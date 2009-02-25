@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context.commands;
 
 import org.apache.axis2.clustering.ClusteringFault;
@@ -45,6 +46,6 @@ public class ContextClusteringCommandCollection extends ContextClusteringCommand
     }
 
     public String toString() {
-        return "ContextClusteringCommandCollection(" + uniqueId + ")";
+        return "ContextClusteringCommandCollection";
     }
 }

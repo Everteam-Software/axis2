@@ -16,12 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.addressing;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.description.AxisDescription;
 import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.axis2.util.Utils;
@@ -86,7 +89,7 @@ public class AddressingHelper {
         // there are some information  that the fault thrower wants to pass to the fault path.
         // Means that the fault is a ws-addressing one hence use the ws-addressing fault action.
         Object faultInfoForHeaders =
-                messageContext.getProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
+                messageContext.getLocalProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
         // if the exception is due to a problem in the faultTo header itself, we can not use those
         // fault informatio to send the error. Try to send using replyTo, leave it to transport
         boolean doNotSendFaultUsingFaultTo = false;
@@ -101,26 +104,48 @@ public class AddressingHelper {
         return !doNotSendFaultUsingFaultTo;
     }
 
+    public static String getAddressingRequirementParemeterValue(AxisDescription axisDescription){
+    	String value = "";
+        if (axisDescription != null) {
+            value = Utils.getParameterValue(
+            		axisDescription.getParameter(AddressingConstants.ADDRESSING_REQUIREMENT_PARAMETER));
+            if(value !=null){
+            	value = value.trim();
+            }
+            if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                log.debug("getAddressingRequirementParemeterValue: value: '" + value + "'");
+            }
+        }
+
+        if (value == null || "".equals(value)) {
+            value = AddressingConstants.ADDRESSING_UNSPECIFIED;
+        }
+        return value;
+    }
+    
     /**
      * Extract the parameter representing the Anonymous flag from the AxisOperation
      * and return the String value. Return the default of "optional" if not specified.
      *
      * @param axisOperation
      */
-    public static String getAnonymousParameterValue(AxisOperation axisOperation) {
+    public static String getInvocationPatternParameterValue(AxisOperation axisOperation) {
         String value = "";
         if (axisOperation != null) {
             value = Utils.getParameterValue(
-                    axisOperation.getParameter(AddressingConstants.WSAW_ANONYMOUS_PARAMETER_NAME));
+                    axisOperation.getParameter(AddressingConstants.WSAM_INVOCATION_PATTERN_PARAMETER_NAME));
+            if(value !=null){
+            	value = value.trim();
+            }
             if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                log.debug("getAnonymousParameterValue: value: '" + value + "'");
+                log.debug("getInvocationPatternParameterValue: value: '" + value + "'");
             }
         }
 
-        if (value == null || "".equals(value.trim())) {
-            value = "optional";
+        if (value == null || "".equals(value)) {
+            value = AddressingConstants.WSAM_INVOCATION_PATTERN_BOTH;
         }
-        return value.trim();
+        return value;
     }
 
     /**
@@ -131,25 +156,25 @@ public class AddressingHelper {
      * @param axisOperation
      * @param value
      */
-    public static void setAnonymousParameterValue(AxisOperation axisOperation, String value) {
+    public static void setInvocationPatternParameterValue(AxisOperation axisOperation, String value) {
         if (value == null) {
             if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                log.debug("setAnonymousParameterValue: value passed in is null. return");
+                log.debug("setInvocationPatternParameterValue: value passed in is null. return");
             }
             return;
         }
 
         Parameter param =
-                axisOperation.getParameter(AddressingConstants.WSAW_ANONYMOUS_PARAMETER_NAME);
+                axisOperation.getParameter(AddressingConstants.WSAM_INVOCATION_PATTERN_PARAMETER_NAME);
         // If an existing parameter exists
         if (param != null) {
             if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                log.debug("setAnonymousParameterValue: Parameter already exists");
+                log.debug("setInvocationPatternParameterValue: Parameter already exists");
             }
             // and is not locked
             if (!param.isLocked()) {
                 if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                    log.debug("setAnonymousParameterValue: Parameter not locked. Setting value: " +
+                    log.debug("setInvocationPatternParameterValue: Parameter not locked. Setting value: " +
                             value);
                 }
                 // set the value
@@ -158,15 +183,15 @@ public class AddressingHelper {
         } else {
             // otherwise, if no Parameter exists
             if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                log.debug("setAnonymousParameterValue: Parameter does not exist");
+                log.debug("setInvocationPatternParameterValue: Parameter does not exist");
             }
             // Create new Parameter with correct name/value
             param = new Parameter();
-            param.setName(AddressingConstants.WSAW_ANONYMOUS_PARAMETER_NAME);
+            param.setName(AddressingConstants.WSAM_INVOCATION_PATTERN_PARAMETER_NAME);
             param.setValue(value);
             try {
                 if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
-                    log.debug("setAnonymousParameterValue: Adding parameter with value: " + value);
+                    log.debug("setInvocationPatternParameterValue: Adding parameter with value: " + value);
                 }
                 // and add it to the AxisOperation object
                 axisOperation.addParameter(param);
@@ -176,9 +201,60 @@ public class AddressingHelper {
                 // if statement.
                 if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
                     log.debug(
-                            "setAnonymousParameterValue: addParameter failed: " + af.getMessage());
+                            "setInvocationPatternParameterValue: addParameter failed: " + af.getMessage());
                 }
             }
         }
     }
+
+	public static void setAddressingRequirementParemeterValue(AxisDescription axisDescription, String value) {
+		if (value == null) {
+            if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                log.debug("getAddressingRequirementParemeterValue: value passed in is null. return");
+            }
+            return;
+        }
+
+        Parameter param =
+        	axisDescription.getParameter(AddressingConstants.ADDRESSING_REQUIREMENT_PARAMETER);
+        // If an existing parameter exists
+        if (param != null) {
+            if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                log.debug("setAddressingRequirementParemeterValue: Parameter already exists");
+            }
+            // and is not locked
+            if (!param.isLocked()) {
+                if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                    log.debug("setAddressingRequirementParemeterValue: Parameter not locked. Setting value: " +
+                            value);
+                }
+                // set the value
+                param.setValue(value);
+            }
+        } else {
+            // otherwise, if no Parameter exists
+            if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                log.debug("setAddressingRequirementParemeterValue: Parameter does not exist");
+            }
+            // Create new Parameter with correct name/value
+            param = new Parameter();
+            param.setName(AddressingConstants.ADDRESSING_REQUIREMENT_PARAMETER);
+            param.setValue(value);
+            try {
+                if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                    log.debug("setAddressingRequirementParemeterValue: Adding parameter with value: " + value);
+                }
+                // and add it to the AxisOperation object
+                axisDescription.addParameter(param);
+            } catch (AxisFault af) {
+                // This should not happen. AxisFault is only ever thrown when a locked Parameter
+                // of the same name already exists and this should be dealt with by the outer
+                // if statement.
+                if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled()) {
+                    log.debug(
+                            "setAddressingRequirementParemeterValue: addParameter failed: " + af.getMessage());
+                }
+            }
+        }
+	}
 }

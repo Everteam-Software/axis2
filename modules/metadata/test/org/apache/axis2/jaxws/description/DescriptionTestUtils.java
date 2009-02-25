@@ -20,9 +20,13 @@
 
 package org.apache.axis2.jaxws.description;
 
+import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
+
 import javax.wsdl.Definition;
 import javax.wsdl.factory.WSDLFactory;
 import javax.wsdl.xml.WSDLReader;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 
 /**
@@ -40,12 +44,17 @@ public class DescriptionTestUtils {
         return getWSDLURL("WSDLTests.wsdl");
 
     }
+    
+    static public String getWSDLLocation(String wsdlFileName) {
+        String basedir = System.getProperty("basedir", ".");
+        String urlString = basedir + "/test-resources/wsdl/" + wsdlFileName;
+        return urlString;
+    }
 
     static public URL getWSDLURL(String wsdlFileName) {
         URL wsdlURL = null;
+        String urlString = "file://localhost/" + getWSDLLocation(wsdlFileName);
         // Get the URL to the WSDL file.  Note that 'basedir' is setup by Maven
-        String basedir = System.getProperty("basedir", ".");
-        String urlString = "file://localhost/" + basedir + "/test-resources/wsdl/" + wsdlFileName;
         try {
             wsdlURL = new URL(urlString);
         } catch (Exception e) {
@@ -61,6 +70,7 @@ public class DescriptionTestUtils {
             WSDLFactory factory = WSDLFactory.newInstance();
             WSDLReader reader = factory.newWSDLReader();
             wsdlDefinition = reader.readWSDL(wsdlURL.toString());
+            wsdlDefinition.setDocumentBaseURI(wsdlURL.toString());
         }
         catch (Exception e) {
             System.out.println(
@@ -70,4 +80,32 @@ public class DescriptionTestUtils {
 
         return wsdlDefinition;
     }
+    static public DescriptionBuilderComposite getServiceDescriptionComposite(ServiceDescription svcDesc) {
+        DescriptionBuilderComposite returnComposite = null;
+        // Need to get the composite off the implementation using the getter method, but it is all
+        // packaged protected and not part of the interface.
+        try {
+            Method getComposite = svcDesc.getClass().getDeclaredMethod("getDescriptionBuilderComposite");
+            getComposite.setAccessible(true);
+            returnComposite = (DescriptionBuilderComposite) getComposite.invoke(svcDesc, null);
+        } catch (SecurityException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (NoSuchMethodException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IllegalArgumentException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
+        return returnComposite;
+    }
+
 }

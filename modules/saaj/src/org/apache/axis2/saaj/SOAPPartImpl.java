@@ -16,32 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.Iterator;
-
-import javax.xml.soap.MimeHeader;
-import javax.xml.soap.MimeHeaders;
-import javax.xml.soap.SOAPElement;
-import javax.xml.soap.SOAPEnvelope;
-import javax.xml.soap.SOAPException;
-import javax.xml.soap.SOAPMessage;
-import javax.xml.soap.SOAPPart;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
-import javax.xml.transform.Result;
-import javax.xml.transform.Source;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.TransformerFactoryConfigurationError;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.impl.MTOMConstants;
@@ -76,6 +52,30 @@ import org.w3c.dom.ProcessingInstruction;
 import org.w3c.dom.Text;
 import org.w3c.dom.UserDataHandler;
 
+import javax.xml.soap.MimeHeader;
+import javax.xml.soap.MimeHeaders;
+import javax.xml.soap.SOAPElement;
+import javax.xml.soap.SOAPEnvelope;
+import javax.xml.soap.SOAPException;
+import javax.xml.soap.SOAPMessage;
+import javax.xml.soap.SOAPPart;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Result;
+import javax.xml.transform.Source;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Iterator;
+
 public class SOAPPartImpl extends SOAPPart {
 
     private static final Log log = LogFactory.getLog(SOAPPartImpl.class);
@@ -95,6 +95,7 @@ public class SOAPPartImpl extends SOAPPart {
         soapMessage = parentSoapMsg;
         envelope = soapEnvelope;
         document = soapEnvelope.getOwnerDocument();
+        envelope.setSOAPPartParent(this);
     }
 
     public SOAPPartImpl(SOAPMessageImpl parentSoapMsg,
@@ -219,6 +220,7 @@ public class SOAPPartImpl extends SOAPPart {
                     (org.apache.axiom.soap.impl.dom.SOAPEnvelopeImpl)soapEnvelope);
             envelope.element.build();
             this.document = envelope.getOwnerDocument();
+            envelope.setSOAPPartParent(this);
             javax.xml.transform.Source xmlSource =
                     new javax.xml.transform.stream.StreamSource( isReader);
             this.source = xmlSource;
@@ -401,6 +403,7 @@ public class SOAPPartImpl extends SOAPPart {
                     (org.apache.axiom.soap.impl.dom.SOAPEnvelopeImpl)soapEnvelope);
             envelope.element.build();
             this.document = envelope.getOwnerDocument();
+            envelope.setSOAPPartParent(this);
         } catch (TransformerFactoryConfigurationError e) {
             log.error(e);
             throw new SOAPException(e);

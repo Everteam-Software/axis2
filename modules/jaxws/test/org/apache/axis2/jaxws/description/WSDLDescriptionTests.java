@@ -20,7 +20,9 @@
 
 package org.apache.axis2.jaxws.description;
 
-import java.net.URL;
+import junit.framework.TestCase;
+import org.apache.axis2.jaxws.spi.ServiceDelegate;
+import org.apache.ws.axis2.tests.EchoPort;
 
 import javax.jws.WebMethod;
 import javax.jws.WebParam;
@@ -34,10 +36,7 @@ import javax.xml.ws.RequestWrapper;
 import javax.xml.ws.ResponseWrapper;
 import javax.xml.ws.Service;
 import javax.xml.ws.WebServiceException;
-
-import junit.framework.TestCase;
-import org.apache.axis2.jaxws.spi.ServiceDelegate;
-import org.apache.ws.axis2.tests.EchoPort;
+import java.net.URL;
 
 /**
  * Directly test the Description classes built with a WSDL file.
@@ -140,7 +139,7 @@ public class WSDLDescriptionTests extends TestCase {
         QName dispatchPortQN = new QName(VALID_NAMESPACE, "dispatchPort");
         service.addPort(dispatchPortQN, null, null);
         
-        EndpointDescription endpointDesc = serviceDescription.getEndpointDescription(dispatchPortQN);
+        EndpointDescription endpointDesc = serviceDescription.getEndpointDescription(dispatchPortQN, serviceDelegate);
         assertNotNull(endpointDesc);
        
         EndpointInterfaceDescription endpointInterfaceDesc = endpointDesc.getEndpointInterfaceDescription();
@@ -226,7 +225,7 @@ public class WSDLDescriptionTests extends TestCase {
         Class sei = endpointInterfaceDesc.getSEIClass();
         assertEquals(EchoPort.class, sei);
 
-        EndpointDescription endpointDescDispatch = serviceDescription.getEndpointDescription(dispatchPortQN);
+        EndpointDescription endpointDescDispatch = serviceDescription.getEndpointDescription(dispatchPortQN, serviceDelegate);
         assertNotNull(endpointDescDispatch);
        
         EndpointInterfaceDescription endpointInterfaceDescDispatch = endpointDescDispatch.getEndpointInterfaceDescription();

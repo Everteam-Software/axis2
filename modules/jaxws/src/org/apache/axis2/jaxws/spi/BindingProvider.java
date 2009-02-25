@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.spi;
 
 import org.apache.axis2.jaxws.description.EndpointDescription;
@@ -27,5 +28,4 @@ public interface BindingProvider extends javax.xml.ws.BindingProvider {
     public EndpointDescription getEndpointDescription();
 
     public ServiceDelegate getServiceDelegate();
-
 }

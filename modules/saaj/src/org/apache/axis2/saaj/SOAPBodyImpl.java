@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import org.apache.axiom.om.OMNamespace;
@@ -427,11 +428,16 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
             if (localName == null) {  //it is possible that localname isn't set but name is set
                 localName = domEle.getTagName();
             }     
+            
+            String prefix = domEle.getPrefix();
+            if(prefix == null) {
+                prefix = "";
+            }
             if (domEle.getNamespaceURI() != null) {
-                ns = new NamespaceImpl(domEle.getNamespaceURI(), domEle.getPrefix());
+                ns = new NamespaceImpl(domEle.getNamespaceURI(), prefix);
             } else {
-                if (domEle.getPrefix() != null) {
-                    ns = new NamespaceImpl("", domEle.getPrefix());
+                if (prefix != null) {
+                    ns = new NamespaceImpl("", prefix);
                 } else {
                     ns = new NamespaceImpl("", "");
                     

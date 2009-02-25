@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <schema elementFormDefault="qualified"
         targetNamespace="http://www.americanexpress.com/wsdl/ctn/utilities/atb"
         xmlns:tns="http://www.americanexpress.com/wsdl/ctn/utilities/atb"
@@ -29,7 +30,6 @@
             </sequence>
         </complexType>
     </element>
-
     <element name="checkEligibility2">
         <complexType>
             <sequence>
@@ -48,4 +48,35 @@
             </sequence>
         </complexType>
     </element>
+
+    <!-- circular element references -->
+    <element name="Element1" type="tns:ComplexType1"/>
+    <complexType name="ComplexType1">
+        <sequence>
+            <element ref="tns:Element1" minOccurs="0"/>
+        </sequence>
+    </complexType>
+    <element name="Element2">
+        <complexType>
+            <sequence>
+                <element name="param1" type="string"/>
+                <element ref="tns:Element2" minOccurs="0"/>
+            </sequence>
+        </complexType>
+    </element>
+
+    <element name="authInfo" >
+		<simpleType>
+			<restriction base="string"/>
+		</simpleType>
+	</element>
+
+    <complexType name="discard_transferToken">
+		<sequence>
+			<element ref="tns:authInfo" minOccurs="0"/>
+            <element name="param1" type="string"/>
+		</sequence>
+	</complexType>
+
+    <element name="TestSimpleReference" type="tns:discard_transferToken"/>
 </schema>

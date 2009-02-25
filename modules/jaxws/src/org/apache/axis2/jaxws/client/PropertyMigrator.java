@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.client;
 
 import org.apache.axis2.Constants;
@@ -25,14 +26,15 @@ import org.apache.axis2.jaxws.spi.migrator.ApplicationContextMigrator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.io.Serializable;
 import java.util.Map;
 
 /**
  * The PropertyMigrator implements the ApplicationContextMigrator in order to perform the necessary
  * manipulations of properties during a request or response flow.
  */
-public class PropertyMigrator implements ApplicationContextMigrator {
-	private static final Log log = LogFactory.getLog(PropertyMigrator.class);
+public class PropertyMigrator implements ApplicationContextMigrator, Serializable {
+    private static final Log log = LogFactory.getLog(PropertyMigrator.class);
     public void migratePropertiesFromMessageContext(Map<String, Object> userContext,
                                                     MessageContext messageContext) {
 
@@ -53,10 +55,15 @@ public class PropertyMigrator implements ApplicationContextMigrator {
 
     public void migratePropertiesToMessageContext(Map<String, Object> userContext,
                                                   MessageContext messageContext) {
-        
+
         // Avoid using putAll as this causes copies of the propery set
         if (userContext != null) {
-            for (String key: userContext.keySet()) {
+            // should not use iterator here because this map may be modified
+            // on different threads by the user or other JAX-WS code
+            String[] keys = new String[userContext.keySet().size()];
+            keys = userContext.keySet().toArray(keys);
+            for(int i=0; i < keys.length; i++) {
+                String key = keys[i];
                 Object value = userContext.get(key);
                 // Make sure mtom state in the user context, the message context, 
                 // the MEP context are the same.

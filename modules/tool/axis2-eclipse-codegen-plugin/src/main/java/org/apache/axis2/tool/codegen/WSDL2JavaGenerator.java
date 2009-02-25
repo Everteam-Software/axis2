@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tool.codegen;
 
 
@@ -25,7 +26,6 @@ import org.apache.axis2.util.CommandLineOption;
 import org.apache.axis2.util.CommandLineOptionConstants;
 
 import javax.wsdl.WSDLException;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -190,8 +190,7 @@ public class WSDL2JavaGenerator {
 				url = new URL(wsdlURI);	
 			}
 
-			//FIXME @author soi - 
-		    // This quick fix assume that the wsdlURI points to a wsdl 1.1 version.
+	    // This quick fix assume that the wsdlURI points to a wsdl 1.1 version.
 			// A better fix should be to determine which builder to use based on the wsdl version. 
 			// The current implementation of the wsdl builder classes did not allow for this. I will suggest
 			// that the determination of which builder to use should be done in the builder classes, preferably
@@ -201,6 +200,10 @@ public class WSDL2JavaGenerator {
 			
 			WSDL11ToAxisServiceBuilder builder = new WSDL11ToAxisServiceBuilder(url.openConnection().getInputStream());
 					
+                        // Set the URI of the base document for the Definition.
+                        // Note that this is the URI of the base document, not the imports.
+                        builder.setDocumentBaseUri(url.toString());
+
 			builder.setBaseUri(getBaseUri(wsdlURI));
 			builder.setCodegen(true);
 			return builder.populateService();

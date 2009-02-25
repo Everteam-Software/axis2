@@ -16,9 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.jaxws.sample.addnumbers;
 
-import java.util.Map;
+package org.apache.axis2.jaxws.sample.addnumbers;
 
 import org.apache.axis2.jaxws.TestLogger;
 
@@ -26,9 +25,10 @@ import javax.annotation.Resource;
 import javax.jws.WebService;
 import javax.xml.ws.WebServiceContext;
 import javax.xml.ws.handler.MessageContext;
+import java.util.Map;
 
 
-@WebService(endpointInterface="org.apache.axis2.jaxws.sample.addnumbers.AddNumbersPortType")
+@WebService(serviceName="AddNumbersService",endpointInterface="org.apache.axis2.jaxws.sample.addnumbers.AddNumbersPortType")
 public class AddNumbersPortTypeImpl implements AddNumbersPortType {
 
     @Resource

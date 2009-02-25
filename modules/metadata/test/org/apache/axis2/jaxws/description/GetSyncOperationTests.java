@@ -16,17 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
+
+import junit.framework.TestCase;
 
 import javax.jws.WebMethod;
 import javax.jws.WebService;
 import javax.xml.namespace.QName;
 import javax.xml.ws.AsyncHandler;
 import javax.xml.ws.Response;
-
 import java.util.concurrent.Future;
-
-import junit.framework.TestCase;
 
 /**
  * 

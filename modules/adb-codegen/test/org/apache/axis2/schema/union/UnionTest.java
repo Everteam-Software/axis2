@@ -16,18 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.union;
 
 import junit.framework.TestCase;
-import org.tempuri.union.*;
-import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axis2.databinding.types.URI;
+import org.tempuri.union.*;
 
-import javax.xml.stream.XMLStreamReader;
-import javax.xml.stream.XMLStreamException;
 import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 
 public class UnionTest extends TestCase {

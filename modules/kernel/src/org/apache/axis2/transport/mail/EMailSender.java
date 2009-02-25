@@ -25,14 +25,13 @@ import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.client.Options;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.description.TransportInDescription;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.OutOnlyAxisOperation;
+import org.apache.axis2.description.TransportInDescription;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -40,7 +39,15 @@ import javax.activation.CommandMap;
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
 import javax.activation.MailcapCommandMap;
-import javax.mail.*;
+import javax.mail.Authenticator;
+import javax.mail.BodyPart;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Multipart;
+import javax.mail.Part;
+import javax.mail.PasswordAuthentication;
+import javax.mail.Session;
+import javax.mail.Transport;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
@@ -103,6 +110,15 @@ public class EMailSender {
                 }
             });
             MimeMessage msg = new MimeMessage(session);
+
+            // Set date - required by rfc2822
+            msg.setSentDate(new java.util.Date());
+
+            // Set from - required by rfc2822
+            String from = properties.getProperty("mail.smtp.from");
+            if( from != null ) {
+                msg.setFrom(new InternetAddress(from));
+            }
 
 
             EndpointReference epr = null;
@@ -240,7 +256,10 @@ public class EMailSender {
         SynchronousMailListener synchronousMailListener = null;
         //No need to stor the message context if the mep is out-only
         AxisOperation axisOperation = msgContext.getAxisOperation();
-        if(axisOperation instanceof OutOnlyAxisOperation) {
+        // piggy back message constant is used to pass a piggy back
+        // message context in asnych model
+        if(axisOperation instanceof OutOnlyAxisOperation &&
+                (msgContext.getProperty(org.apache.axis2.Constants.PIGGYBACK_MESSAGE) == null)) {
             return;
         }
 

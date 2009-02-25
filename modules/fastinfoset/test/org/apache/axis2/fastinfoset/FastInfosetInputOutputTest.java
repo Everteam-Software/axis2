@@ -19,27 +19,21 @@
 
 package org.apache.axis2.fastinfoset;
 
+import com.sun.xml.fastinfoset.stax.StAXDocumentParser;
+import com.sun.xml.fastinfoset.stax.StAXDocumentSerializer;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.impl.builder.StAXBuilder;
+import org.apache.axiom.om.impl.builder.StAXOMBuilder;
+import org.custommonkey.xmlunit.XMLTestCase;
+
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.stream.XMLStreamWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 
-import javax.xml.stream.XMLStreamReader;
-import javax.xml.stream.XMLStreamWriter;
-
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.impl.builder.StAXBuilder;
-import org.apache.axiom.om.impl.builder.StAXOMBuilder;
-import org.custommonkey.xmlunit.XMLTestCase;
-
-import com.sun.xml.fastinfoset.stax.StAXDocumentParser;
-import com.sun.xml.fastinfoset.stax.StAXDocumentSerializer;
-
-/**
- * @author : Eran Chinthaka (echintha@cs.indiana.edu)
- * @Date : May 11, 2007
- */
 public class FastInfosetInputOutputTest extends XMLTestCase {
 
     /**

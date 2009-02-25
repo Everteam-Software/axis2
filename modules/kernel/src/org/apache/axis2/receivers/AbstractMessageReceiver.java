@@ -27,26 +27,30 @@ import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.EndpointReference;
-import org.apache.axis2.clustering.context.Replicator;
+import org.apache.axis2.classloader.MultiParentClassLoader;
 import org.apache.axis2.clustering.ClusteringFault;
+import org.apache.axis2.clustering.context.Replicator;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.ServiceContext;
 import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.InOnlyAxisOperation;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.engine.AxisEngine;
 import org.apache.axis2.engine.DependencyManager;
 import org.apache.axis2.engine.MessageReceiver;
-import org.apache.axis2.engine.AxisEngine;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.util.Loader;
 import org.apache.axis2.util.MessageContextBuilder;
-import org.apache.axis2.classloader.MultiParentClassLoader;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
 
 public abstract class AbstractMessageReceiver implements MessageReceiver {
     protected static final Log log = LogFactory.getLog(AbstractMessageReceiver.class);
@@ -58,7 +62,7 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
     public static final String DO_ASYNC = "messageReceiver.invokeOnSeparateThread";
 
     // Place to store previous values
-    public class ThreadContextDescriptor {
+    public static class ThreadContextDescriptor {
         public ClassLoader oldClassLoader;
         public MessageContext oldMessageContext;
     }
@@ -100,6 +104,7 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
                     !WSDL2Constants.MEP_URI_ROBUST_IN_ONLY.equals(messageCtx.getAxisOperation().getMessageExchangePattern())) {
                 log.error(fault);
             } else {
+                fault.setFaultType(Constants.APPLICATION_FAULT);
                 throw fault;
             }
         } finally {
@@ -117,10 +122,10 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
      * @param msgContext the current MessageContext
      * @return a ThreadContextDescriptor containing the old values
      */
-    protected ThreadContextDescriptor setThreadContext(MessageContext msgContext) {
+    protected ThreadContextDescriptor setThreadContext(final MessageContext msgContext) {
         ThreadContextDescriptor tc = new ThreadContextDescriptor();
         tc.oldMessageContext = (MessageContext) MessageContext.currentMessageContext.get();
-        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+        final ClassLoader contextClassLoader = getContextClassLoader_doPriv();
         tc.oldClassLoader = contextClassLoader;
 
         AxisService service = msgContext.getAxisService();
@@ -129,14 +134,34 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
             serviceTCCL = serviceTCCL.trim().toLowerCase();
 
             if (serviceTCCL.equals(Constants.TCCL_COMPOSITE)) {
-                Thread.currentThread().setContextClassLoader(
-                        new MultiParentClassLoader(new URL[] {}, new ClassLoader[] {
-                                msgContext.getAxisService().getClassLoader(),
-                                contextClassLoader,
-                        }));
+                final ClassLoader loader = (ClassLoader) AccessController.doPrivileged(new PrivilegedAction() {
+                    public Object run() {
+                        return new MultiParentClassLoader(new URL[]{},
+                                new ClassLoader[]{
+                                        msgContext.getAxisService().getClassLoader(),
+                                        contextClassLoader
+                                });
+                    }
+                });
+                org.apache.axis2.java.security.AccessController.doPrivileged(
+                        new PrivilegedAction() {
+                            public Object run() {
+                                Thread.currentThread().setContextClassLoader(
+                                        loader);
+                                return null;
+                            }
+                        }
+                );
             } else if (serviceTCCL.equals(Constants.TCCL_SERVICE)) {
-                Thread.currentThread().setContextClassLoader(
-                        msgContext.getAxisService().getClassLoader()
+                org.apache.axis2.java.security.AccessController.doPrivileged(
+                        new PrivilegedAction() {
+                            public Object run() {
+                                Thread.currentThread().setContextClassLoader(
+                                        msgContext.getAxisService().getClassLoader()
+                                );
+                                return null;
+                            }
+                        }
                 );
             }
         }
@@ -144,8 +169,25 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
         return tc;
     }
 
-    protected void restoreThreadContext(ThreadContextDescriptor tc) {
-        Thread.currentThread().setContextClassLoader(tc.oldClassLoader);
+    private ClassLoader getContextClassLoader_doPriv() {
+        return (ClassLoader) org.apache.axis2.java.security.AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        return Thread.currentThread().getContextClassLoader();
+                    }
+                }
+        );
+    }
+
+    protected void restoreThreadContext(final ThreadContextDescriptor tc) {
+        org.apache.axis2.java.security.AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        Thread.currentThread().setContextClassLoader(tc.oldClassLoader);
+                        return null;
+                    }
+                }
+        );
         MessageContext.currentMessageContext.set(tc.oldMessageContext);
     }
 
@@ -159,31 +201,48 @@ public abstract class AbstractMessageReceiver implements MessageReceiver {
      */
     protected Object makeNewServiceObject(MessageContext msgContext) throws AxisFault {
         try {
-            AxisService service = msgContext.getAxisService();
+            final AxisService service = msgContext.getAxisService();
             ClassLoader classLoader = service.getClassLoader();
 
             // allow alternative definition of makeNewServiceObject
             if (service.getParameter(Constants.SERVICE_OBJECT_SUPPLIER) != null) {
                 Parameter serviceObjectParam =
                         service.getParameter(Constants.SERVICE_OBJECT_SUPPLIER);
-                Class serviceObjectMaker = Loader.loadClass(classLoader, ((String)
+                final Class serviceObjectMaker = Loader.loadClass(classLoader, ((String)
                         serviceObjectParam.getValue()).trim());
 
                 // Find static getServiceObject() method, call it if there
-                Method method = serviceObjectMaker.getMethod("getServiceObject",
-                                                             new Class[]{AxisService.class});
+                final Method method = (Method) org.apache.axis2.java.security.AccessController.doPrivileged(
+                        new PrivilegedExceptionAction() {
+                            public Object run() throws NoSuchMethodException {
+                                return serviceObjectMaker.getMethod("getServiceObject",
+                                        new Class[]{AxisService.class});
+                            }
+                        }
+                );
                 if (method != null) {
-                    return method.invoke(serviceObjectMaker.newInstance(), new Object[]{service});
+                    return org.apache.axis2.java.security.AccessController.doPrivileged(
+                            new PrivilegedExceptionAction() {
+                                public Object run() throws InvocationTargetException, IllegalAccessException, InstantiationException {
+                                    return method.invoke(serviceObjectMaker.newInstance(), new Object[]{service});
+                                }
+                            }
+                    );
                 }
             }
 
             Parameter implInfoParam = service.getParameter(Constants.SERVICE_CLASS);
             if (implInfoParam != null) {
-                Class implClass = Loader.loadClass(
+                final Class implClass = Loader.loadClass(
                         classLoader,
                         ((String) implInfoParam.getValue()).trim());
-
-                return implClass.newInstance();
+                return org.apache.axis2.java.security.AccessController.doPrivileged(
+                        new PrivilegedExceptionAction() {
+                            public Object run() throws InstantiationException, IllegalAccessException {
+                                return implClass.newInstance();
+                            }
+                        }
+                );
             } else {
                 throw new AxisFault(
                         Messages.getMessage("paramIsNotSpecified", "SERVICE_OBJECT_SUPPLIER"));

@@ -16,10 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package javax.xml.ws.spi;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+package javax.xml.ws.spi;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -45,12 +43,11 @@ class FactoryFinder {
     /**
      * Set to true for debugging.
      */
-    private static final Log log = LogFactory.getLog(FactoryFinder.class);
     private static final boolean debug = false;
 
     private static void debugPrintln(String msg) {
-        if (debug && log.isDebugEnabled()) {
-            log.debug("Factory Finder:" + msg);
+        if (debug) {
+            System.err.println("Factory Finder:" + msg);
         }
     }
 

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
 
 import org.apache.axis2.jaxws.util.WSDLWrapper;
@@ -24,7 +25,6 @@ import javax.wsdl.Definition;
 import javax.wsdl.Port;
 import javax.wsdl.Service;
 import javax.xml.namespace.QName;
-import java.net.URL;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +54,7 @@ public interface ServiceDescriptionWSDL {
      */
     public List<Port> getWSDLPortsUsingSOAPAddress(List<Port> wsdlPorts);
 
-    public abstract URL getWSDLLocation();
+    public abstract String getWSDLLocation();
 
     public Definition getWSDLDefinition();
 

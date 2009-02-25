@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.jaxws.handler.lifecycle.factory;
 
-import javax.xml.ws.handler.Handler;
+package org.apache.axis2.jaxws.handler.lifecycle.factory;
 
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.injection.ResourceInjectionException;
 import org.apache.axis2.jaxws.lifecycle.LifecycleException;
+
+import javax.xml.ws.handler.Handler;
 
 /*
  * HandlerLifecycleManager is responsible to invoke lifycycle methods on Handler.
@@ -32,6 +33,9 @@ public interface HandlerLifecycleManager {
     public Handler createHandlerInstance(MessageContext mc, Class handlerClass)
             throws LifecycleException, ResourceInjectionException;
 
+    public void destroyHandlerInstance(MessageContext mc, Handler handler)
+    		throws LifecycleException, ResourceInjectionException;
+    
     /*
       * Invokes method on endpoint marked with @PostConstruct annotation.
       */

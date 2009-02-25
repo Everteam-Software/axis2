@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tool.service.eclipse.ui;
 
 
@@ -34,7 +35,6 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.actions.WorkspaceModifyOperation;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.List;
 
 
 public class ServiceArchiveWizard extends Wizard implements INewWizard {

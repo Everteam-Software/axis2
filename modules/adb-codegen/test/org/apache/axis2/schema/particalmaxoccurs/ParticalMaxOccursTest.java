@@ -16,20 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.particalmaxoccurs;
 
+import com.mynamespace.testparticlemaxoccurs.*;
 import junit.framework.TestCase;
-
-
-import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.StAXUtils;
 
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
-
-import com.mynamespace.testparticlemaxoccurs.*;
 
 
 public class ParticalMaxOccursTest extends TestCase {
@@ -346,8 +344,10 @@ public class ParticalMaxOccursTest extends TestCase {
             assertEquals(resultChoices[0].getParm1(), "Param11");
             assertEquals(resultChoices[1].getParm2(), "Param12");
         } catch (XMLStreamException e) {
+           e.printStackTrace();
             fail();
         } catch (Exception e) {
+           e.printStackTrace();
             fail();
         }
     }

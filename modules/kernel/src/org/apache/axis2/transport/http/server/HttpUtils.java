@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.http.server;
 
-import org.apache.axis2.transport.http.HTTPConstants;
-import org.apache.axis2.transport.TransportListener;
-import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.description.Parameter;
+import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.transport.TransportListener;
+import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.http.Header;
 
 import java.net.InetAddress;

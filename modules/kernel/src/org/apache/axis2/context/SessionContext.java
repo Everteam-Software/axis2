@@ -21,10 +21,13 @@
 package org.apache.axis2.context;
 
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.context.externalize.ExternalizeConstants;
+import org.apache.axis2.context.externalize.SafeObjectInputStream;
+import org.apache.axis2.context.externalize.SafeObjectOutputStream;
+import org.apache.axis2.context.externalize.SafeSerializable;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.DependencyManager;
-import org.apache.axis2.util.ObjectStateUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -41,7 +44,8 @@ import java.util.Map;
  * All the engine components are stateless across the executions and all the states should be kept in the
  * Contexts, there are three context Global, Session and Message.
  */
-public class SessionContext extends AbstractContext implements Externalizable {
+public class SessionContext extends AbstractContext 
+    implements Externalizable, SafeSerializable {
 
     /**
      * @serial The serialization version ID tracks the version of the class.
@@ -62,14 +66,14 @@ public class SessionContext extends AbstractContext implements Externalizable {
      * Refer to the writeExternal() and readExternal() methods.
      */
     // supported revision levels, add a new level to manage compatible changes
-    private static final int REVISION_1 = 1;
+    private static final int REVISION_2 = 2;
     // current revision level of this object
-    private static final int revisionID = REVISION_1;
+    private static final int revisionID = REVISION_2;
 
 
     // TODO: investigate whether these collections need to be saved
-    private transient HashMap serviceContextMap = new HashMap();
-    private transient HashMap serviceGroupContextMap = new HashMap();
+    private transient Map serviceContextMap = new HashMap();
+    private transient Map serviceGroupContextMap = new HashMap();
 
     private String cookieID;
 
@@ -180,7 +184,8 @@ public class SessionContext extends AbstractContext implements Externalizable {
      * @param out The stream to write the object contents to
      * @throws IOException
      */
-    public void writeExternal(ObjectOutput out) throws IOException {
+    public void writeExternal(ObjectOutput o) throws IOException {
+        SafeObjectOutputStream out = SafeObjectOutputStream.install(o);
         // write out contents of this object
 
         // NOTES: For each item, where appropriate,
@@ -207,29 +212,17 @@ public class SessionContext extends AbstractContext implements Externalizable {
         out.writeLong(getLastTouchedTime());
 
         out.writeLong(sessionContextTimeoutInterval);
-
-        ObjectStateUtils.writeString(out, cookieID, "SessionContext.cookieID");
+        out.writeObject(cookieID);
 
         //---------------------------------------------------------
         // properties
         //---------------------------------------------------------
-        Map tmpMap = getProperties();
-
-        HashMap tmpHashMap = null;
-
-        if ((tmpMap != null) && (!tmpMap.isEmpty())) {
-            tmpHashMap = new HashMap(tmpMap);
-        }
-
-        ObjectStateUtils.writeHashMap(out, tmpHashMap, "SessionContext.properties");
+        out.writeMap(getProperties());
 
         //---------------------------------------------------------
         // "nested"
         //---------------------------------------------------------
-
-        // Options parent
-        ObjectStateUtils.writeObject(out, parent, "SessionContext.parent");
-
+        out.writeObject(parent);
 
     }
 
@@ -246,7 +239,8 @@ public class SessionContext extends AbstractContext implements Externalizable {
      * @throws IOException
      * @throws ClassNotFoundException
      */
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput inObject) throws IOException, ClassNotFoundException {
+        SafeObjectInputStream in = SafeObjectInputStream.install(inObject);
         // trace point
         if (log.isTraceEnabled()) {
             log.trace(myClassName + ":readExternal():  BEGIN  bytes available in stream [" +
@@ -261,12 +255,12 @@ public class SessionContext extends AbstractContext implements Externalizable {
 
         // make sure the object data is in a version we can handle
         if (suid != serialVersionUID) {
-            throw new ClassNotFoundException(ObjectStateUtils.UNSUPPORTED_SUID);
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_SUID);
         }
 
         // make sure the object data is in a revision level we can handle
-        if (revID != REVISION_1) {
-            throw new ClassNotFoundException(ObjectStateUtils.UNSUPPORTED_REVID);
+        if (revID != REVISION_2) {
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_REVID);
         }
 
         //---------------------------------------------------------
@@ -276,37 +270,26 @@ public class SessionContext extends AbstractContext implements Externalizable {
         setLastTouchedTime(time);
 
         sessionContextTimeoutInterval = in.readLong();
-
-        cookieID = ObjectStateUtils.readString(in, "SessionContext.cookieID");
+        cookieID = (String) in.readObject();
 
         //---------------------------------------------------------
         // properties
         //---------------------------------------------------------
-
-        HashMap tmpHashMap = ObjectStateUtils.readHashMap(in, "SessionContext.properties");
-
-        properties = new HashMap();
-        if (tmpHashMap != null) {
-            setProperties(tmpHashMap);
-        }
+        properties = in.readHashMap();
 
         //---------------------------------------------------------
         // "nested"
         //---------------------------------------------------------
 
         // parent
-        Object tmpParent = ObjectStateUtils.readObject(in, "SessionContext.parent");
-
-        if (tmpParent != null) {
-            parent = (AbstractContext) tmpParent;
-        } else {
-            parent = null;
-        }
+        parent = (AbstractContext) in.readObject();
 
         //---------------------------------------------------------
         // done
         //---------------------------------------------------------
 
+        serviceContextMap = new HashMap();
+        serviceGroupContextMap = new HashMap();
     }
 
     public ConfigurationContext getRootContext() {

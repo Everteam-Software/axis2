@@ -16,16 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.extension;
 
 import junit.framework.TestCase;
-import test.axis2.apache.org.TestComplexElement;
+import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.util.StAXUtils;
+import test.axis2.apache.org.BaseType;
 import test.axis2.apache.org.ExtendedComplexType;
 import test.axis2.apache.org.FullName;
-import test.axis2.apache.org.BaseType;
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.OMAbstractFactory;
-import org.apache.axiom.om.util.StAXUtils;
+import test.axis2.apache.org.TestComplexElement;
 
 import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;

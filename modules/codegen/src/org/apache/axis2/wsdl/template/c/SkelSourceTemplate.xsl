@@ -1,3 +1,22 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements. See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership. The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License. You may obtain a copy of the License at
+  ~
+  ~ http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied. See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
     <xsl:template match="/interface">
@@ -31,8 +50,14 @@
          * auto generated function definition signature
          * for "<xsl:value-of select="@qname"/>" operation.
          <!--  select only the body parameters  -->
-         <xsl:for-each select="input/param[@type!='']">* @param <xsl:value-of select="@name"></xsl:value-of></xsl:for-each>
+         *<xsl:for-each select="input/param[@type!='']"><xsl:text>
+         </xsl:text>* @param <xsl:value-of select="@name"/></xsl:for-each>
+         *<xsl:for-each select="output/param[@location='soap_header']"><xsl:text>
+         </xsl:text>* @param dp_<xsl:value-of select="@name"/> - output header</xsl:for-each>
+         * @return <xsl:value-of select="$outputtype"/>
+         <xsl:for-each select="input/param[@type!='']">* @param <xsl:value-of select="@name"></xsl:value-of></xsl:for-each><xsl:text>
          */
+         </xsl:text>
         <xsl:choose>
         <xsl:when test="$outputtype=''">axis2_status_t </xsl:when>
         <xsl:when test="$outputtype!=''"><xsl:value-of select="$outputtype"/></xsl:when>
@@ -42,8 +67,11 @@
                                               <xsl:variable name="inputtype">
                                                   <xsl:if test="@ours">adb_</xsl:if><xsl:value-of select="@type"/><xsl:if test="@ours">_t*</xsl:if>
                                               </xsl:variable>
-                                              <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="$inputtype"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
-                                          </xsl:for-each> )
+                                              <xsl:value-of select="$inputtype"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
+                                          </xsl:for-each><xsl:for-each select="output/param[@location='soap_header']">,
+                                            <xsl:variable name="outputtype"><xsl:if test="@ours">adb_</xsl:if><xsl:value-of select="@type"/><xsl:if test="@ours">_t**</xsl:if></xsl:variable>
+                                            <xsl:value-of select="$outputtype"/><xsl:text> dp_</xsl:text><xsl:value-of select="@name"/><xsl:text> /* output header double ptr*/</xsl:text>
+                                            </xsl:for-each> )
         {
           /* TODO fill this with the necessary business logic */
           <xsl:if test="$outputtype!=''">return NULL;</xsl:if>

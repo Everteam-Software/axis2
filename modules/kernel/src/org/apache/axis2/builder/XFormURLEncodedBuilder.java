@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.builder;
 
 import org.apache.axiom.om.OMAbstractFactory;
@@ -25,6 +26,7 @@ import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisBinding;
@@ -43,6 +45,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
+import java.security.PrivilegedActionException;
 
 
 public class XFormURLEncodedBuilder implements Builder {
@@ -89,12 +94,7 @@ public class XFormURLEncodedBuilder implements Builder {
             throw new AxisFault("Cannot create DocumentElement without destination EPR");
         }
 
-        String requestURL = null;
-        try {
-            requestURL = URIEncoderDecoder.decode(endpointReference.getAddress());
-        } catch (UnsupportedEncodingException e) {
-            throw AxisFault.makeFault(e);
-        }
+        String requestURL = endpointReference.getAddress();
         try {
             requestURL = extractParametersUsingHttpLocation(templatedPath, parameterMap,
                                                             requestURL,
@@ -105,7 +105,7 @@ public class XFormURLEncodedBuilder implements Builder {
 
         String query = requestURL;
         int index;
-        if ((index = requestURL.indexOf("?")) > 0) {
+        if ((index = requestURL.indexOf("?")) > -1) {
             query = requestURL.substring(index + 1);
         }
 
@@ -122,8 +122,8 @@ public class XFormURLEncodedBuilder implements Builder {
     protected void extractParametersFromRequest(MultipleEntryHashMap parameterMap,
                                                 String query,
                                                 String queryParamSeparator,
-                                                String charsetEncoding,
-                                                InputStream inputStream)
+                                                final String charsetEncoding,
+                                                final InputStream inputStream)
             throws AxisFault {
 
         if (query != null && !"".equals(query)) {
@@ -132,9 +132,16 @@ public class XFormURLEncodedBuilder implements Builder {
             for (int i = 0; i < parts.length; i++) {
                 int separator = parts[i].indexOf("=");
                 if (separator > 0) {
+                    String value = parts[i].substring(separator + 1);
+                    try {
+                        value = URIEncoderDecoder.decode(value);
+                    } catch (UnsupportedEncodingException e) {
+                        throw AxisFault.makeFault(e);
+                    }
+
                     parameterMap
                             .put(parts[i].substring(0, separator),
-                                 parts[i].substring(separator + 1));
+                                 value);
                 }
             }
 
@@ -143,7 +150,18 @@ public class XFormURLEncodedBuilder implements Builder {
         if (inputStream != null) {
             try {
                 InputStreamReader inputStreamReader =
-                        new InputStreamReader(inputStream, charsetEncoding);
+                        null;
+                try {
+                    inputStreamReader = (InputStreamReader) AccessController.doPrivileged(
+                            new PrivilegedExceptionAction() {
+                                public Object run() throws UnsupportedEncodingException {
+                                    return new InputStreamReader(inputStream, charsetEncoding);
+                                }
+                            }
+                    );
+                } catch (PrivilegedActionException e) {
+                    throw (UnsupportedEncodingException) e.getException();
+                }
                 BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
                 while (true) {
                     String line = bufferedReader.readLine();
@@ -152,8 +170,9 @@ public class XFormURLEncodedBuilder implements Builder {
                                 WSDL20DefaultValueHolder.ATTR_WHTTP_QUERY_PARAMETER_SEPARATOR_DEFAULT);
                         for (int i = 0; i < parts.length; i++) {
                             int separator = parts[i].indexOf("=");
+                            String value = parts[i].substring(separator + 1);
                             parameterMap.put(parts[i].substring(0, separator),
-                                             parts[i].substring(separator + 1));
+                                             URIEncoderDecoder.decode(value));
                         }
                     } else {
                         break;
@@ -235,9 +254,18 @@ public class XFormURLEncodedBuilder implements Builder {
                     if (templateStartIndex == -1) {
                         if (templateEndIndex == pathTemplate.length() - 1) {
 
+                            // We may have occations where we have templates of the form foo/{name}.
+                            // In this case the next connstant will be ? and not the
+                            // queryParameterSeparator
                             indexOfNextConstant =
                                     requestURIBuffer
-                                            .indexOf(queryParameterSeparator, endIndexOfConstant);
+                                            .indexOf("?", endIndexOfConstant);
+                            if (indexOfNextConstant == -1) {
+                                indexOfNextConstant =
+                                        requestURIBuffer
+                                                .indexOf(queryParameterSeparator,
+                                                         endIndexOfConstant);
+                            }
                             if (indexOfNextConstant > 0) {
                                 addParameterToMap(parameterMap, parameterName,
                                                   requestURIBuffer.substring(endIndexOfConstant,
@@ -297,7 +325,12 @@ public class XFormURLEncodedBuilder implements Builder {
 
     private void addParameterToMap(MultipleEntryHashMap parameterMap, String paramName,
                                    String paramValue)
-            throws UnsupportedEncodingException {
+            throws UnsupportedEncodingException, AxisFault {
+        try {
+            paramValue = URIEncoderDecoder.decode(paramValue);
+        } catch (UnsupportedEncodingException e) {
+            throw AxisFault.makeFault(e);
+        }
         if (paramName.startsWith(WSDL2Constants.TEMPLATE_ENCODE_ESCAPING_CHARACTER)) {
             parameterMap.put(paramName.substring(1), paramValue);
         } else {
@@ -307,7 +340,10 @@ public class XFormURLEncodedBuilder implements Builder {
     }
 
     private SOAPFactory getSOAPFactory(String nsURI) throws AxisFault {
-        if (SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI.equals(nsURI)) {
+        if (nsURI == null) {
+            return OMAbstractFactory.getSOAP12Factory();
+        }
+        else if (SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI.equals(nsURI)) {
             return OMAbstractFactory.getSOAP12Factory();
         } else if (SOAP11Constants.SOAP_ENVELOPE_NAMESPACE_URI.equals(nsURI)) {
             return OMAbstractFactory.getSOAP11Factory();
@@ -316,4 +352,3 @@ public class XFormURLEncodedBuilder implements Builder {
         }
     }
 }
-

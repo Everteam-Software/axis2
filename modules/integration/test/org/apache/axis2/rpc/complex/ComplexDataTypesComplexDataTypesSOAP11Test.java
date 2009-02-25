@@ -25,17 +25,19 @@
  */
 package org.apache.axis2.rpc.complex;
 
+import junit.framework.Test;
+import junit.framework.TestSuite;
 import org.apache.axiom.attachments.ByteArrayDataSource;
 import org.apache.axiom.attachments.utils.IOUtils;
 import org.apache.axiom.om.OMAbstractFactory;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMFactory;
 import org.apache.axiom.om.OMNamespace;
-import org.apache.axis2.integration.UtilServerBasedTestCase;
-import org.apache.axis2.integration.UtilServer;
-import org.apache.axis2.description.AxisService;
 import org.apache.axis2.addressing.EndpointReference;
+import org.apache.axis2.description.AxisService;
 import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.integration.UtilServer;
+import org.apache.axis2.integration.UtilServerBasedTestCase;
 import org.tempuri.complex.data.arrays.xsd.ArrayOfArrayOfstring;
 import org.tempuri.complex.data.arrays.xsd.ArrayOfNullableOfdateTime;
 import org.tempuri.complex.data.arrays.xsd.ArrayOfNullableOfdecimal;
@@ -50,13 +52,10 @@ import javax.activation.DataHandler;
 import javax.xml.namespace.QName;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Calendar;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.rmi.RemoteException;
-
-import junit.framework.TestCase;
-import junit.framework.Test;
-import junit.framework.TestSuite;
+import java.util.Calendar;
+import java.util.TimeZone;
 
 
 
@@ -68,7 +67,7 @@ public class ComplexDataTypesComplexDataTypesSOAP11Test extends UtilServerBasedT
     protected AxisConfiguration axisConfiguration;
 
     protected boolean finish = false;
-    org.tempuri.complex.ComplexDataTypesComplexDataTypesSOAP11Port_httpStub stub;
+    org.tempuri.complex.ComplexDataTypesComplexDataTypesHttpSoap11EndpointStub stub;
 
     public ComplexDataTypesComplexDataTypesSOAP11Test() {
         super(ComplexDataTypesComplexDataTypesSOAP11Test.class.getName());
@@ -97,7 +96,7 @@ public class ComplexDataTypesComplexDataTypesSOAP11Test extends UtilServerBasedT
                 new EndpointReference("http://127.0.0.1:"
                         + (UtilServer.TESTING_PORT)
                         + "/axis2/services/ComplexDataTypes");
-        stub  = new org.tempuri.complex.ComplexDataTypesComplexDataTypesSOAP11Port_httpStub(null,targetEPR.getAddress());
+        stub  = new org.tempuri.complex.ComplexDataTypesComplexDataTypesHttpSoap11EndpointStub(null,targetEPR.getAddress());
     }
 
     protected void tearDown() throws Exception {
@@ -207,8 +206,9 @@ public class ComplexDataTypesComplexDataTypesSOAP11Test extends UtilServerBasedT
         // now create the Article element with the above namespace
         OMElement articleElement = factory.createOMElement("Article", ns);
 
-        input.setAnyType(new OMElement[]{articleElement});
-        assertNotNull(stub.retArrayAnyType1D(input));
+       // comment out test case since now adb uses an object to represent an any type
+       // input.setAnyType(new OMElement[]{articleElement});
+       // assertNotNull(stub.retArrayAnyType1D(input));
     }
 
     /**
@@ -346,15 +346,17 @@ public class ComplexDataTypesComplexDataTypesSOAP11Test extends UtilServerBasedT
         assertTrue(ret==43.0f);
     }
 
+    private SimpleDateFormat zulu = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+
     /**
      * Auto generated test method
      */
     public void testretDateTime() throws java.lang.Exception {
-
+        zulu.setTimeZone(TimeZone.getTimeZone("GMT"));
         Calendar input = Calendar.getInstance();
         Calendar ret = stub.retDateTime(input);
         assertNotNull(ret);
-        assertEquals(ret, input);
+        assertEquals(zulu.format(input.getTime()), zulu.format(ret.getTime()));
     }
 
     /**
@@ -474,9 +476,10 @@ public class ComplexDataTypesComplexDataTypesSOAP11Test extends UtilServerBasedT
         // now create the Article element with the above namespace
         OMElement articleElement = factory.createOMElement("Article", ns);
 
-        OMElement ret = stub.retObject(articleElement);
-        assertNotNull(ret);
-        assertEquals(ret.toString(), articleElement.toString());
+        // comment out this test case since adb now uses an object to represents the any type
+        // OMElement ret = stub.retObject(articleElement);
+        // assertNotNull(ret);
+        // assertEquals(ret.toString(), articleElement.toString());
     }
 
     /**

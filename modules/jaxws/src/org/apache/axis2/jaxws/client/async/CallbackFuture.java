@@ -16,11 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.client.async;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.client.async.AsyncResult;
 import org.apache.axis2.client.async.Callback;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.core.InvocationContext;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.commons.logging.Log;
@@ -28,7 +30,7 @@ import org.apache.commons.logging.LogFactory;
 
 import javax.xml.ws.AsyncHandler;
 import javax.xml.ws.WebServiceException;
-
+import java.security.PrivilegedAction;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
@@ -172,9 +174,36 @@ public class CallbackFuture extends Callback {
                 if (log.isDebugEnabled()) {
                     log.debug("Task submitted to Executor");
                 }
+                
+                /*
+                 * TODO:  review
+                 * A thread switch will occur immediately after going out of scope
+                 * on this method.  This is ok, except on some platforms this will
+                 * prompt the JVM to clean up the old thread, thus cleaning up any
+                 * InputStreams there.  If that's the case, and we have not fully
+                 * read the InputStreams, we will likely get a NullPointerException
+                 * coming from the parser, which has a reference to the InputStream
+                 * that got nulled out from under it.  Make sure to do the
+                 * cft.notifyAll() in the right place.  CallbackFutureTask.call()
+                 * is the right place since at that point, the parser has fully read
+                 * the InputStream.
+                 */
+                try {
+                    synchronized (cft) {
+                        if(!cft.done) {
+                            cft.wait(180000);  // 3 minutes
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    if (debug) {
+                        log.debug("cft.wait() was interrupted");
+                        log.debug("Exception: " + e.getMessage());
+                    }
+                }
+                
             } else {
                 if (log.isDebugEnabled()) {
-                    log.info(
+                    log.debug(
                             "Executor task was not sumbitted as Async Future task was cancelled by clients");
                 }
             }
@@ -195,12 +224,17 @@ class CallbackFutureTask implements Callable {
     MessageContext msgCtx;
     AsyncHandler handler;
     Exception error;
+    boolean done = false;
 
     CallbackFutureTask(AsyncResponse r, AsyncHandler h) {
         response = r;
         handler = h;
     }
-
+    
+    protected AsyncHandler getHandler() {
+        return handler;
+    }
+    
     void setMessageContext(MessageContext mc) {
         msgCtx = mc;
     }
@@ -211,34 +245,44 @@ class CallbackFutureTask implements Callable {
 
     @SuppressWarnings("unchecked")
     public Object call() throws Exception {
-        // Set the response or fault content on the AsyncResponse object
-        // so that it can be collected inside the Executor thread and processed.
-        if (error != null) {
-            response.onError(error, msgCtx);
-        } else {
-            response.onComplete(msgCtx);
-        }
-
-        // Now that the content is available, call the JAX-WS AsyncHandler class
-        // to deliver the response to the user.
-        try {
-            ClassLoader cl = handler.getClass().getClassLoader();
-        	if (log.isDebugEnabled()) {
-        		log.debug("Setting up the thread's ClassLoader");
-        		log.debug(cl.toString());
-        	}
-        	Thread.currentThread().setContextClassLoader(cl);
+    	try {
+            ClassLoader classLoader = (ClassLoader)AccessController.doPrivileged(new PrivilegedAction() {
+                public Object run() {
+                    return handler.getClass().getClassLoader();
+                }
+            });
             
+            // Set the response or fault content on the AsyncResponse object
+            // so that it can be collected inside the Executor thread and processed.
+            if (error != null) {
+                response.onError(error, msgCtx, classLoader);
+            } else {
+                response.onComplete(msgCtx, classLoader);
+            }
+            
+            // Now that the content is available, call the JAX-WS AsyncHandler class
+            // to deliver the response to the user.
+            ClassLoader cl = handler.getClass().getClassLoader();
+            if (log.isDebugEnabled()) {
+                log.debug("Setting up the thread's ClassLoader");
+                log.debug(cl.toString());
+            }
+            Thread.currentThread().setContextClassLoader(cl);
+
             if (debug) {
                 log.debug("Calling JAX-WS AsyncHandler with the Response object");
                 log.debug("AyncHandler class: " + handler.getClass());
             }
             handler.handleResponse(response);
-        }
-        catch (Throwable t) {
+    	} catch (Throwable t) {
             if (debug) {
                 log.debug("An error occured while invoking the callback object.");
                 log.debug("Error: " + t.getMessage());
+            }
+    	} finally {
+            synchronized(this) {
+                done = true;
+                this.notifyAll();
             }
         }
 

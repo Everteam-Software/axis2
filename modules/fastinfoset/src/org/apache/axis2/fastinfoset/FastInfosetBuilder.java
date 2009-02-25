@@ -19,10 +19,7 @@
 
 package org.apache.axis2.fastinfoset;
 
-import java.io.InputStream;
-
-import javax.xml.stream.XMLStreamReader;
-
+import com.sun.xml.fastinfoset.stax.StAXDocumentParser;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.impl.builder.StAXBuilder;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
@@ -32,15 +29,12 @@ import org.apache.axis2.context.MessageContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.sun.xml.fastinfoset.stax.StAXDocumentParser;
+import javax.xml.stream.XMLStreamReader;
+import java.io.InputStream;
 
-/**
- * @author Sanjaya Karunasena (sanjayak@yahoo.com)
- * @date Feb 06, 2007
- */
 public class FastInfosetBuilder implements Builder {
 
-	private Log logger = LogFactory.getLog(FastInfosetBuilder.class);
+	private static  Log logger = LogFactory.getLog(FastInfosetBuilder.class);
 	
 	/**
 	 * Returns a OMElement handler to the document element of the Fast Infoset message.

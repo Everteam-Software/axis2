@@ -27,10 +27,9 @@ import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axiom.soap.SOAPHeader;
 import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.util.Counter;
 import org.apache.axis2.addressing.EndpointReference;
-import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.client.async.AxisCallback;
+import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
@@ -43,19 +42,22 @@ import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisServiceGroup;
 import org.apache.axis2.description.OutInAxisOperation;
 import org.apache.axis2.description.OutOnlyAxisOperation;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.RobustOutOnlyAxisOperation;
+import org.apache.axis2.description.TransportOutDescription;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.ListenerManager;
 import org.apache.axis2.i18n.Messages;
+import org.apache.axis2.util.Counter;
 import org.apache.axis2.wsdl.WSDLConstants;
-import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.Log;
-
+import org.apache.commons.logging.LogFactory;
 
 import javax.wsdl.Definition;
 import javax.xml.namespace.QName;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Iterator;
 
 /**
  * Client access to a service. Each instance of this class is associated with a
@@ -65,7 +67,7 @@ import java.util.ArrayList;
  */
 public class ServiceClient {
     protected static final Log log = LogFactory.getLog(ServiceClient.class);
-    
+
     /**
      * Base name used for a service created without an existing configuration.
      */
@@ -120,6 +122,8 @@ public class ServiceClient {
 
     //whether we create configctx or not
     private boolean createConfigCtx;
+    
+    private int hashCode;
 
     /**
      * Create a service client configured to work with a specific AxisService.
@@ -151,6 +155,7 @@ public class ServiceClient {
             }
         }
         this.configContext = configContext;
+        hashCode = (int) anonServiceCounter.incrementAndGet();
 
         // Initialize transports
         ListenerManager transportManager = configContext.getListenerManager();
@@ -216,6 +221,17 @@ public class ServiceClient {
                                                                                       wsdlServiceName,
                                                                                       portName,
                                                                                       options));
+        Parameter transportName = axisService.getParameter("TRANSPORT_NAME");
+        if(transportName != null ) {
+            TransportOutDescription transportOut = configContext.getAxisConfiguration().getTransportOut(
+                    transportName.getValue().toString());
+            if (transportOut == null) {
+                throw new AxisFault("Cannot load transport from binding, either defin in Axis2.config " +
+                        "or set it explicitely in ServiceClinet.Options");
+            } else {
+                options.setTransportOut(transportOut);
+            }
+        }
     }
 
     /**
@@ -259,9 +275,11 @@ public class ServiceClient {
      * Returns the AxisConfiguration associated with the client.    
      */
     public AxisConfiguration getAxisConfiguration() {
-        return axisConfig;
+        synchronized(this.axisConfig) {
+            return axisConfig;
+        }
     }
-    
+
     /**
      * Return the AxisService this is a client for. This is primarily useful
      * when the AxisService is created anonymously or from WSDL as otherwise the
@@ -331,7 +349,7 @@ public class ServiceClient {
      * @throws AxisFault if something goes wrong
      */
     public void engageModule(String moduleName) throws AxisFault {
-        synchronized (this) {
+        synchronized (this.axisConfig) {
             AxisModule module = axisConfig.getModule(moduleName);
             if (module != null) {
                 axisService.engageModule(module);
@@ -357,12 +375,14 @@ public class ServiceClient {
      * @param moduleName name of Module to disengage
      */
     public void disengageModule(String moduleName) {
-        AxisModule module = axisConfig.getModule(moduleName);
-        if (module != null) {
-            try {
-                axisService.disengageModule(module);
-            } catch (AxisFault axisFault) {
-                log.error(axisFault.getMessage(), axisFault);
+        synchronized (this.axisConfig) {
+            AxisModule module = axisConfig.getModule(moduleName);
+            if (module != null) {
+                try {
+                    axisService.disengageModule(module);
+                } catch (AxisFault axisFault) {
+                    log.error(axisFault.getMessage(), axisFault);
+                }
             }
         }
     }
@@ -531,10 +551,8 @@ public class ServiceClient {
         if(options.isCallTransportCleanup()){
             response.getEnvelope().build();
             cleanupTransport();
-            return response.getEnvelope().getBody().getFirstElement();
-        } else {
-            return response.getEnvelope().getBody().getFirstElement();
         }
+        return response.getEnvelope().getBody().getFirstElement();
     }
 
     /**
@@ -643,6 +661,12 @@ public class ServiceClient {
                     .getMessage("operationnotfound", operationQName.getLocalPart()));
         }
 
+        // add the option properties to the service context
+        String key;
+        for (Iterator iter = options.getProperties().keySet().iterator();iter.hasNext();){
+            key = (String) iter.next();
+            serviceContext.setProperty(key, options.getProperties().get(key));
+        }
         OperationClient operationClient = axisOperation.createClient(serviceContext, options);
 
         // if overide options have been set, that means we need to make sure
@@ -817,15 +841,40 @@ public class ServiceClient {
             throw new IllegalArgumentException("AxisService is null");
         }
 
-        axisConfig.removeService(this.axisService.getName());
-        this.axisService = axisService;
+        synchronized(this.axisConfig) {
+            axisConfig.removeService(this.axisService.getName());
+            this.axisService = axisService;
 
-        axisService.setClientSide(true);
-        axisConfig.addService(axisService);
-
+            axisService.setClientSide(true);
+            axisConfig.addService(axisService);
+        }
         AxisServiceGroup axisServiceGroup = axisService.getAxisServiceGroup();
         ServiceGroupContext serviceGroupContext =
                 configContext.createServiceGroupContext(axisServiceGroup);
         this.serviceContext = serviceGroupContext.getServiceContext(axisService);
     }
+
+	/**
+	 * @see java.lang.Object#hashCode()
+	 */
+	public int hashCode() {
+		return this.hashCode;
+	}
+
+	/**
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (!(obj instanceof ServiceClient))
+			return false;
+		final ServiceClient other = (ServiceClient) obj;
+		if (hashCode != other.hashCode)
+			return false;
+		return true;
+	}
+    
 }

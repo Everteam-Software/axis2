@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tools.java2wsdl;
 
 
 import org.apache.axis2.tools.bean.WsdlgenBean;
-import org.apache.axis2.tools.component.WizardPanel;
 import org.apache.axis2.tools.component.WizardComponents;
+import org.apache.axis2.tools.component.WizardPanel;
 import org.apache.axis2.tools.wizardframe.CodegenFrame;
 
 import javax.swing.*;

@@ -19,38 +19,42 @@
 
 package org.apache.axis2.jaxws.binding;
 
+import org.apache.axis2.addressing.EndpointReference;
+import org.apache.axis2.jaxws.core.MessageContext;
+import org.apache.axis2.jaxws.description.EndpointDescription;
+import org.apache.axis2.jaxws.feature.ClientConfigurator;
+import org.apache.axis2.jaxws.feature.ClientFramework;
+import org.apache.axis2.jaxws.handler.HandlerResolverImpl;
+import org.apache.axis2.jaxws.i18n.Messages;
+import org.apache.axis2.jaxws.registry.ClientConfiguratorRegistry;
+import org.apache.axis2.jaxws.spi.Binding;
+import org.apache.axis2.jaxws.spi.BindingProvider;
+
+import javax.xml.ws.WebServiceFeature;
+import javax.xml.ws.handler.Handler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import javax.xml.ws.Binding;
-import javax.xml.ws.handler.Handler;
-
-import org.apache.axis2.jaxws.description.EndpointDescription;
-import org.apache.axis2.jaxws.handler.HandlerResolverImpl;
-
 /**
- * @author rott classes that would normally "implement javax.xml.ws.Binding"
- *         should extend this class instead.
+ * Classes that would normally "implement javax.xml.ws.Binding"
+ * should extend this class instead.
  */
-public class BindingImpl implements Binding {
-
+public abstract class BindingImpl implements Binding {
     // an unsorted list of handlers
-    private List<Handler> handlers = null;
-
-    protected String bindingId = null;
+    private List<Handler> handlers;
 
     private EndpointDescription endpointDesc;
+    
+    private ClientFramework framework = new ClientFramework();
 
-    protected Set<String> roles = null;
+    protected String bindingId;
+
+    protected Set<String> roles;
 
     protected static final String SOAP11_ENV_NS = "http://schemas.xmlsoap.org/soap/envelope/";
 
     protected static final String SOAP12_ENV_NS = "http://www.w3.org/2003/05/soap-envelope";
-
-    public BindingImpl(String bindingId) {
-        this.bindingId = bindingId;
-    }
 
     public BindingImpl(EndpointDescription endpointDesc) {
         this.endpointDesc = endpointDesc;
@@ -59,6 +63,15 @@ public class BindingImpl implements Binding {
         if (this.bindingId == null) {
             // server
             this.bindingId = endpointDesc.getBindingType();
+        }
+        
+        Set<String> ids = ClientConfiguratorRegistry.getIds();
+        
+        for (String id : ids) {
+            ClientConfigurator configurator = ClientConfiguratorRegistry.getConfigurator(id);
+            
+            if (configurator.supports(this))
+                framework.addConfigurator(id, configurator);
         }
     }
 
@@ -81,4 +94,53 @@ public class BindingImpl implements Binding {
         }
     }
 
+    /**
+     * @since JAX-WS 2.1
+     */
+    public String getBindingID() {
+        return this.bindingId;
+    }
+
+    public void configure(MessageContext messageContext, BindingProvider provider) {
+        framework.configure(messageContext, provider);
+    }
+
+    public WebServiceFeature getFeature(String id) {
+        return framework.getFeature(id);
+    }
+
+    public void setFeatures(WebServiceFeature... features) {
+        if (features != null) {
+            for (WebServiceFeature feature : features) {
+                framework.addFeature(feature);
+            }
+        }
+    }
+    
+    public void setAddressingNamespace(String addressingNamespace) {
+        if (addressingNamespace != null) {
+            throw new UnsupportedOperationException(
+                Messages.getMessage("bindingMethodNotSupported", 
+                                    "setAddressingNamespace", 
+                                    bindingId)); 
+        }
+    }
+
+    public void setAxis2EndpointReference(EndpointReference epr) {
+        if (epr != null) {
+            throw new UnsupportedOperationException(
+                Messages.getMessage("bindingMethodNotSupported", "setAxis2EndpointReference", 
+                                    bindingId));
+        }
+    }
+
+    public String getAddressingNamespace() {
+        throw new UnsupportedOperationException(
+           Messages.getMessage("bindingMethodNotSupported", "getAddressingNamespace", bindingId));
+    }
+
+    public EndpointReference getAxis2EndpointReference() {
+        throw new UnsupportedOperationException(
+           Messages.getMessage("bindingMethodNotSupported", "getAxis2EndpointReference", bindingId)); 
+    }
 }

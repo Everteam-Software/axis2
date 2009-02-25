@@ -16,9 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.http.server;
 
 import edu.emory.mathcs.backport.java.util.concurrent.CountDownLatch;
+import org.apache.axiom.soap.SOAP11Constants;
+import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingHelper;
@@ -33,13 +36,24 @@ import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.axis2.util.MessageContextBuilder;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.http.*;
+import org.apache.http.ConnectionReuseStrategy;
+import org.apache.http.Header;
+import org.apache.http.HttpEntityEnclosingRequest;
+import org.apache.http.HttpException;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpResponseFactory;
+import org.apache.http.HttpStatus;
+import org.apache.http.HttpVersion;
+import org.apache.http.MethodNotSupportedException;
+import org.apache.http.ProtocolException;
+import org.apache.http.ProtocolVersion;
+import org.apache.http.RequestLine;
+import org.apache.http.UnsupportedHttpVersionException;
+import org.apache.http.params.DefaultedHttpParams;
 import org.apache.http.params.HttpParams;
-import org.apache.http.params.HttpParamsLinker;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpProcessor;
-import org.apache.axiom.soap.SOAP12Constants;
-import org.apache.axiom.soap.SOAP11Constants;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.namespace.QName;
@@ -51,8 +65,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 
 /**
- * This class is an extension of the defaulf HTTP service responsible for
- * maintaining and polulating the {@link MessageContext} for incoming Axis
+ * This class is an extension of the default HTTP service responsible for
+ * maintaining and populating the {@link MessageContext} for incoming Axis
  * requests.
  */
 public class AxisHttpService {
@@ -126,8 +140,13 @@ public class AxisHttpService {
         HttpResponse response;
         try {
             HttpRequest request = conn.receiveRequest();
-            HttpParamsLinker.link(request, this.params);
-            HttpVersion ver = request.getRequestLine().getHttpVersion();
+            RequestLine requestLine = request.getRequestLine();
+            if (requestLine != null) {
+                msgContext.setProperty(HTTPConstants.HTTP_METHOD, requestLine.getMethod());
+            }
+            request.setParams(
+                new DefaultedHttpParams(request.getParams(), this.params));
+            ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             if (!ver.lessEquals(HttpVersion.HTTP_1_1)) {
                 // Downgrade protocol version if greater than HTTP/1.1 
                 ver = HttpVersion.HTTP_1_1;
@@ -135,13 +154,15 @@ public class AxisHttpService {
 
             response = this.responseFactory.newHttpResponse
                     (ver, HttpStatus.SC_OK, context);
-            HttpParamsLinker.link(response, this.params);
+            response.setParams(
+                new DefaultedHttpParams(response.getParams(), this.params));
 
             if (request instanceof HttpEntityEnclosingRequest) {
                 if (((HttpEntityEnclosingRequest) request).expectContinue()) {
                     HttpResponse ack = this.responseFactory.newHttpResponse
                             (ver, HttpStatus.SC_CONTINUE, context);
-                    HttpParamsLinker.link(ack, this.params);
+                    ack.setParams(
+                        new DefaultedHttpParams(ack.getParams(), this.params));
                     conn.sendResponse(ack);
                     conn.flush();
                 }
@@ -186,7 +207,8 @@ public class AxisHttpService {
             response = this.responseFactory.newHttpResponse
                     (HttpVersion.HTTP_1_0, HttpStatus.SC_INTERNAL_SERVER_ERROR,
                      context);
-            HttpParamsLinker.link(response, this.params);
+            response.setParams(
+                new DefaultedHttpParams(response.getParams(), this.params));
             handleException(ex, response);
             this.httpProcessor.process(response, context);
             conn.sendResponse(response);
@@ -261,7 +283,7 @@ public class AxisHttpService {
             // Socket is unreliable. 
             throw ex;
         } catch (HttpException ex) {
-            // HTTP protocol violation. Transport is unrelaible
+            // HTTP protocol violation. Transport is unreliable
             throw ex;
         } catch (Throwable e) {
 
@@ -311,18 +333,18 @@ public class AxisHttpService {
 
     class SimpleHTTPRequestResponseTransport implements RequestResponseTransport {
 
-		private CountDownLatch responseReadySignal = new CountDownLatch(1);
-        RequestResponseTransportStatus status = RequestResponseTransportStatus.INITIAL;
+        private CountDownLatch responseReadySignal = new CountDownLatch(1);
+        RequestResponseTransportStatus status = RequestResponseTransportStatus.WAITING;
         AxisFault faultToBeThrownOut = null;
         private boolean responseWritten = false;
 
         public void acknowledgeMessage(MessageContext msgContext) throws AxisFault {
             //TODO: Once the core HTTP API allows us to return an ack before unwinding, then the should be fixed
-            signalResponseReady();
+            status = RequestResponseTransportStatus.ACKED;
+            responseReadySignal.countDown();
         }
 
         public void awaitResponse() throws InterruptedException, AxisFault {
-            status = RequestResponseTransportStatus.WAITING;
             responseReadySignal.await();
 
             if (faultToBeThrownOut != null) {
@@ -345,12 +367,12 @@ public class AxisHttpService {
         }
         
         public boolean isResponseWritten() {
-			return responseWritten;
-		}
+            return responseWritten;
+        }
 
-		public void setResponseWritten(boolean responseWritten) {
-			this.responseWritten = responseWritten;
-		}
+        public void setResponseWritten(boolean responseWritten) {
+            this.responseWritten = responseWritten;
+        }
 
     }
 

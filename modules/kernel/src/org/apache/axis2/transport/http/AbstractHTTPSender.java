@@ -32,7 +32,19 @@ import org.apache.axis2.transport.MessageFormatter;
 import org.apache.axis2.transport.TransportUtils;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.wsdl.WSDLConstants;
-import org.apache.commons.httpclient.*;
+import org.apache.commons.httpclient.Credentials;
+import org.apache.commons.httpclient.Header;
+import org.apache.commons.httpclient.HeaderElement;
+import org.apache.commons.httpclient.HostConfiguration;
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.HttpConnectionManager;
+import org.apache.commons.httpclient.HttpMethod;
+import org.apache.commons.httpclient.HttpMethodBase;
+import org.apache.commons.httpclient.HttpVersion;
+import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
+import org.apache.commons.httpclient.NTCredentials;
+import org.apache.commons.httpclient.NameValuePair;
+import org.apache.commons.httpclient.UsernamePasswordCredentials;
 import org.apache.commons.httpclient.auth.AuthPolicy;
 import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.protocol.Protocol;
@@ -45,6 +57,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -184,7 +197,7 @@ public abstract class AbstractHTTPSender {
     private String processCookieHeader(HeaderElement element) {
         String cookie = element.getName() + "=" + element.getValue();
         NameValuePair[] parameters =  element.getParameters();
-        for (int j = 0; j < parameters.length; j++) {
+        for (int j = 0; parameters != null && j < parameters.length; j++) {
             NameValuePair parameter = parameters[j];
             cookie = cookie + "; " + parameter.getName() + "=" + parameter.getValue();
         }
@@ -482,7 +495,12 @@ public abstract class AbstractHTTPSender {
         } else {
             HttpConnectionManager connManager =
                     (HttpConnectionManager) msgContext.getProperty(
-                            HTTPConstants.MUTTITHREAD_HTTP_CONNECTION_MANAGER);
+                            HTTPConstants.MULTITHREAD_HTTP_CONNECTION_MANAGER);
+            if (connManager == null) {
+                connManager =
+                        (HttpConnectionManager) msgContext.getProperty(
+                                HTTPConstants.MUTTITHREAD_HTTP_CONNECTION_MANAGER);
+            }
             if(connManager != null){
                 httpClient = new HttpClient(connManager);
             } else {
@@ -517,6 +535,10 @@ public abstract class AbstractHTTPSender {
                     HTTPConstants.COMPRESSION_GZIP);
         }
 
+        String cookiePolicy = (String) msgContext.getProperty(HTTPConstants.COOKIE_POLICY);
+        if (cookiePolicy != null) {
+            method.getParams().setCookiePolicy(cookiePolicy);   
+        }
         httpClient.executeMethod(config, method);
     }
 
@@ -525,17 +547,31 @@ public abstract class AbstractHTTPSender {
         boolean isCustomUserAgentSet = false;
         // set the custom headers, if available
         Object httpHeadersObj = msgContext.getProperty(HTTPConstants.HTTP_HEADERS);
-        if (httpHeadersObj != null && httpHeadersObj instanceof ArrayList) {
-            ArrayList httpHeaders = (ArrayList) httpHeadersObj;
-            Header header;
-            for (int i = 0; i < httpHeaders.size(); i++) {
-                header = (Header) httpHeaders.get(i);
-                if (HTTPConstants.HEADER_USER_AGENT.equals(header.getName())) {
-                    isCustomUserAgentSet = true;
+        if (httpHeadersObj != null) {
+            if (httpHeadersObj instanceof ArrayList) {
+                ArrayList httpHeaders = (ArrayList) httpHeadersObj;
+                Header header;
+                for (int i = 0; i < httpHeaders.size(); i++) {
+                    header = (Header) httpHeaders.get(i);
+                    if (HTTPConstants.HEADER_USER_AGENT.equals(header.getName())) {
+                        isCustomUserAgentSet = true;
+                    }
+                    method.addRequestHeader(header);
                 }
-                method.addRequestHeader(header);
+    
             }
-
+            if (httpHeadersObj instanceof Map) {
+                Map httpHeaders = (Map) httpHeadersObj;
+                for (Iterator iterator = httpHeaders.entrySet().iterator(); iterator.hasNext();) {
+                    Map.Entry entry  = (Map.Entry) iterator.next();
+                    String key = (String) entry.getKey();
+                    String value = (String) entry.getValue();
+                    if (HTTPConstants.HEADER_USER_AGENT.equals(key)) {
+                        isCustomUserAgentSet = true;
+                    }
+                    method.addRequestHeader(key, value);
+                }
+            }
         }
 
         if (!isCustomUserAgentSet) {

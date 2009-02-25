@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.builder.converter;
 
 import junit.framework.TestCase;
@@ -24,7 +25,6 @@ import org.apache.axis2.jaxws.description.builder.MethodDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.ParameterDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.WebMethodAnnot;
 import org.apache.axis2.jaxws.description.builder.WebParamAnnot;
-import org.apache.axis2.jaxws.description.builder.WebServiceAnnot;
 import org.apache.log4j.BasicConfigurator;
 
 import javax.jws.WebMethod;
@@ -60,7 +60,7 @@ public class ReflectiveConverterTests extends TestCase {
 
     public static void testCreateImplDBC() {
         assertNotNull(implDBC);
-        WebServiceAnnot wsAnnot = implDBC.getWebServiceAnnot();
+        WebService wsAnnot = implDBC.getWebServiceAnnot();
         assertNotNull(wsAnnot);
         assertEquals("SimpleService", wsAnnot.serviceName());
     }
@@ -114,7 +114,7 @@ public class ReflectiveConverterTests extends TestCase {
 
     public static void testCreateSEIDBC() {
         assertNotNull(seiDBC);
-        WebServiceAnnot wsAnnot = seiDBC.getWebServiceAnnot();
+        WebService wsAnnot = seiDBC.getWebServiceAnnot();
         assertNotNull(wsAnnot);
         assertEquals("SimpleServicePort", wsAnnot.name());
     }

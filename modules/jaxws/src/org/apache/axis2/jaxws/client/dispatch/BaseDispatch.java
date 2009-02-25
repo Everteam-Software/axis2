@@ -16,28 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.client.dispatch;
 
-import java.net.HttpURLConnection;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
-
-import javax.xml.soap.SOAPBody;
-import javax.xml.soap.SOAPConstants;
-import javax.xml.soap.SOAPFactory;
-import javax.xml.soap.SOAPFault;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.ws.AsyncHandler;
-import javax.xml.ws.Binding;
-import javax.xml.ws.ProtocolException;
-import javax.xml.ws.Response;
-import javax.xml.ws.WebServiceException;
-import javax.xml.ws.Service.Mode;
-import javax.xml.ws.http.HTTPBinding;
-import javax.xml.ws.http.HTTPException;
-import javax.xml.ws.soap.SOAPBinding;
-import javax.xml.ws.soap.SOAPFaultException;
-
+import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.jaxws.BindingProvider;
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -45,25 +27,36 @@ import org.apache.axis2.jaxws.client.async.AsyncResponse;
 import org.apache.axis2.jaxws.core.InvocationContext;
 import org.apache.axis2.jaxws.core.InvocationContextFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
-import org.apache.axis2.jaxws.core.controller.AxisInvocationController;
 import org.apache.axis2.jaxws.core.controller.InvocationController;
+import org.apache.axis2.jaxws.core.controller.InvocationControllerFactory;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.marshaller.impl.alt.MethodMarshallerUtils;
 import org.apache.axis2.jaxws.message.Message;
-import org.apache.axis2.jaxws.message.Protocol;
-import org.apache.axis2.jaxws.message.util.XMLFaultUtils;
+import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.spi.Binding;
 import org.apache.axis2.jaxws.spi.Constants;
 import org.apache.axis2.jaxws.spi.ServiceDelegate;
 import org.apache.axis2.jaxws.spi.migrator.ApplicationContextMigratorUtil;
-import org.apache.axis2.jaxws.utility.SAAJFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.ws.AsyncHandler;
+import javax.xml.ws.ProtocolException;
+import javax.xml.ws.Response;
+import javax.xml.ws.Service.Mode;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.WebServiceFeature;
+import javax.xml.ws.http.HTTPBinding;
+import javax.xml.ws.soap.SOAPBinding;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 
 public abstract class BaseDispatch<T> extends BindingProvider
         implements javax.xml.ws.Dispatch {
 
-    private Log log = LogFactory.getLog(BaseDispatch.class);
+    private static Log log = LogFactory.getLog(BaseDispatch.class);
 
     protected InvocationController ic;
 
@@ -71,10 +64,19 @@ public abstract class BaseDispatch<T> extends BindingProvider
 
     protected Mode mode;
 
-    protected BaseDispatch(ServiceDelegate svcDelgate, EndpointDescription epDesc) {
-        super(svcDelgate, epDesc);
+    protected BaseDispatch(ServiceDelegate svcDelgate,
+                           EndpointDescription epDesc,
+                           EndpointReference epr,
+                           String addressingNamespace,
+                           WebServiceFeature... features) {
+        super(svcDelgate, epDesc, epr, addressingNamespace, features);
 
-        ic = new AxisInvocationController();
+        InvocationControllerFactory icf = (InvocationControllerFactory) FactoryRegistry.getFactory(InvocationControllerFactory.class);
+        ic = icf.getInvocationController();
+        
+        if (ic == null) {
+            throw new WebServiceException(Messages.getMessage("missingInvocationController"));
+        }
     }
 
     /**
@@ -132,19 +134,11 @@ public abstract class BaseDispatch<T> extends BindingProvider
              */
 
             // be sure to use whatever handlerresolver is registered on the Service
-            invocationContext.setHandlers(getBinding().getHandlerChain());
+            Binding binding = (Binding) getBinding();
+            invocationContext.setHandlers(binding.getHandlerChain());
 
-            Message requestMsg = null;
-            try {
-                if (isValidInvocationParam(obj)) {
-                    requestMsg = createMessageFromValue(obj);
-                } else {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchInvalidParam"));
-                }
-            } catch (Exception e) {
-                throw getProtocolException(e);
-            }
-
+            Message requestMsg = createRequestMessage(obj);
+           
             setupMessageProperties(requestMsg);
             requestMsgCtx.setMessage(requestMsg);
 
@@ -153,6 +147,9 @@ public abstract class BaseDispatch<T> extends BindingProvider
             ApplicationContextMigratorUtil.performMigrationToMessageContext(
                     Constants.APPLICATION_CONTEXT_MIGRATOR_LIST_ID,
                     getRequestContext(), requestMsgCtx);
+
+            // Perform the WebServiceFeature configuration requested by the user.
+            binding.configure(requestMsgCtx, this);
 
             // Send the request using the InvocationController
             ic.invoke(invocationContext);
@@ -208,17 +205,23 @@ public abstract class BaseDispatch<T> extends BindingProvider
             MessageContext requestMsgCtx = new MessageContext();
             requestMsgCtx.setEndpointDescription(getEndpointDescription());
             invocationContext.setRequestMessageContext(requestMsgCtx);
+            
+            /*
+             * TODO: review: make sure the handlers are set on the InvocationContext
+             * This implementation of the JAXWS runtime does not use Endpoint, which
+             * would normally be the place to initialize and store the handler list.
+             * In lieu of that, we will have to intialize and store them on the 
+             * InvocationContext.  also see the InvocationContextFactory.  On the client
+             * side, the binding is not yet set when we call into that factory, so the
+             * handler list doesn't get set on the InvocationContext object there.  Thus
+             * we gotta do it here.
+             */
 
-            Message requestMsg = null;
-            try {
-                if (isValidInvocationParam(obj)) {
-                    requestMsg = createMessageFromValue(obj);
-                } else {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchInvalidParam"));
-                }
-            } catch (Exception e){
-                throw getProtocolException(e);
-            }
+            // be sure to use whatever handlerresolver is registered on the Service
+            Binding binding = (Binding) getBinding();
+            invocationContext.setHandlers(binding.getHandlerChain());
+
+            Message requestMsg = createRequestMessage(obj);
 
             setupMessageProperties(requestMsg);
             requestMsgCtx.setMessage(requestMsg);
@@ -228,6 +231,9 @@ public abstract class BaseDispatch<T> extends BindingProvider
             ApplicationContextMigratorUtil.performMigrationToMessageContext(
                     Constants.APPLICATION_CONTEXT_MIGRATOR_LIST_ID,
                     getRequestContext(), requestMsgCtx);
+
+            // Perform the WebServiceFeature configuration requested by the user.
+            binding.configure(requestMsgCtx, this);
 
             // Send the request using the InvocationController
             ic.invokeOneWay(invocationContext);
@@ -266,13 +272,23 @@ public abstract class BaseDispatch<T> extends BindingProvider
             MessageContext requestMsgCtx = new MessageContext();
             requestMsgCtx.setEndpointDescription(getEndpointDescription());
             invocationContext.setRequestMessageContext(requestMsgCtx);
+            
+            /*
+             * TODO: review: make sure the handlers are set on the InvocationContext
+             * This implementation of the JAXWS runtime does not use Endpoint, which
+             * would normally be the place to initialize and store the handler list.
+             * In lieu of that, we will have to intialize and store them on the 
+             * InvocationContext.  also see the InvocationContextFactory.  On the client
+             * side, the binding is not yet set when we call into that factory, so the
+             * handler list doesn't get set on the InvocationContext object there.  Thus
+             * we gotta do it here.
+             */
 
-            Message requestMsg = null;
-            if (isValidInvocationParam(obj)) {
-                requestMsg = createMessageFromValue(obj);
-            } else {
-                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchInvalidParam"));
-            }
+            // be sure to use whatever handlerresolver is registered on the Service
+            Binding binding = (Binding) getBinding();
+            invocationContext.setHandlers(binding.getHandlerChain());
+
+            Message requestMsg = createRequestMessage(obj);
 
             setupMessageProperties(requestMsg);
             requestMsgCtx.setMessage(requestMsg);
@@ -282,6 +298,9 @@ public abstract class BaseDispatch<T> extends BindingProvider
             ApplicationContextMigratorUtil.performMigrationToMessageContext(
                     Constants.APPLICATION_CONTEXT_MIGRATOR_LIST_ID,
                     getRequestContext(), requestMsgCtx);
+
+            // Perform the WebServiceFeature configuration requested by the user.
+            binding.configure(requestMsgCtx, this);
 
             // Setup the Executor that will be used to drive async responses back to 
             // the client.
@@ -331,13 +350,23 @@ public abstract class BaseDispatch<T> extends BindingProvider
             MessageContext requestMsgCtx = new MessageContext();
             requestMsgCtx.setEndpointDescription(getEndpointDescription());
             invocationContext.setRequestMessageContext(requestMsgCtx);
+            
+            /*
+             * TODO: review: make sure the handlers are set on the InvocationContext
+             * This implementation of the JAXWS runtime does not use Endpoint, which
+             * would normally be the place to initialize and store the handler list.
+             * In lieu of that, we will have to intialize and store them on the 
+             * InvocationContext.  also see the InvocationContextFactory.  On the client
+             * side, the binding is not yet set when we call into that factory, so the
+             * handler list doesn't get set on the InvocationContext object there.  Thus
+             * we gotta do it here.
+             */
 
-            Message requestMsg = null;
-            if (isValidInvocationParam(obj)) {
-                requestMsg = createMessageFromValue(obj);
-            } else {
-                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchInvalidParam"));
-            }
+            // be sure to use whatever handlerresolver is registered on the Service
+            Binding binding = (Binding) getBinding();
+            invocationContext.setHandlers(binding.getHandlerChain());
+
+            Message requestMsg = createRequestMessage(obj);
 
             setupMessageProperties(requestMsg);
             requestMsgCtx.setMessage(requestMsg);
@@ -347,6 +376,9 @@ public abstract class BaseDispatch<T> extends BindingProvider
             ApplicationContextMigratorUtil.performMigrationToMessageContext(
                     Constants.APPLICATION_CONTEXT_MIGRATOR_LIST_ID,
                     getRequestContext(), requestMsgCtx);
+
+            // Perform the WebServiceFeature configuration requested by the user.
+            binding.configure(requestMsgCtx, this);
 
             // Setup the Executor that will be used to drive async responses back to 
             // the client.
@@ -412,37 +444,6 @@ public abstract class BaseDispatch<T> extends BindingProvider
 
         return null;
     }
-    
-    private ProtocolException getProtocolException(Exception e) {
-        if (getBinding() instanceof SOAPBinding) {
-            // Throw a SOAPFaultException
-            if (log.isDebugEnabled()) {
-                log.debug("Constructing SOAPFaultException for " + e);
-            }
-            try {
-                SOAPFault soapFault = SOAPFactory.newInstance().createFault();
-                soapFault.setFaultString(e.getMessage());
-                return new SOAPFaultException(soapFault);
-            } catch (Exception ex) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Exception occurred during fault processing:", ex);
-                }
-                return ExceptionFactory.makeProtocolException(e.getMessage(), null);
-            }
-        } else if (getBinding() instanceof HTTPBinding) {
-            if (log.isDebugEnabled()) {
-                log.debug("Constructing ProtocolException for " + e);
-            }
-            HTTPException ex = new HTTPException(HttpURLConnection.HTTP_INTERNAL_ERROR);
-            ex.initCause(new Throwable(e.getMessage()));
-            return ex;
-        } else {
-            if (log.isDebugEnabled()) {
-                log.debug("Constructing ProtocolException for " + e);
-            }
-            return ExceptionFactory.makeProtocolException(e.getMessage(), null);
-        }
-    }
 
     /**
      * Returns a boolean indicating whether or not the MessageContext contained a fault.
@@ -465,20 +466,11 @@ public abstract class BaseDispatch<T> extends BindingProvider
     private void setupMessageProperties(Message msg) {
         // If the user has enabled MTOM on the SOAPBinding, we need
         // to make sure that gets pushed to the Message object.
-        Binding binding = getBinding();
+        Binding binding = (Binding) getBinding();
         if (binding != null && binding instanceof SOAPBinding) {
             SOAPBinding soapBinding = (SOAPBinding)binding;
             if (soapBinding.isMTOMEnabled())
                 msg.setMTOMEnabled(true);
-        }
-
-        // Check if the user enabled MTOM using the SOAP binding 
-        // properties for MTOM
-        String bindingID = endpointDesc.getClientBindingID();
-        if ((bindingID.equalsIgnoreCase(SOAPBinding.SOAP11HTTP_MTOM_BINDING) ||
-                bindingID.equalsIgnoreCase(SOAPBinding.SOAP12HTTP_MTOM_BINDING)) &&
-                !msg.isMTOMEnabled()) {
-            msg.setMTOMEnabled(true);
         }
     }
 
@@ -519,5 +511,25 @@ public abstract class BaseDispatch<T> extends BindingProvider
 
         // If we've gotten this far, then all is good.
         return true;
+    }
+    
+    private Message createRequestMessage(Object obj) throws WebServiceException {
+        
+        // Check to see if the object is a valid invocation parameter.  
+        // Then create the message from the object.
+        // If an exception occurs, it is local to the client and therefore is a
+        // WebServiceException (and not ProtocolExceptions).
+        // This code complies with JAX-WS 2.0 sections 4.3.2, 4.3.3 and 4.3.4.
+        if (!isValidInvocationParam(obj)) {
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchInvalidParam"));
+        } 
+        Message requestMsg = null;
+        try {
+             requestMsg = createMessageFromValue(obj);
+        } catch (Throwable t) {
+            // The webservice exception wraps the thrown exception.
+            throw ExceptionFactory.makeWebServiceException(t);
+        }
+        return requestMsg;
     }
 }

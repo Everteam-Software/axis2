@@ -30,10 +30,12 @@ import org.apache.axis2.description.AxisOperationFactory;
 import org.apache.axis2.description.InOnlyAxisOperation;
 import org.apache.axis2.description.PolicyInclude;
 import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.engine.Deployable;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.modules.Module;
+import org.apache.axis2.phaseresolver.PhaseMetadata;
 import org.apache.axis2.util.Loader;
 
 import javax.xml.namespace.QName;
@@ -88,7 +90,11 @@ public class ModuleBuilder extends DescriptionBuilder {
             OMElement moduleElement = buildOM();
             // Setting Module Class , if it is there
             OMAttribute moduleClassAtt = moduleElement.getAttribute(new QName(TAG_CLASS_NAME));
+            // processing Parameters
+            // Processing service level parameters
+            Iterator itr = moduleElement.getChildrenWithName(new QName(TAG_PARAMETER));
 
+            processParameters(itr, module, module.getParent());
             if (moduleClassAtt != null) {
                 String moduleClass = moduleClassAtt.getAttributeValue();
 
@@ -130,6 +136,10 @@ public class ModuleBuilder extends DescriptionBuilder {
                 module.setModuleDescription("module description not found");
             }
 
+            // Processing Dynamic Phase
+            Iterator phaseItr = moduleElement.getChildrenWithName(new QName(TAG_PHASE));
+            processModulePhase(phaseItr);
+            
             // setting the PolicyInclude
 
             // processing <wsp:Policy> .. </..> elements
@@ -137,8 +147,7 @@ public class ModuleBuilder extends DescriptionBuilder {
                     moduleElement.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY));
 
             if (policyElements != null && policyElements.hasNext()) {
-                processPolicyElements(PolicyInclude.AXIS_MODULE_POLICY, policyElements,
-                                      module.getPolicyInclude());
+                processPolicyElements(policyElements, module.getPolicySubject());
             }
 
             // processing <wsp:PolicyReference> .. </..> elements
@@ -146,15 +155,8 @@ public class ModuleBuilder extends DescriptionBuilder {
                     moduleElement.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY_REF));
 
             if (policyRefElements != null && policyElements.hasNext()) {
-                processPolicyRefElements(PolicyInclude.AXIS_MODULE_POLICY, policyRefElements,
-                                         module.getPolicyInclude());
+                processPolicyRefElements(policyRefElements, module.getPolicySubject());
             }
-
-            // processing Parameters
-            // Processing service level parameters
-            Iterator itr = moduleElement.getChildrenWithName(new QName(TAG_PARAMETER));
-
-            processParameters(itr, module, module.getParent());
 
             // process INFLOW
             OMElement inFlow = moduleElement.getFirstChildWithName(new QName(TAG_FLOW_IN));
@@ -212,7 +214,10 @@ public class ModuleBuilder extends DescriptionBuilder {
 
                 module.addOperation(operation);
             }
+
         } catch (XMLStreamException e) {
+            throw new DeploymentException(e);
+        } catch(AxisFault e) {
             throw new DeploymentException(e);
         }
     }
@@ -290,14 +295,14 @@ public class ModuleBuilder extends DescriptionBuilder {
             Iterator policyElements = operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY));
 
             if (policyElements != null && policyElements.hasNext()) {
-                processPolicyElements(PolicyInclude.AXIS_MODULE_OPERATION_POLICY, policyElements, op_descrip.getPolicyInclude());
+                processPolicyElements(policyElements, op_descrip.getPolicySubject());
             }
 
             // processing <wsp:PolicyReference> .. </..> elements
             Iterator policyRefElements = operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY_REF));
 
-            if (policyRefElements != null && policyElements.hasNext()) {
-                processPolicyRefElements(PolicyInclude.AXIS_MODULE_OPERATION_POLICY, policyRefElements, module.getPolicyInclude());
+            if (policyRefElements != null && policyRefElements.hasNext()) {
+                processPolicyRefElements(policyRefElements, module.getPolicySubject());
             }
 
             // setting Operation phase
@@ -314,5 +319,56 @@ public class ModuleBuilder extends DescriptionBuilder {
         }
 
         return operations;
+    }
+
+    /**
+     * This will process the phase list and then added the phases specified in module.xml to
+     * axisConfiguration. The format of a phase element will something like
+     *  <phase name="Foo" after="After_phase_Name" before="Before_Phase_Name"
+     *  flow="[InFlow,OutFlow,OutFaultFlow,InFaultFlow]"/>
+     *  Here before and after can be null
+     * @param phases : OMElement iterator
+     * @throws AxisFault : If something went wrong
+     */
+    private void processModulePhase(Iterator phases) throws AxisFault {
+        if (phases == null){
+            return;
+        }
+        while (phases.hasNext()) {
+            OMElement element = (OMElement) phases.next();
+            String phaseName = element.getAttributeValue(new QName(ATTRIBUTE_NAME));
+
+            Deployable d = new Deployable(phaseName);
+            String after = element.getAttributeValue(new QName(TAG_AFTER));
+            if (after != null) {
+                String [] afters = after.split(",");
+                for (int i = 0; i < afters.length; i++) {
+                    String s = afters[i];
+                    d.addPredecessor(s);
+                }
+            }
+            String before = element.getAttributeValue(new QName(TAG_BEFORE));
+            if (before != null) {
+                String [] befores = before.split(",");
+                for (int i = 0; i < befores.length; i++) {
+                    String s = befores[i];
+                    d.addSuccessor(s);
+                }
+            }
+            String flowName = element.getAttributeValue(new QName("flow"));
+            int flowIndex ;
+            if (TAG_FLOW_IN.equals(flowName)){
+                flowIndex = PhaseMetadata.IN_FLOW ;
+            } else if (TAG_FLOW_OUT.equals(flowName)) {
+                flowIndex = PhaseMetadata.OUT_FLOW ;
+            } else if (TAG_FLOW_OUT_FAULT.equals(flowName)) {
+                flowIndex = PhaseMetadata.FAULT_OUT_FLOW;
+            } else if (TAG_FLOW_IN_FAULT.equals(flowName)) {
+                flowIndex = PhaseMetadata.FAULT_IN_FLOW;
+            } else {
+                throw new DeploymentException(" Flow can not be null for the phase name " + phaseName);
+            }
+            axisConfig.insertPhase(d, flowIndex);
+        }
     }
 }

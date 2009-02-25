@@ -16,10 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.databinding;
 
-import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.Location;
+import javax.xml.stream.XMLStreamException;
 
 /**
  * handles databinding exceptions

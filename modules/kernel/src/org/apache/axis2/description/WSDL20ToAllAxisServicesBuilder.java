@@ -22,7 +22,7 @@ package org.apache.axis2.description;
 import org.apache.axis2.AxisFault;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.woden.wsdl20.Endpoint;
+import org.apache.woden.WSDLException;
 import org.apache.woden.wsdl20.Service;
 
 import java.io.InputStream;
@@ -46,6 +46,11 @@ public class WSDL20ToAllAxisServicesBuilder extends WSDL20ToAxisServiceBuilder {
      */
     public WSDL20ToAllAxisServicesBuilder(InputStream in) {
         super(in, null, null);
+        axisServices = new ArrayList();   // create an empty ArrayList
+    }
+
+    public WSDL20ToAllAxisServicesBuilder(String wsdlUri, String endpointName) throws WSDLException {
+        super(wsdlUri, null, endpointName);
         axisServices = new ArrayList();   // create an empty ArrayList
     }
 

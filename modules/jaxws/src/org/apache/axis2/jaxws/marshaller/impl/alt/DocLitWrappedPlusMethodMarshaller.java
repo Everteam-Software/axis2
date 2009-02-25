@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -523,7 +524,12 @@ public class DocLitWrappedPlusMethodMarshaller implements MethodMarshaller {
 
             // Now create the single JAXB element
             String wrapperName = marshalDesc.getResponseWrapperClassName(operationDesc);
-            Class cls = MethodMarshallerUtils.loadClass(wrapperName);
+            Class cls;
+            try {
+                cls = MethodMarshallerUtils.loadClass(wrapperName);
+            } catch (ClassNotFoundException e){
+                cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
+            }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
             Object object = wrapperTool.wrap(cls, nameList, objectList,
                                              marshalDesc.getPropertyDescriptorMap(cls));
@@ -557,6 +563,12 @@ public class DocLitWrappedPlusMethodMarshaller implements MethodMarshaller {
                 }
                 MethodMarshallerUtils.toMessage(headerPDEList, m, packages);
             }
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
+            
             return m;
         } catch (Exception e) {
             throw ExceptionFactory.makeWebServiceException(e);
@@ -640,7 +652,12 @@ public class DocLitWrappedPlusMethodMarshaller implements MethodMarshaller {
 
             // Now create the single JAXB element 
             String wrapperName = marshalDesc.getRequestWrapperClassName(operationDesc);
-            Class cls = MethodMarshallerUtils.loadClass(wrapperName);
+            Class cls;
+            try {
+                cls = MethodMarshallerUtils.loadClass(wrapperName);
+            } catch (ClassNotFoundException e){
+                cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
+            }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
             Object object = wrapperTool.wrap(cls, nameList, objectList,
                                              marshalDesc.getPropertyDescriptorMap(cls));
@@ -674,6 +691,12 @@ public class DocLitWrappedPlusMethodMarshaller implements MethodMarshaller {
 
                 MethodMarshallerUtils.toMessage(headerPDEList, m, packages);
             }
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
+            
             return m;
         } catch (Exception e) {
             throw ExceptionFactory.makeWebServiceException(e);

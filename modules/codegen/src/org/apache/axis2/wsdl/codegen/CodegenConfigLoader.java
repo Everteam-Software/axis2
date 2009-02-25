@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl.codegen;
 
 import org.apache.axis2.util.CommandLineOption;
 import org.apache.axis2.util.CommandLineOptionConstants;
-import org.apache.axis2.wsdl.i18n.CodegenMessages;
 import org.apache.axis2.wsdl.codegen.extension.XMLBeansExtension;
+import org.apache.axis2.wsdl.i18n.CodegenMessages;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,21 +39,23 @@ class CodegenConfigLoader implements CommandLineOptionConstants {
         CommandLineOption commandLineOption = loadOption(WSDL2JavaConstants.OUTPUT_LOCATION_OPTION,
                                                          WSDL2JavaConstants.OUTPUT_LOCATION_OPTION_LONG,
                                                          optionMap);
-
+        
         if (commandLineOption != null) {
+        //set isoutputSourceLocation true when user specify an output source location
+            config.setoutputSourceLocation(true);
             outputLocation = commandLineOption.getOptionValue();
         }
         File outputLocationFile = new File(outputLocation);
         config.setOutputLocation(outputLocationFile);
 
         //check and create the directories
-        if (outputLocationFile.exists()) {
-            if (outputLocationFile.isFile()) {
+        if (outputLocationFile.exists()) {//$NON-SEC-2
+            if (outputLocationFile.isFile()) {//$NON-SEC-2
                 throw new RuntimeException(
                         CodegenMessages.getMessage("options.notADirectoryException"));
             }
         } else {
-            outputLocationFile.mkdirs();
+            outputLocationFile.mkdirs();//$NON-SEC-2
         }
 
         config.setServerSide(loadOption(WSDL2JavaConstants.SERVER_SIDE_CODE_OPTION,
@@ -194,8 +197,8 @@ class CodegenConfigLoader implements CommandLineOptionConstants {
                 } else {
                     // Try loading the properties from the file specified
                     try {
-                        Properties p = new Properties();
-                        p.load(new FileInputStream(value));
+                        Properties p = new Properties();//$NON-SEC-3
+                        p.load(new FileInputStream(value));//$NON-SEC-2//$NON-SEC-3
                         config.setUri2PackageNameMap(p);
                     } catch (IOException e) {
                         throw new RuntimeException(
@@ -256,6 +259,35 @@ class CodegenConfigLoader implements CommandLineOptionConstants {
         if (commandLineOption != null) {
             config.getProperties().put(XMLBeansExtension.XSDCONFIG_OPTION, 
                     commandLineOption.getOptionValue());
+        }
+
+        //setting http proxy host and http proxy port
+        commandLineOption = loadOption(null, WSDL2JavaConstants.HTTP_PROXY_HOST_OPTION_LONG, optionMap);
+        if (commandLineOption != null) {
+            System.setProperty("http.proxyHost", commandLineOption.getOptionValue());//$NON-SEC-2
+        }
+
+        commandLineOption = loadOption(null, WSDL2JavaConstants.HTTP_PROXY_PORT_OPTION_LONG, optionMap);
+        if (commandLineOption != null) {
+            System.setProperty("http.proxyPort", commandLineOption.getOptionValue());//$NON-SEC-2
+        }
+
+        commandLineOption = loadOption(WSDL2JavaConstants.EXCLUDE_PAKAGES_OPTION,
+                WSDL2JavaConstants.EXCLUDE_PAKAGES_OPTION_LONG, optionMap);
+        if (commandLineOption != null){
+            config.setExcludeProperties(commandLineOption.getOptionValue());
+        }
+
+        commandLineOption = loadOption(WSDL2JavaConstants.SKELTON_INTERFACE_NAME_OPTION,
+                WSDL2JavaConstants.SKELTON_INTERFACE_NAME_OPTION_LONG, optionMap);
+        if (commandLineOption != null){
+            config.setSkeltonInterfaceName(commandLineOption.getOptionValue());
+        }
+
+        commandLineOption = loadOption(WSDL2JavaConstants.SKELTON_CLASS_NAME_OPTION,
+                WSDL2JavaConstants.SKELTON_CLASS_NAME_OPTION_LONG, optionMap);
+        if (commandLineOption != null){
+            config.setSkeltonClassName(commandLineOption.getOptionValue());
         }
 
         // setting the overrid and all ports options

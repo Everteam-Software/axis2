@@ -19,12 +19,12 @@
 
 package org.apache.axis2.transport.nhttp;
 
-import org.apache.commons.logging.LogFactory;
-import org.apache.commons.logging.Log;
-import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.transport.RequestResponseTransport;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  * This interface is a point of control for Axis2 (and Sandesha2 in particular) to control
@@ -48,6 +48,7 @@ public class HttpCoreRequestResponseTransport implements RequestResponseTranspor
 
     public void acknowledgeMessage(MessageContext msgContext) throws AxisFault {
         log.debug("Acking one-way request");
+        status = RequestResponseTransportStatus.ACKED;
     }
 
     public void awaitResponse() throws InterruptedException, AxisFault {

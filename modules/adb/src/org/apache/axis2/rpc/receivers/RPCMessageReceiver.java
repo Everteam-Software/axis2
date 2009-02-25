@@ -29,7 +29,11 @@ import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisMessage;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
 import org.apache.axis2.receivers.AbstractInOutMessageReceiver;
 import org.apache.axis2.wsdl.WSDLConstants;
@@ -144,7 +148,7 @@ public class RPCMessageReceiver extends AbstractInOutMessageReceiver {
             }
             if (msg == null) {
                 msg = "Exception occurred while trying to invoke service method " +
-                        method.getName();
+                	(method != null ? method.getName() : "null");
             }
             if (cause instanceof AxisFault) {
                 log.debug(msg, cause);
@@ -153,10 +157,11 @@ public class RPCMessageReceiver extends AbstractInOutMessageReceiver {
             log.error(msg, e);
             throw new AxisFault(msg, e);
         } catch(RuntimeException e) {
+            log.error(e.getMessage(), e);
             throw AxisFault.makeFault(e);
         } catch (Exception e) {
             String msg = "Exception occurred while trying to invoke service method " +
-                    method.getName();
+            	(method != null ? method.getName() : "null");
             log.error(msg, e);
             throw AxisFault.makeFault(e);
         }

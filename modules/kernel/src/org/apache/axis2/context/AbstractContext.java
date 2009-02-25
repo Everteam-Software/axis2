@@ -23,16 +23,26 @@ package org.apache.axis2.context;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.clustering.ClusterManager;
 import org.apache.axis2.clustering.context.Replicator;
+import org.apache.axis2.util.JavaUtils;
+import org.apache.axis2.util.Utils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * This is the top most level of the Context hierarchy and is a bag of properties.
  */
 public abstract class AbstractContext {
 
+    private static final Log log = LogFactory.getLog(AbstractContext.class);
+    
+    private static boolean DEBUG_ENABLED = log.isDebugEnabled();
+    private static boolean DEBUG_CALLSTACK_ON_SET = log.isDebugEnabled();
+    
     /**
      * Property used to indicate copying of properties is needed by context.
      */
@@ -42,7 +52,7 @@ public abstract class AbstractContext {
 
     protected transient AbstractContext parent;
     protected transient Map properties;
-    private transient Map propertyDifferences = new HashMap();
+    private transient Map propertyDifferences;
 
     protected AbstractContext(AbstractContext parent) {
         this.parent = parent;
@@ -58,6 +68,24 @@ public abstract class AbstractContext {
         return parent;
     }
 
+    /**
+     * @param context
+     * @return true if the context is an ancestor
+     */
+    public boolean isAncestor(AbstractContext context) {
+        if (context == null) {
+            return false;
+        }
+        for (AbstractContext ancestor = getParent();
+            ancestor != null;
+            ancestor = ancestor.getParent()) {
+            if (ancestor == context) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     /**
      * @return The properties
      * @deprecated Use {@link #getPropertyNames()}, {@link #getProperty(String)},
@@ -91,17 +119,38 @@ public abstract class AbstractContext {
      */
     public Object getProperty(String key) {
         Object obj = properties == null ? null : properties.get(key);
-        if ((obj == null) && (parent != null)) {
+        if (obj!=null) {
+            // Assume that a property which is read may be updated.
+            // i.e. The object pointed to by 'value' may be modified after it is read
+            addPropertyDifference(key, obj, false);
+        } else if (parent!=null) {
             obj = parent.getProperty(key);
+        } 
+        return obj;
+    }
+
+    /**
+     * Retrieves an object given a key. Only searches at this level
+     * i.e. getLocalProperty on MessageContext does not look in
+     * the OperationContext properties map if a local result is not
+     * found.
+     *
+     * @param key - if not found, will return null
+     * @return Returns the property.
+     */
+    public Object getLocalProperty(String key) {
+        Object obj = properties == null ? null : properties.get(key);
+        if ((obj == null) && (parent != null)) {
+            // This is getLocalProperty() don't search the hierarchy.
         } else {
 
             // Assume that a property is which is read may be updated.
             // i.e. The object pointed to by 'value' may be modified after it is read
-            addPropertyDifference(key);
+            addPropertyDifference(key, obj, false);
         }
         return obj;
     }
-
+    
     /**
      * Retrieves an object given a key. The retrieved property will not be replicated to
      * other nodes in the clustered scenario.
@@ -128,20 +177,49 @@ public abstract class AbstractContext {
             this.properties = new HashMap();
         }
         properties.put(key, value);
-        addPropertyDifference(key);
+        addPropertyDifference(key, value, false);
+        if (DEBUG_ENABLED) {
+            debugPropertySet(key, value);
+        }
     }
 
-    private synchronized void addPropertyDifference(String key) {
+    private void addPropertyDifference(String key, Object value,  boolean isRemoved) {
+        
+        if (!needPropertyDifferences()) {
+            return;
+        }
+        // Narrowed the synchronization so that we only wait
+        // if a property difference is added.
+        synchronized(this) {
+            // Lazizly create propertyDifferences map
+            if (propertyDifferences == null) {
+                propertyDifferences = new HashMap();
+            }
+            propertyDifferences.put(key, new PropertyDifference(key, value, isRemoved));
+        }
+    }
+    
+    /**
+     * @return true if we need to store property differences for this 
+     * context in this scenario.
+     */
+    private boolean needPropertyDifferences() {
+        
+        // Don't store property differences if there are no 
+        // cluster members.
+        
         ConfigurationContext cc = getRootContext();
-        if (cc == null) return;
-
+        if (cc == null) {
+            return false;
+        }
         // Add the property differences only if Context replication is enabled,
         // and there are members in the cluster
         ClusterManager clusterManager = cc.getAxisConfiguration().getClusterManager();
-        if (clusterManager != null &&
-            clusterManager.getContextManager() != null) {
-            propertyDifferences.put(key, new PropertyDifference(key, false));
+        if (clusterManager == null ||
+            clusterManager.getContextManager() == null) {
+            return false;
         }
+        return true;
     }
 
     /**
@@ -165,10 +243,16 @@ public abstract class AbstractContext {
      * @param key
      */
     public synchronized void removeProperty(String key) {
-        if (properties != null) {
-            properties.remove(key);
+        if(properties == null){
+            return;
         }
-        propertyDifferences.put(key, new PropertyDifference(key, true));
+        Object value = properties.get(key);
+        if (value != null) {
+            if (properties != null) {
+                properties.remove(key);
+            }
+            addPropertyDifference(key, value, true);
+        }
     }
 
     /**
@@ -191,6 +275,9 @@ public abstract class AbstractContext {
      * @return The property differences
      */
     public synchronized Map getPropertyDifferences() {
+        if (propertyDifferences == null) {
+            propertyDifferences = new HashMap();
+        }
         return propertyDifferences;
     }
 
@@ -200,7 +287,9 @@ public abstract class AbstractContext {
      * been sent.
      */
     public synchronized void clearPropertyDifferences() {
-        propertyDifferences.clear();
+        if (propertyDifferences != null) {
+            propertyDifferences.clear();
+        }
     }
 
     /**
@@ -227,6 +316,17 @@ public abstract class AbstractContext {
             if ((copyProperties != null) && copyProperties.booleanValue()) {
                 mergeProperties(properties);
             } else {
+                
+                if (this.properties != properties) {
+                    if (DEBUG_ENABLED) {
+                        for (Iterator iterator = properties.entrySet().iterator();
+                        iterator.hasNext();) {
+                            Entry entry = (Entry) iterator.next();
+                            debugPropertySet((String) entry.getKey(), entry.getValue());
+
+                        }
+                    }
+                }
                 this.properties = properties;
             }
         }
@@ -246,7 +346,11 @@ public abstract class AbstractContext {
             for (Iterator iterator = props.keySet().iterator();
                  iterator.hasNext();) {
                 Object key = iterator.next();
-                this.properties.put(key, props.get(key));
+                Object value = props.get(key);
+                this.properties.put(key, value);
+                if (DEBUG_ENABLED) {
+                    debugPropertySet((String) key, value);
+                }
             }
         }
     }
@@ -281,4 +385,37 @@ public abstract class AbstractContext {
 
     public abstract ConfigurationContext getRootContext();
 
+    /**
+     * Debug for for property key and value.
+     * @param key
+     * @param value
+     */
+    private void debugPropertySet(String key, Object value) {
+        if (DEBUG_ENABLED) {
+            String className = (value == null) ? "null" : value.getClass().getName();
+            String classloader = "null";
+            if(value != null) {
+                ClassLoader cl = Utils.getObjectClassLoader(value);
+                if(cl != null) {
+                    classloader = cl.toString();
+                }
+            }
+            String valueText = (value instanceof String) ? value.toString() : null;
+            String identity = getClass().getName() + '@' + 
+                Integer.toHexString(System.identityHashCode(this));
+            
+            log.debug("==================");
+            log.debug(" Property set on object " + identity);
+            log.debug("  Key =" + key);
+            if (valueText != null) {
+                log.debug("  Value =" + valueText);
+            }
+            log.debug("  Value Class = " + className);
+            log.debug("  Value Classloader = " + classloader);
+            if (this.DEBUG_CALLSTACK_ON_SET) {
+                log.debug(  "Call Stack = " + JavaUtils.callStackToString());
+            }
+            log.debug("==================");
+        }
+    }
 }

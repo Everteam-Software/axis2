@@ -19,6 +19,9 @@
 
 package org.apache.axis2.jaxws.description.builder;
 
+import org.w3c.dom.Element;
+
+import javax.xml.ws.EndpointReference;
 import javax.xml.ws.handler.MessageContext;
 import java.lang.annotation.Annotation;
 import java.security.Principal;
@@ -41,20 +44,6 @@ public class WebServiceContextAnnot implements javax.xml.ws.WebServiceContext {
         this.messageContext = messageContext;
         this.userPrincipal = userPrincipal;
         this.isUserInRole = isUserInRole;
-    }
-
-    public static WebServiceContextAnnot createWebServiceConextAnnot() {
-        return new WebServiceContextAnnot();
-    }
-
-    public static WebServiceContextAnnot createWebServiceContextAnnot(
-            MessageContext messageContext,
-            Principal userPrincipal,
-            boolean isUserInRole
-    ) {
-        return new WebServiceContextAnnot(messageContext,
-                                          userPrincipal,
-                                          isUserInRole);
     }
 
     /**
@@ -90,10 +79,20 @@ public class WebServiceContextAnnot implements javax.xml.ws.WebServiceContext {
         this.userPrincipal = userPrincipal;
     }
 
+    public <T extends EndpointReference> T getEndpointReference(Class<T> arg0, Element... arg1) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public EndpointReference getEndpointReference(Element... arg0) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
 
     //hmm, should we really do this
     public Class<Annotation> annotationType() {
         return Annotation.class;
-	}
+    }
 	
 }

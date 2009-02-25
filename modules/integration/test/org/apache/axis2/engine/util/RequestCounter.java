@@ -16,15 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.engine.util;
 
-import javax.xml.namespace.QName;
+package org.apache.axis2.engine.util;
 
 import org.apache.axiom.om.OMAbstractFactory;
 import org.apache.axiom.om.OMElement;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.context.ServiceGroupContext;
 import org.apache.axis2.context.ServiceContext;
+
+import javax.xml.namespace.QName;
 
 public class RequestCounter {
 

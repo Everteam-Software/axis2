@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   ~ Licensed to the Apache Software Foundation (ASF) under one
   ~ or more contributor license agreements. See the NOTICE file
@@ -17,6 +18,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <project
         xmlns="http://maven.apache.org/POM/4.0.0"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -25,18 +27,20 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.3</version>
+        <version>1.4.1</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>axis2-adb</artifactId>
-    <name>Apache Axis 2.0 - Data Binding</name>
+    <name>Apache Axis2 - Data Binding</name>
     <description>Axis2 Data Binding module</description>
     <scm>
         <connection>
-            scm:svn:http://svn.apache.org/repos/asf/webservices/axis2/trunk/java/modules/adb</connection>
+            scm:svn:http://svn.apache.org/repos/asf/webservices/axis2/trunk/java/modules/adb
+        </connection>
         <developerConnection>
-            scm:svn:https://svn.apache.org/repos/asf/webservices/axis2/trunk/java/modules/adb</developerConnection>
+            scm:svn:https://svn.apache.org/repos/asf/webservices/axis2/trunk/java/modules/adb
+        </developerConnection>
         <url>http://svn.apache.org/viewvc/webservices/axis2/trunk/java/modules/adb</url>
     </scm>
     <dependencies>
@@ -56,6 +60,14 @@
         <testSourceDirectory>test</testSourceDirectory>
         <resources>
             <resource>
+                <directory>../..</directory>
+                <includes>
+                    <include>NOTICE.txt</include>
+                    <include>LICENSE.txt</include>
+                </includes>
+                <filtering>false</filtering>
+            </resource>
+            <resource>
                 <directory>conf</directory>
                 <excludes>
                     <exclude>**/*.properties</exclude>
@@ -70,6 +82,14 @@
             </resource>
         </resources>
         <plugins>
+            <plugin>
+              <artifactId>maven-jar-plugin</artifactId>
+              <configuration>
+                <archive>  
+                  <manifestFile>resources/META-INF/MANIFEST.MF</manifestFile>
+                </archive> 
+              </configuration>
+            </plugin>  
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <inherited>true</inherited>

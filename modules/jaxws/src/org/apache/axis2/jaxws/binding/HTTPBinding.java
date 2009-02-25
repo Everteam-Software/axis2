@@ -16,7 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.binding;
+
+import java.util.List;
+
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.handler.Handler;
+import javax.xml.ws.handler.soap.SOAPHandler;
 
 import org.apache.axis2.jaxws.description.EndpointDescription;
 
@@ -26,4 +33,15 @@ public class HTTPBinding extends BindingImpl implements javax.xml.ws.http.HTTPBi
         super(ed);
     }
 
+    @Override
+    public void setHandlerChain(List<Handler> list) {
+        if (list != null) {
+            for (Handler handler : list) {
+                if (handler instanceof SOAPHandler) {
+                    throw new WebServiceException("Chain contains incompatibile handler");
+                }
+            }
+        }
+        super.setHandlerChain(list);
+    }
 }

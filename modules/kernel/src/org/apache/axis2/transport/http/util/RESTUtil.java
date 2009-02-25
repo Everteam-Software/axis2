@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.http.util;
 
 import org.apache.axiom.soap.SOAPEnvelope;
@@ -28,11 +29,11 @@ import org.apache.axis2.description.AxisEndpoint;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.WSDL2Constants;
-import org.apache.axis2.engine.AxisEngine;
 import org.apache.axis2.dispatchers.HTTPLocationBasedDispatcher;
-import org.apache.axis2.engine.Handler;
 import org.apache.axis2.dispatchers.RequestURIBasedDispatcher;
 import org.apache.axis2.dispatchers.RequestURIOperationDispatcher;
+import org.apache.axis2.engine.AxisEngine;
+import org.apache.axis2.engine.Handler;
 import org.apache.axis2.transport.TransportUtils;
 import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.axis2.transport.http.HTTPTransportUtils;
@@ -72,8 +73,13 @@ public class RESTUtil {
         } catch (IOException e) {
             throw AxisFault.makeFault(e);
         } finally {
-            msgContext.setProperty(Constants.Configuration.MESSAGE_TYPE,
-                                   HTTPConstants.MEDIA_TYPE_APPLICATION_XML);
+            String messageType =
+                    (String) msgContext.getProperty(Constants.Configuration.MESSAGE_TYPE);
+            if (HTTPConstants.MEDIA_TYPE_X_WWW_FORM.equals(messageType) ||
+                    HTTPConstants.MEDIA_TYPE_MULTIPART_FORM_DATA.equals(messageType)) {
+                msgContext.setProperty(Constants.Configuration.MESSAGE_TYPE,
+                                       HTTPConstants.MEDIA_TYPE_APPLICATION_XML);
+            }
         }
         return invokeAxisEngine(msgContext);
     }
@@ -113,8 +119,13 @@ public class RESTUtil {
         catch (IOException e) {
             throw AxisFault.makeFault(e);
         } finally {
-            msgContext.setProperty(Constants.Configuration.MESSAGE_TYPE,
-                                   HTTPConstants.MEDIA_TYPE_APPLICATION_XML);
+            String messageType =
+                    (String) msgContext.getProperty(Constants.Configuration.MESSAGE_TYPE);
+            if (HTTPConstants.MEDIA_TYPE_X_WWW_FORM.equals(messageType) ||
+                    HTTPConstants.MEDIA_TYPE_MULTIPART_FORM_DATA.equals(messageType)) {
+                msgContext.setProperty(Constants.Configuration.MESSAGE_TYPE,
+                                       HTTPConstants.MEDIA_TYPE_APPLICATION_XML);
+            }
         }
         return invokeAxisEngine(msgContext);
     }
@@ -131,14 +142,13 @@ public class RESTUtil {
         requestDispatcher.invoke(msgContext);
         AxisService axisService = msgContext.getAxisService();
         if (axisService != null) {
-            RequestURIOperationDispatcher requestURIOperationDispatcher =
-                    new RequestURIOperationDispatcher();
-            requestURIOperationDispatcher.invoke(msgContext);
-
+            HTTPLocationBasedDispatcher httpLocationBasedDispatcher =
+                    new HTTPLocationBasedDispatcher();
+            httpLocationBasedDispatcher.invoke(msgContext);
             if (msgContext.getAxisOperation() == null) {
-                HTTPLocationBasedDispatcher httpLocationBasedDispatcher =
-                        new HTTPLocationBasedDispatcher();
-                httpLocationBasedDispatcher.invoke(msgContext);
+                RequestURIOperationDispatcher requestURIOperationDispatcher =
+                        new RequestURIOperationDispatcher();
+                requestURIOperationDispatcher.invoke(msgContext);
             }
 
             AxisOperation axisOperation;
@@ -155,7 +165,7 @@ public class RESTUtil {
         }
     }
 
-    public static String getConstantFromHTTPLocation(String httpLocation) {
+    public static String getConstantFromHTTPLocation(String httpLocation, String httpMethod) {
         if (httpLocation.charAt(0) != '?') {
             httpLocation = "/" + httpLocation;
         }
@@ -163,7 +173,7 @@ public class RESTUtil {
         if (index > -1) {
             httpLocation = httpLocation.substring(0, index);
         }
-        return httpLocation;
+        return httpMethod + httpLocation;
     }
 
 }

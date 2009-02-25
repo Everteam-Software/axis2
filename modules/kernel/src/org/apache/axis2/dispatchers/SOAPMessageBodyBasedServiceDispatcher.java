@@ -19,7 +19,6 @@
 
 package org.apache.axis2.dispatchers;
 
-import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.MessageContext;
@@ -38,10 +37,10 @@ public class SOAPMessageBodyBasedServiceDispatcher extends AbstractServiceDispat
 
     public AxisService findService(MessageContext messageContext) throws AxisFault {
         String serviceName = null;
-        OMElement bodyFirstChild = messageContext.getEnvelope().getBody().getFirstElement();
+        String localPart = messageContext.getEnvelope().getSOAPBodyFirstElementLocalName();
 
-        if (bodyFirstChild != null) {
-            OMNamespace ns = bodyFirstChild.getNamespace();
+        if (localPart != null) {
+            OMNamespace ns = messageContext.getEnvelope().getSOAPBodyFirstElementNS();
 
             if (ns != null) {
                 String filePart = ns.getNamespaceURI();

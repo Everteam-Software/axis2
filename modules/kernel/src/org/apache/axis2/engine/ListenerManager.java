@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.engine;
 
 import org.apache.axis2.AxisFault;
@@ -128,7 +129,7 @@ public class ListenerManager {
                     }
                 }
             } catch (Exception e) {
-                log.info(e.getMessage());
+                log.info(e.getMessage(), e);
             }
         }
         Runtime.getRuntime().addShutdownHook(new ListenerManagerShutdownThread(this));

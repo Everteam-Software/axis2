@@ -16,14 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.context.ConfigurationContextFactory;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.WSDL11ToAllAxisServicesBuilder;
+import org.apache.axis2.engine.AxisConfiguration;
 import org.custommonkey.xmlunit.XMLTestCase;
 import org.custommonkey.xmlunit.XMLUnit;
-import org.apache.axis2.description.WSDL11ToAllAxisServicesBuilder;
-import org.apache.axis2.description.AxisService;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.StringReader;
 
 /**
  *
@@ -39,15 +47,15 @@ public class WSDL11ToAxisServiceBuilderTest extends XMLTestCase {
             WSDL11ToAllAxisServicesBuilder builder = new WSDL11ToAllAxisServicesBuilder(
                     new FileInputStream(testResourceFile));
             AxisService axisService = builder.populateService();
-            System.out.println("WSDL file: " + testResourceFile.getAbsolutePath());
+            ConfigurationContext configContext = ConfigurationContextFactory.createDefaultConfigurationContext();
+            AxisConfiguration axisConfig = configContext.getAxisConfiguration();
+            axisConfig.addService(axisService);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             axisService.printWSDL(baos);
-            System.out.println(new String(baos.toByteArray()));
             assertXMLEqual(new FileReader(testResourceFile), new StringReader(new String(baos.toByteArray())));
         } catch (Exception e) {
             System.out.println("Error in WSDL : " + testResourceFile.getName());
             System.out.println("Exception: " + e.toString());
-            e.printStackTrace();
             fail("Caught exception " + e.toString());
         } finally {
             XMLUnit.setIgnoreWhitespace(false);

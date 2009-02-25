@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.scripting;
 
-import javax.xml.stream.XMLStreamException;
+package org.apache.axis2.scripting;
 
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.scripting.convertors.OMElementConvertor;
+
+import javax.xml.stream.XMLStreamException;
 
 /**
  * ScriptMessageContext decorates the Axis2 MessageContext adding methods to use

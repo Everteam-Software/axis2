@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import org.apache.axiom.om.OMAttribute;
@@ -24,7 +25,6 @@ import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.OMNode;
 import org.apache.axiom.om.impl.OMNamespaceImpl;
-import org.apache.axiom.om.impl.dom.DocumentImpl;
 import org.apache.axiom.om.impl.dom.ElementImpl;
 import org.apache.axiom.om.impl.dom.NodeImpl;
 import org.apache.axiom.om.impl.dom.TextImpl;
@@ -720,7 +720,10 @@ public class SOAPElementImpl extends NodeImplEx implements SOAPElement {
      */
     public SOAPElement getParentElement() {
         if (this.parentElement == null) {
-            return (SOAPElement)toSAAJNode(element.getParentNode());
+            javax.xml.soap.Node parentNode = toSAAJNode(element.getParentNode());
+            if (parentNode instanceof SOAPElement) {
+                this.parentElement = (SOAPElement) parentNode;
+            }
         }
         return this.parentElement;
     }
@@ -775,7 +778,16 @@ public class SOAPElementImpl extends NodeImplEx implements SOAPElement {
     }
 
     public Node getParentNode() {
-        return getParentElement();
+        Node parentNode = null;
+        if (this.parentElement == null) {
+            parentNode = toSAAJNode(element.getParentNode());
+            if (parentNode instanceof SOAPElement) {
+                this.parentElement = (SOAPElement) parentNode;
+            }
+        } else {
+            parentNode = this.parentElement;
+        }
+        return parentNode;
     }
 
     /** dom Node method */
@@ -847,5 +859,9 @@ public class SOAPElementImpl extends NodeImplEx implements SOAPElement {
      */
     public NamedNodeMap getAttributes() {
         return element.getAttributes();
+    }
+    
+    public String toString() {
+        return element.toString();
     }
 }

@@ -22,13 +22,33 @@
  */
 package org.apache.axis2.jaxws.description.builder;
 
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.java.security.AccessController;
+import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.catalog.JAXWSCatalogManager;
+import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
+import org.apache.axis2.jaxws.i18n.Messages;
+import org.apache.axis2.jaxws.util.WSDL4JWrapper;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import javax.wsdl.Definition;
+import javax.xml.namespace.QName;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.net.URL;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAnnotationComposite {
+
+    private static final Log log = LogFactory.getLog(DescriptionBuilderComposite.class);
+
     /*
       * This structure contains the full reflected class, as well as, the
       * possible annotations found for this class...the class description
@@ -37,23 +57,27 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
       */
 
     public DescriptionBuilderComposite() {
+        this((ConfigurationContext)null);
+    }
 
+    public DescriptionBuilderComposite(ConfigurationContext configContext) {
+        myConfigContext = configContext;
         methodDescriptions = new ArrayList<MethodDescriptionComposite>();
         fieldDescriptions = new ArrayList<FieldDescriptionComposite>();
         webServiceRefAnnotList = new ArrayList<WebServiceRefAnnot>();
         interfacesList = new ArrayList<String>();
+        genericAnnotationInstances = new ArrayList<CustomAnnotationInstance>();
+        genericAnnotationProcessors = new HashMap<String, CustomAnnotationProcessor>();
+        properties = new HashMap<String, Object>();
     }
-
-    //Class type within the module
-    public static enum ModuleClassType {
-        SERVICEIMPL, SEI, SERVICE, SUPER, PROVIDER, FAULT}
-
-    private ModuleClassType moduleClassType = null;
 
     //Note: a WSDL is not necessary
     private Definition wsdlDefinition = null;
     private URL wsdlURL = null;
+    private WSDL4JWrapper wsdlWrapper = null;
 
+    private ConfigurationContext myConfigContext;
+    
     // Class-level annotations
     private WebServiceAnnot webServiceAnnot;
     private WebServiceProviderAnnot webServiceProviderAnnot;
@@ -64,26 +88,156 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     private SoapBindingAnnot soapBindingAnnot;
     private List<WebServiceRefAnnot> webServiceRefAnnotList;
     private BindingTypeAnnot bindingTypeAnnot;
-    private WebServiceContextAnnot webServiceContextAnnot;
-
+    
+    private List<Annotation> features;
+    
     // Class information
     private String className;
+    /**
+     * Get an annotation by introspecting on a class.  This is wrappered to avoid a Java2Security violation.
+     * @param cls Class that contains annotation 
+     * @param annotation Class of requrested Annotation
+     * @return annotation or null
+     */
+    private static Annotation getAnnotationFromClass(final Class cls, final Class annotation) {
+        return (Annotation) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                
+                Annotation a = cls.getAnnotation(annotation);
+                return a;
+            }
+        });
+    }
+
     private String[] classModifiers; //public, abstract, final, strictfp...
     private String extendsClass;    //Set to the name of the super class
     private List<String> interfacesList; //Set this for all implemented interfaces
     private boolean isInterface = false;
-
+    private QName preferredPort;        // Port to use if no port QName given.  May be null
+    private boolean isMTOMEnabled = false;
+    
     private List<MethodDescriptionComposite> methodDescriptions;
     private List<FieldDescriptionComposite> fieldDescriptions;
+    
+    // we can keep these in a singular list b/c for a given type-level annotation
+    // there can only one instance of the annotation
+    private List<CustomAnnotationInstance> genericAnnotationInstances;
+    
+    // a map that stores all the type-targetted GenericAnnotationProcessor instances
+    private Map<String, CustomAnnotationProcessor> genericAnnotationProcessors;
 
     private WsdlGenerator wsdlGenerator;
     private ClassLoader classLoader;
-
-    // Methods
-    public WebServiceAnnot getWebServiceAnnot() {
-        return this.webServiceAnnot;
+    
+    // JAXB object used to represent handler chain configuration info
+    // either this or the HandlerChainAnnot may be present, but 
+    // not both, they may both be null
+    private HandlerChainsType handlerChainsType = null;
+    
+    // Does this composite represent a service requester or service provider.
+    // We default to service provider since composites were orginally not used by requesters.
+    private boolean isServiceProvider = true;
+    
+    // For a service requester, this will be the client-side class associated with this composite; 
+    // It could be the Service class or the SEI class.  On the service provider this will be null
+    // unless the deprecated service construction logic in DescriptionFactory was used.
+    private Class theCorrespondingClass;
+    
+    // Service-requesters (aka clients) can specify a sprase composite that may contain annotation
+    // information corresponding to information in a deployment descriptor or an injected 
+    // resource.
+    private WeakHashMap<Object, DescriptionBuilderComposite> sparseCompositeMap = new WeakHashMap<Object, DescriptionBuilderComposite>();
+    
+    // Allow a unique XML CatalogManager per service description.
+    private JAXWSCatalogManager catalogManager = null;
+    
+    // This is a bag of properties that apply to the DBC. Currently these properties will be
+    // copied over from the DBC to the description hierarchy. This will only occur on the
+    // server-side for now
+    private Map<String, Object> properties = null;
+    
+    public void setSparseComposite(Object key, DescriptionBuilderComposite sparseComposite) {
+        if (key != null && sparseComposite != null) {
+            this.sparseCompositeMap.put(key, sparseComposite);
+        }
+    }
+    public DescriptionBuilderComposite getSparseComposite(Object key) {
+        return sparseCompositeMap.get(key);
     }
 
+    /**
+     * For a service requester, set the QName of the preferred port for this service.  This
+     * indicates which port (i.e. which EndpointDescription) should be returned if a port QName
+     * isn't specified.  This may be null, indicating the first valid port in the WSDL should be
+     * returned.
+     * 
+     * @param preferredPort
+     */
+    public void setPreferredPort(QName preferredPort) {
+        this.preferredPort = preferredPort;
+    }
+    
+    /**
+     * For a service requester, the QName of the prefered port for this service.  This indicates
+     * which port should be returned if a port QName wasn't specified.  This may be null, 
+     * indicating the first valid port in the WSDL should be returned.
+     * @return
+     */
+    public QName getPreferredPort() {
+        return preferredPort;
+    }
+    public QName getPreferredPort(Object key) {
+        QName returnPreferredPort = null;
+        // See if there's a sparse composite override for this composite
+        if (key != null) {
+            DescriptionBuilderComposite sparse = getSparseComposite(key);
+            if (sparse != null 
+                && !DescriptionBuilderUtils.isEmpty(sparse.getPreferredPort())) {
+                returnPreferredPort = sparse.getPreferredPort();
+            } else {
+                returnPreferredPort = getPreferredPort();
+            }
+        } else {
+            returnPreferredPort = getPreferredPort();
+        }
+        
+        return returnPreferredPort;
+        
+    }
+    
+    public void setIsMTOMEnabled(boolean isMTOMEnabled) {
+        this.isMTOMEnabled = isMTOMEnabled;
+    }
+    
+    public boolean isMTOMEnabled() {
+        return isMTOMEnabled;
+    }
+    
+    public boolean isMTOMEnabled(Object key) {
+        boolean returnIsMTOMEnabled = false;
+        if (key != null) {
+            DescriptionBuilderComposite sparseDBC = getSparseComposite(key);
+            if (sparseDBC != null && sparseDBC.isMTOMEnabled()) {
+                returnIsMTOMEnabled = sparseDBC.isMTOMEnabled();
+            } else {
+                returnIsMTOMEnabled = isMTOMEnabled();
+            }
+            
+        } else {
+            returnIsMTOMEnabled = isMTOMEnabled();
+        }
+        
+        return returnIsMTOMEnabled;
+    }
+    
+    // Methods
+    public WebServiceAnnot getWebServiceAnnot() {
+        return webServiceAnnot = 
+            (WebServiceAnnot) getCompositeAnnotation(webServiceAnnot,
+                                                     WebServiceAnnot.class,
+                                                     javax.jws.WebService.class);
+    }
+    
     /** @return Returns the classModifiers. */
     public String[] getClassModifiers() {
         return classModifiers;
@@ -91,8 +245,17 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
 
     /** @return Returns the className. */
     public String getClassName() {
-        return className;
+        if (className != null) {
+            return className;
+        }
+        else if (theCorrespondingClass != null) {
+            return theCorrespondingClass.getName();
+        }
+        else {
+            return null;
+        }
     }
+    
 
     /** @return Returns the super class name. */
     public String getSuperClassName() {
@@ -106,32 +269,102 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
 
     /** @return Returns the handlerChainAnnotImpl. */
     public HandlerChainAnnot getHandlerChainAnnot() {
-        return handlerChainAnnot;
+        return handlerChainAnnot = 
+            (HandlerChainAnnot) getCompositeAnnotation(handlerChainAnnot,
+                                                       HandlerChainAnnot.class,
+                                                       javax.jws.HandlerChain.class);
     }
 
     /** @return Returns the serviceModeAnnot. */
     public ServiceModeAnnot getServiceModeAnnot() {
-        return serviceModeAnnot;
+        return serviceModeAnnot = 
+            (ServiceModeAnnot) getCompositeAnnotation(serviceModeAnnot,
+                                                      ServiceModeAnnot.class,
+                                                      javax.xml.ws.ServiceMode.class);
     }
 
     /** @return Returns the soapBindingAnnot. */
     public SoapBindingAnnot getSoapBindingAnnot() {
-        return soapBindingAnnot;
+        return soapBindingAnnot = 
+            (SoapBindingAnnot) getCompositeAnnotation(soapBindingAnnot,
+                                                      SoapBindingAnnot.class,
+                                                      javax.jws.soap.SOAPBinding.class);
     }
 
     /** @return Returns the webFaultAnnot. */
     public WebFaultAnnot getWebFaultAnnot() {
-        return webFaultAnnot;
+        return webFaultAnnot = 
+            (WebFaultAnnot) getCompositeAnnotation(webFaultAnnot, 
+                                                   WebFaultAnnot.class, 
+                                                   javax.xml.ws.WebFault.class);
     }
 
     /** @return Returns the webServiceClientAnnot. */
     public WebServiceClientAnnot getWebServiceClientAnnot() {
-        return webServiceClientAnnot;
+        return webServiceClientAnnot = 
+            (WebServiceClientAnnot) getCompositeAnnotation(webServiceClientAnnot, 
+                                                           WebServiceClientAnnot.class,
+                                                           javax.xml.ws.WebServiceClient.class);
+    }
+    
+    public WebServiceClientAnnot getWebServiceClientAnnot(Object key) {
+        WebServiceClientAnnot annot = getWebServiceClientAnnot();
+        DescriptionBuilderComposite sparseComposite = getSparseComposite(key);
+        WebServiceClientAnnot sparseAnnot = null;
+        if (sparseComposite != null) {
+            sparseAnnot = sparseComposite.getWebServiceClientAnnot();
+        }
+        return WebServiceClientAnnot.createFromAnnotation(annot, sparseAnnot);
+    }
+    
+    /**
+     * Return a composite annotation of the specified type.  If the composite annotation is 
+     * null, then the associated class (if not null) will be examined for the appropriate java
+     * annotation.  If one is found, it will be used to create a new composite annotation.
+     * 
+     * @param compositeAnnotation May be null.  The current composite annotation.  If this is
+     * non-null, it will simply be returned.
+     * @param compositeAnnotClass The class of the composite annotation.  This is a subclass of
+     * the java annotation class.
+     * @param javaAnnotationClass The java annotation class.  The associated class will be 
+     * reflected on to see if this annotation exists.  If so, it is used to create an instance of
+     * the composite annotation class.
+     * @return
+     */
+    private Annotation getCompositeAnnotation(Annotation compositeAnnotation,
+                                              Class compositeAnnotClass,
+                                              Class javaAnnotationClass) {
+        Annotation returnAnnotation = compositeAnnotation;
+        if (returnAnnotation == null && theCorrespondingClass != null) {
+            // Get the annotation from the class and if one exists, construct a composite annot for it
+            Annotation annotationFromClass = getAnnotationFromClass(theCorrespondingClass, javaAnnotationClass);
+            if (annotationFromClass != null) {
+                try {
+                    Method createAnnot = compositeAnnotClass.getMethod("createFromAnnotation", Annotation.class);
+                    returnAnnotation = (Annotation) createAnnot.invoke(null, annotationFromClass);
+                } catch (Exception e) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Unable to create composite annotation due to exception."
+                                  + "  Composite Annotation: " + compositeAnnotation
+                                  + "; Composite Annot class: " + compositeAnnotClass 
+                                  + "; Java Annot class: " + javaAnnotationClass, e);
+                    }
+                    String msg = Messages.getMessage("DescriptionBuilderErr1", 
+                                                     compositeAnnotClass.toString(),
+                                                     e.toString());
+                    throw ExceptionFactory.makeWebServiceException(msg, e);
+                }
+            }
+        }
+        return returnAnnotation;
     }
 
     /** @return Returns the webServiceProviderAnnot. */
     public WebServiceProviderAnnot getWebServiceProviderAnnot() {
-        return webServiceProviderAnnot;
+        return webServiceProviderAnnot = 
+            (WebServiceProviderAnnot) getCompositeAnnotation(webServiceProviderAnnot,
+                                                             WebServiceProviderAnnot.class, 
+                                                             javax.xml.ws.WebServiceProvider.class);
     }
 
     /** @return Returns the webServiceRefAnnot list. */
@@ -156,16 +389,35 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
 
     /** @return Returns the webServiceRefAnnot. */
     public BindingTypeAnnot getBindingTypeAnnot() {
-        return bindingTypeAnnot;
+        return (BindingTypeAnnot) getCompositeAnnotation(bindingTypeAnnot,
+                                                         BindingTypeAnnot.class,
+                                                         javax.xml.ws.BindingType.class);
     }
-
-    /** @return Returns the webServiceContextAnnot. */
-    public WebServiceContextAnnot getWebServiceContextAnnot() {
-        return webServiceContextAnnot;
+    
+    public List<Annotation> getWebServiceFeatures() {
+        return features;
     }
-
+    
+    public void setWebServiceFeatures(List<Annotation> list) {
+        features = list;
+    }
+    
+    public void addWebServiceFeature(Annotation a) {
+        if (features == null)
+            features = new ArrayList<Annotation>();
+        
+        features.add(a);
+    }
+    
     /** @return Returns the wsdlDefinition */
     public Definition getWsdlDefinition() {
+        if (wsdlDefinition != null) {
+            return wsdlDefinition;
+        } else if (wsdlWrapper != null) {
+            wsdlDefinition = wsdlWrapper.getDefinition();
+        } else {
+            wsdlDefinition = createWsdlDefinition(wsdlURL);
+        }
         return wsdlDefinition;
     }
 
@@ -318,10 +570,70 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     public void setWebServiceRefAnnot(WebServiceRefAnnot webServiceRefAnnot) {
         addWebServiceRefAnnot(webServiceRefAnnot);
     }
+    
+    public void addCustomAnnotationProcessor(CustomAnnotationProcessor processor) {
+        genericAnnotationProcessors.put(processor.getAnnotationInstanceClassName(), processor);
+    }
+    
+    public Map<String, CustomAnnotationProcessor> getCustomAnnotationProcessors() {
+        return genericAnnotationProcessors;
+    }
+    
+    public void addCustomAnnotationInstance(CustomAnnotationInstance annotation) {
+        genericAnnotationInstances.add(annotation);
+    }
+    
+    public List<CustomAnnotationInstance> getCustomAnnotationInstances() {
+        return genericAnnotationInstances;
+    }
 
-    /** @param wsdlDefinition The wsdlDefinition to set. */
-    public void setWsdlDefinition(Definition wsdlDefinition) {
-        this.wsdlDefinition = wsdlDefinition;
+
+    /**
+     * @param wsdlDefinition The wsdlDefinition to set.
+     */
+    public void setWsdlDefinition(Definition wsdlDef) {
+
+        Definition def = null;
+
+        if (wsdlDef != null) {
+            if (wsdlDef instanceof WSDL4JWrapper) {
+                wsdlWrapper = (WSDL4JWrapper) wsdlDef;
+
+                def = wsdlWrapper.getDefinition();
+            } else {
+                try {
+                    if (myConfigContext != null) {
+                        // Construct WSDL4JWrapper with configuration information
+                        wsdlWrapper = new WSDL4JWrapper(wsdlDef, 
+                                                        myConfigContext);
+                    } else {
+                        // If there is no configuration, default to using a 
+                        // memory sensitive wrapper
+                        wsdlWrapper = new WSDL4JWrapper(wsdlDef, true, 2);
+                    }
+                    def = wsdlWrapper.getDefinition();
+                } catch (Exception ex) {
+                    // absorb
+                }
+            }
+
+            if (def != null) {
+                String wsdlDefinitionBaseURI = def.getDocumentBaseURI();
+
+                if ((wsdlDefinitionBaseURI != null) && (wsdlURL == null)) {
+                    try {
+                        wsdlURL = new URL(wsdlDefinitionBaseURI);
+                    } catch (Exception e) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("DescriptionBuilderComposite:setWsdlDefinition(): "
+                                    +"Caught exception creating WSDL URL :" 
+                                    + wsdlDefinitionBaseURI + "; exception: " 
+                                    +e.toString(),e); 
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /** @param wsdlURL The wsdlURL to set. */
@@ -333,12 +645,6 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     public void setBindingTypeAnnot(
             BindingTypeAnnot bindingTypeAnnot) {
         this.bindingTypeAnnot = bindingTypeAnnot;
-    }
-
-    /** @param webServiceContextAnnot The webServiceContextAnnot to set. */
-    public void setWebServiceContextAnnot(
-            WebServiceContextAnnot webServiceContextAnnot) {
-        this.webServiceContextAnnot = webServiceContextAnnot;
     }
 
     /** @param isInterface Sets whether this composite represents a class or interface */
@@ -356,26 +662,111 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
         fieldDescriptions.add(fieldDescription);
     }
 
-    /** @return Returns the ModuleClassType. */
-    public ModuleClassType getClassType() {
-
-        if (moduleClassType == null) {
-            //TODO: Determine the class type
-        }
-        return moduleClassType;
-    }
-
-    /** @return Returns the ModuleClassType. */
     public void setCustomWsdlGenerator(WsdlGenerator wsdlGenerator) {
 
         this.wsdlGenerator = wsdlGenerator;
     }
 
-    /** @return Returns the ModuleClassType. */
     public void setClassLoader(ClassLoader classLoader) {
 
         this.classLoader = classLoader;
     }
+    
+    public HandlerChainsType getHandlerChainsType() {
+    	return handlerChainsType;
+    }
+    
+    public void setHandlerChainsType(HandlerChainsType handlerChainsType) {
+    	this.handlerChainsType = handlerChainsType;
+    }
+    
+    /**
+     * Answer does this composite represent a service requester (aka client) or a service
+     * provider (aka server).
+     * 
+     * @return true if this is a service provider (aka an endpoint or a service implementation
+     * or a server)
+     * 
+     */
+    public boolean isServiceProvider() {
+        return isServiceProvider;
+    }
+
+    /**
+     * Set the indication of whether this composite represents a service requester (aka client) or
+     * a service provider (aka server).
+     */
+    public void setIsServiceProvider(boolean value) {
+        isServiceProvider = value;
+    }
+    
+    /**
+     * Set the class associated with this composite.  For a service requester, this could be the
+     * Service class or the SEI class.  For a service provider this will be null (unless the 
+     * deprecated service construction logic in DescriptionFactory is used)
+     * @param theClass
+     */
+    public void setCorrespondingClass(Class theClass) {
+        this.theCorrespondingClass = theClass;
+    }
+    
+    /**
+     * Returns the corresponding class associated with this composite, if any.
+     * @return
+     */
+    public Class getCorrespondingClass() {
+        return theCorrespondingClass;
+    }
+
+    /**
+     * Set the Catalog Manager associated with this composite.  
+     * @param theCatalogManger
+     */
+    public void setCatalogManager(JAXWSCatalogManager theCatalogManager) {
+    	this.catalogManager = theCatalogManager;
+    }
+    
+    /**
+     * Returns the catalog manager associated with this composite, if any.
+     * @return
+     */
+    public JAXWSCatalogManager getCatalogManager() {
+    	return catalogManager;
+    }
+    
+    /**
+     * @deprecated
+     */
+    private boolean isDeprecatedServiceProviderConstruction = false;
+    /**
+     * Answer if this composite represents a service provider that was constructed using the
+     * deprecated path (used for testing only and being removed).  Once that deprecated path
+     * is removed, this method and all code blocks referencing it can be removed.
+     * 
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory.createServiceDescriptionFromServiceImpl
+     * 
+     * @deprecated
+     * @return true if the this was constructed with the deprecated logic
+     */
+    public boolean isDeprecatedServiceProviderConstruction() {
+        return isDeprecatedServiceProviderConstruction;        
+    }
+    /**
+     * @deprecated
+     * @param value
+     */
+    public void setIsDeprecatedServiceProviderConstruction(boolean value) {
+        isDeprecatedServiceProviderConstruction = value;
+    }
+
+    public void setProperties(Map<String, Object> properties) {
+        this.properties = properties;
+    }
+    
+    public Map<String, Object> getProperties() {
+        return properties;
+    }
+    
 
     /**
      * Convenience method for unit testing. We will print all of the
@@ -399,6 +790,20 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
                 sb.append(classModifiers[i]);
                 sb.append(sameLine);
             }
+        }
+
+        sb.append(newLine);
+        sb.append("is Service Provider: " + isServiceProvider() );
+
+        sb.append(newLine);
+        sb.append("wsdlURL: " + getWsdlURL() );
+
+        sb.append(newLine);
+        sb.append("has wsdlDefinition?: ");
+        if (wsdlDefinition !=null) {
+            sb.append("true");
+        } else {
+            sb.append("false");
         }
 
         sb.append(newLine);
@@ -488,5 +893,44 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
 		}
 		return sb.toString();
 	}
-	
+
+
+    /**
+     * Create a wsdl definition from the supplied 
+     * location.
+     * 
+     * @param _wsdlURL The URL where the wsdl is located
+     * @return The WSDL Definition or NULL
+     */
+    private Definition createWsdlDefinition(URL _wsdlURL) {
+        if (_wsdlURL == null) {
+            return null;
+        }
+
+        Definition wsdlDef = null;
+        try {
+            if (log.isDebugEnabled() ) {
+                log.debug("new WSDL4JWrapper(" + _wsdlURL.toString() + ",ConfigurationContext" ); 
+            }
+            
+            wsdlWrapper = new WSDL4JWrapper(_wsdlURL, myConfigContext);
+            
+            if (wsdlWrapper != null) {
+                wsdlDef = wsdlWrapper.getDefinition();
+            }
+        } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.debug("DescriptionBuilderComposite:createWsdlDefinition("
+                        + _wsdlURL.toString()
+                        + "): Caught exception trying to create WSDL Definition: "
+                        +e, e); 
+            }
+        }
+
+        return wsdlDef;
+    }
+
+    public ConfigurationContext getConfigurationContext() {
+        return myConfigContext;
+    }
 }

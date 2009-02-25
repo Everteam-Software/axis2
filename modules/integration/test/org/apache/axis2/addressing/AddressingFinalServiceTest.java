@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.addressing;
 
 import junit.framework.Test;
@@ -261,7 +262,7 @@ public class AddressingFinalServiceTest extends UtilServerBasedTestCase implemen
     }
 
     public void testUsingAddressingRequired() throws Exception {
-        echoService.setWSAddressingFlag("required");
+        AddressingHelper.setAddressingRequirementParemeterValue(echoService, "required");
 
         OMElement method = createEchoOMElement("this message should cause a fault.");
         ServiceClient sender = null;

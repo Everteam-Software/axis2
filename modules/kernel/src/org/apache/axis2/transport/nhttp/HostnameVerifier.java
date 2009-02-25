@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.nhttp;
 
 import javax.net.ssl.SSLException;
@@ -25,9 +26,15 @@ import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.security.cert.CertificateParsingException;
-import java.util.*;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
 
 /**
  * ************************************************************************
@@ -54,10 +61,6 @@ import java.util.*;
  * <p/>
  * Inspired by Sebastian Hauer's original StrictSSLProtocolSocketFactory in the
  * HttpClient "contrib" repository.
- *
- * @author Julius Davies
- * @author <a href="mailto:hauer@psicode.com">Sebastian Hauer</a>
- * @since 8-Dec-2006
  */
 
 public interface HostnameVerifier extends javax.net.ssl.HostnameVerifier {

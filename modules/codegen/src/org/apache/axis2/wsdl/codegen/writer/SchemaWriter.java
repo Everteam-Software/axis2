@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl.codegen.writer;
 
 import org.apache.axis2.util.FileWriter;
@@ -25,8 +26,8 @@ import org.apache.ws.commons.schema.XmlSchema;
 import javax.xml.transform.OutputKeys;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 /** A convenient class to write out the schemas into a file in the output location */
 public class SchemaWriter {

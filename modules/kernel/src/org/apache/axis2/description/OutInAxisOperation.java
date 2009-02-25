@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
 import org.apache.axiom.om.util.UUIDGenerator;
@@ -23,12 +24,13 @@ import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.client.OperationClient;
 import org.apache.axis2.client.Options;
 import org.apache.axis2.client.async.AsyncResult;
-import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.client.async.AxisCallback;
+import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
@@ -47,6 +49,9 @@ import javax.xml.namespace.QName;
 import java.util.HashMap;
 
 public class OutInAxisOperation extends TwoChannelAxisOperation {
+
+	private static final Log log = LogFactory.getLog(OutInAxisOperation.class);
+
     public OutInAxisOperation() {
         super();
         //setup a temporary name
@@ -186,24 +191,36 @@ class OutInAxisOperationClient extends OperationClient {
          * async calls alone.
          */
         boolean useAsync = false;
-        if (!options.isUseSeparateListener()) {
+        if (!mc.getOptions().isUseSeparateListener()) {
             Boolean useAsyncOption =
                     (Boolean) mc.getProperty(Constants.Configuration.USE_ASYNC_OPERATIONS);
+			if (log.isDebugEnabled()) log.debug("OutInAxisOperationClient: useAsyncOption " + useAsyncOption);
             if (useAsyncOption != null) {
                 useAsync = useAsyncOption.booleanValue();
             }
         }
+
         EndpointReference replyTo = mc.getReplyTo();
-        if (replyTo !=null && replyTo.hasNoneAddress()) {
-            throw new AxisFault( replyTo.getAddress() + "" +
-                    " can not be used with OutInAxisOperationClient , user either "
-                    + "fireAndForget or sendRobust)");
-        }
-        if (replyTo!=null && !replyTo.hasAnonymousAddress()){
-            useAsync = true;
+        if (replyTo != null) {
+            if (replyTo.hasNoneAddress()) {
+                throw new AxisFault( replyTo.getAddress() + "" +
+                        " can not be used with OutInAxisOperationClient , user either "
+                        + "fireAndForget or sendRobust)");
+            }
+            else if (replyTo.isWSAddressingAnonymous() &&
+                     replyTo.getAllReferenceParameters() != null) {
+                mc.setProperty(AddressingConstants.INCLUDE_OPTIONAL_HEADERS, Boolean.TRUE);
+            }
+            
+            String customReplyTo = (String)options.getProperty(Options.CUSTOM_REPLYTO_ADDRESS);
+            if ( ! (Options.CUSTOM_REPLYTO_ADDRESS_TRUE.equals(customReplyTo))) {
+                if (!replyTo.hasAnonymousAddress()){
+                    useAsync = true;
+                }
+            }
         }
 
-        if (useAsync || options.isUseSeparateListener()) {
+        if (useAsync || mc.getOptions().isUseSeparateListener()) {
             sendAsync(useAsync, mc);
         } else {
             if (block) {
@@ -221,35 +238,44 @@ class OutInAxisOperationClient extends OperationClient {
             throws AxisFault {
         if (log.isDebugEnabled()) {
             log.debug("useAsync=" + useAsync + ", seperateListener=" +
-                    options.isUseSeparateListener());
+                    mc.getOptions().isUseSeparateListener());
         }
         /**
          * We are following the async path. If the user hasn't set a callback object then we must
          * block until the whole MEP is complete, as they have no other way to get their reply message.
          */
+        // THREADSAFE issue: Multiple threads could be trying to initialize the callback receiver
+        // so it is synchronized.  It is not done within the else clause to avoid the 
+        // double-checked lock antipattern.
         CallbackReceiver callbackReceiver;
-        if (axisOp.getMessageReceiver() != null &&
-                axisOp.getMessageReceiver() instanceof CallbackReceiver) {
-            callbackReceiver = (CallbackReceiver) axisOp.getMessageReceiver();
-        } else {
-            if (log.isDebugEnabled()) {
-                log.debug("Creating new callback receiver");
+        synchronized (axisOp) {
+            if (axisOp.getMessageReceiver() != null &&
+                    axisOp.getMessageReceiver() instanceof CallbackReceiver) {
+                callbackReceiver = (CallbackReceiver) axisOp.getMessageReceiver();
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Creating new callback receiver");
+                }
+                callbackReceiver = new CallbackReceiver();
+                axisOp.setMessageReceiver(callbackReceiver);
+				if (log.isDebugEnabled()) log.debug("OutInAxisOperation: callbackReceiver " + callbackReceiver + " : " + axisOp);
             }
-            callbackReceiver = new CallbackReceiver();
-            axisOp.setMessageReceiver(callbackReceiver);
         }
 
         SyncCallBack internalCallback = null;
         if (callback != null) {
             callbackReceiver.addCallback(mc.getMessageID(), callback);
+			if (log.isDebugEnabled()) log.debug("OutInAxisOperationClient: Creating callback");
         } else if (axisCallback != null) {
-            callbackReceiver.addCallback(mc.getMessageID(), axisCallback);            
+            callbackReceiver.addCallback(mc.getMessageID(), axisCallback);  
+			if (log.isDebugEnabled()) log.debug("OutInAxisOperationClient: Creating axis callback");			
         } else {
             if (log.isDebugEnabled()) {
                 log.debug("Creating internal callback");
             }
             internalCallback = new SyncCallBack();
             callbackReceiver.addCallback(mc.getMessageID(), internalCallback);
+			if (log.isDebugEnabled()) log.debug("OutInAxisOperationClient: Creating internal callback");
         }
 
         /**
@@ -263,17 +289,18 @@ class OutInAxisOperationClient extends OperationClient {
             useCustomListener = Boolean.TRUE;
         }
         if (useCustomListener == null || !useCustomListener.booleanValue()) {
-            if(mc.getReplyTo()==null){
+            EndpointReference replyTo = mc.getReplyTo();
+            if (replyTo == null || replyTo.hasAnonymousAddress()){
                 EndpointReference replyToFromTransport =
                         mc.getConfigurationContext().getListenerManager().
                                 getEPRforService(sc.getAxisService().getName(),
                                         axisOp.getName().getLocalPart(), mc
                                         .getTransportIn().getName());
 
-                if (mc.getReplyTo() == null) {
+                if (replyTo == null) {
                     mc.setReplyTo(replyToFromTransport);
                 } else {
-                    mc.getReplyTo().setAddress(replyToFromTransport.getAddress());
+                    replyTo.setAddress(replyToFromTransport.getAddress());
                 }
             }
         }
@@ -337,7 +364,7 @@ class OutInAxisOperationClient extends OperationClient {
             if (responseMessageContext.getReplyTo() != null) {
                 sc.setTargetEPR(responseMessageContext.getReplyTo());
             }
-            if (resenvelope.getBody().hasFault()||responseMessageContext.isProcessingFault()) {
+            if (resenvelope.hasFault()||responseMessageContext.isProcessingFault()) {
                 if (options.isExceptionToBeThrownOnSOAPFault()) {
                     // does the SOAPFault has a detail element for Excpetion
                     throw Utils.getInboundFaultFromMessageContext(responseMessageContext);
@@ -415,8 +442,9 @@ class OutInAxisOperationClient extends OperationClient {
                 // call the callback
                 if (response != null) {
                     SOAPEnvelope resenvelope = response.getEnvelope();
-                    SOAPBody body = resenvelope.getBody();
-                    if (body.hasFault()) {
+                    
+                    if (resenvelope.hasFault()) {
+                        SOAPBody body = resenvelope.getBody();
                         // If a fault was found, create an AxisFault with a MessageContext so that
                         // other programming models can deserialize the fault to an alternative form.
                         AxisFault fault = new AxisFault(body.getFault(), response);

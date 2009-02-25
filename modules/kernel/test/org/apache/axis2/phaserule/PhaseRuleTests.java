@@ -16,24 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.phaserule;
 
-import org.apache.axis2.engine.Phase;
-import org.apache.axis2.engine.Handler;
-import org.apache.axis2.engine.AxisConfiguration;
-import org.apache.axis2.engine.DispatchPhase;
-import org.apache.axis2.phaseresolver.PhaseHolder;
-import org.apache.axis2.phaseresolver.PhaseException;
+import junit.framework.TestCase;
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.HandlerDescription;
 import org.apache.axis2.description.PhaseRule;
-import org.apache.axis2.AxisFault;
-import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.engine.DispatchPhase;
+import org.apache.axis2.engine.Handler;
+import org.apache.axis2.engine.Phase;
+import org.apache.axis2.phaseresolver.PhaseException;
+import org.apache.axis2.phaseresolver.PhaseHolder;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-
-import junit.framework.TestCase;
+import java.util.List;
 
 /**
  * Test various PhaseRule configurations
@@ -79,7 +80,7 @@ public class PhaseRuleTests extends TestCase {
         hm1.setRules(rule1);
         ph.addHandler(hm1);
 
-        ArrayList handlers = p1.getHandlers();
+        List handlers = p1.getHandlers();
         Handler handler = (Handler) handlers.get(0);
         if (handler != h2) {
             fail("Computed Hnadler order is wrong ");
@@ -128,7 +129,7 @@ public class PhaseRuleTests extends TestCase {
         hm.setRules(rule);
         ph.addHandler(hm);
 
-        ArrayList handlers = p1.getHandlers();
+        List handlers = p1.getHandlers();
         Handler handler = (Handler) handlers.get(0);
         if (handler != h2) {
             fail("Computed Handler order is wrong ");
@@ -200,7 +201,7 @@ public class PhaseRuleTests extends TestCase {
         hm4.setRules(rule4);
         ph.addHandler(hm4);
 
-        ArrayList handlers = p1.getHandlers();
+        List handlers = p1.getHandlers();
         boolean foundH1 = false;
         boolean foundH4 = false;
 

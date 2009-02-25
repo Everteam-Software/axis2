@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.client.dispatch;
 
+import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.client.async.AsyncResponse;
 import org.apache.axis2.jaxws.description.EndpointDescription;
@@ -40,14 +42,25 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.transform.Source;
 import javax.xml.ws.Service.Mode;
 import javax.xml.ws.WebServiceException;
+import javax.xml.ws.WebServiceFeature;
 
 public class XMLDispatch<T> extends BaseDispatch<T> {
     private static final Log log = LogFactory.getLog(XMLDispatch.class);
     private Class type;
     private Class blockFactoryType;
 
-    public XMLDispatch(ServiceDelegate svcDelegate, EndpointDescription enpdointDesc) {
-        super(svcDelegate, enpdointDesc);
+    public XMLDispatch(ServiceDelegate svcDelegate,
+                       EndpointDescription endpointDesc,
+                       WebServiceFeature... features) {
+        this(svcDelegate, endpointDesc, null, null, features);
+    }
+
+    public XMLDispatch(ServiceDelegate svcDelegate,
+            EndpointDescription endpointDesc,
+            EndpointReference epr,
+            String addressingNamespace,
+            WebServiceFeature... features) {
+        super(svcDelegate, endpointDesc, epr, addressingNamespace, features);
     }
 
     public Class getType() {
@@ -186,6 +199,8 @@ public class XMLDispatch<T> extends BaseDispatch<T> {
                 log.debug("An error occured while creating the block");
             }
             throw ExceptionFactory.makeWebServiceException(e);
+        } finally {
+            message.close();
         }
 
         if (log.isDebugEnabled()) {

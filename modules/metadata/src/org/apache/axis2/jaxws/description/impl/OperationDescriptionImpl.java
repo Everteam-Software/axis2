@@ -28,9 +28,9 @@ import org.apache.axis2.description.AxisOperationFactory;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.description.AttachmentDescription;
-import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescriptionJava;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.axis2.jaxws.description.FaultDescription;
@@ -45,6 +45,7 @@ import org.apache.axis2.jaxws.description.builder.MethodDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.OneWayAnnot;
 import org.apache.axis2.jaxws.description.builder.ParameterDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.converter.ConverterUtils;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.util.WSDL4JWrapper;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
@@ -53,8 +54,8 @@ import org.apache.commons.logging.LogFactory;
 import javax.jws.Oneway;
 import javax.jws.WebMethod;
 import javax.jws.WebParam;
-import javax.jws.WebResult;
 import javax.jws.WebParam.Mode;
+import javax.jws.WebResult;
 import javax.jws.soap.SOAPBinding;
 import javax.wsdl.Binding;
 import javax.wsdl.BindingInput;
@@ -62,20 +63,22 @@ import javax.wsdl.BindingOperation;
 import javax.wsdl.BindingOutput;
 import javax.wsdl.Definition;
 import javax.wsdl.extensions.AttributeExtensible;
-import javax.xml.bind.annotation.XmlList;
 import javax.xml.namespace.QName;
+import javax.xml.ws.Action;
 import javax.xml.ws.AsyncHandler;
+import javax.xml.ws.FaultAction;
 import javax.xml.ws.RequestWrapper;
 import javax.xml.ws.Response;
 import javax.xml.ws.ResponseWrapper;
 import javax.xml.ws.WebFault;
-
 import java.io.File;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URL;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -114,8 +117,8 @@ class OperationDescriptionImpl
     private Boolean onewayIsOneway;
 
     // ANNOTATION: @XmlList
-    private boolean 			isListType = false;
-    
+    private boolean isListType = false;
+
     // ANNOTATION: @RequestWrapper
     private RequestWrapper requestWrapperAnnotation;
     private String requestWrapperTargetNamespace;
@@ -127,6 +130,9 @@ class OperationDescriptionImpl
     private String responseWrapperLocalName;
     private String responseWrapperTargetNamespace;
     private String responseWrapperClassName;
+    
+    // ANNOTATION: @Action
+    private Action actionAnnotation;
 
     // ANNOTATION: @SOAPBinding
     // Note this is the Method-level annotation.  See EndpointInterfaceDescription for the Type-level annotation
@@ -178,6 +184,10 @@ class OperationDescriptionImpl
     private boolean             _setAttachmentDesc = false;
     private AttachmentDescription attachmentDesc = null;
     
+    private boolean hasRequestSwaRefAttachments = false;
+    private boolean hasResponseSwaRefAttachments = false;
+    private Map<String, AttachmentDescription> partAttachmentMap;
+    
     private Method serviceImplMethod;
     private boolean serviceImplMethodFound = false;
     // For JAX-WS client async methods, this is the corresponding Sync method; for everything else,
@@ -186,14 +196,15 @@ class OperationDescriptionImpl
     // RUNTIME INFORMATION
     Map<String, OperationRuntimeDescription> runtimeDescMap =
             Collections.synchronizedMap(new HashMap<String, OperationRuntimeDescription>());
-    private Map<String, AttachmentDescription> partAttachmentMap;
-    
+    // Cache the actual Class of the type being returned. 
+    private Class resultActualTypeClazz;
+
     OperationDescriptionImpl(Method method, EndpointInterfaceDescription parent) {
         // TODO: Look for WebMethod anno; get name and action off of it
         parentEndpointInterfaceDescription = parent;
         partAttachmentMap = new HashMap<String, AttachmentDescription>();
         setSEIMethod(method);
-		isListType = ConverterUtils.hasXmlListAnnotation(method.getAnnotations());
+		
         // The operationQName is intentionally unqualified to be consistent with the remaining parts of the system. 
         // Using a qualified name will cause breakage.
         // Don't do --> this.operationQName = new QName(parent.getTargetNamespace(), getOperationName());
@@ -203,6 +214,15 @@ class OperationDescriptionImpl
                 axisOperation = createClientAxisOperation();
             }
         }
+        if(this.axisOperation != null) {
+            try {
+                this.axisOperation.addParameter(new Parameter(OperationDescription.AXIS_OPERATION_PARAMETER,
+                                                         this));  
+            }
+            catch(AxisFault af) {
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("operationDescriptionErr1"));
+            }
+        }
         buildAttachmentInformation();
     }
 
@@ -210,6 +230,15 @@ class OperationDescriptionImpl
         parentEndpointInterfaceDescription = parent;
         partAttachmentMap = new HashMap<String, AttachmentDescription>();
         axisOperation = operation;
+        if(this.axisOperation != null) {
+            try {
+                this.axisOperation.addParameter(new Parameter(OperationDescription.AXIS_OPERATION_PARAMETER,
+                                                         this));  
+            }
+            catch(AxisFault af) {
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("operationDescriptionErr1"));
+            }
+        }
         this.operationQName = axisOperation.getName();
         buildAttachmentInformation();
     }
@@ -240,6 +269,17 @@ class OperationDescriptionImpl
         } else {
             this.axisOperation = createAxisOperation();
         }
+        
+        if(this.axisOperation != null) {
+            try {
+                this.axisOperation.addParameter(new Parameter(OperationDescription.AXIS_OPERATION_PARAMETER,
+                                                         this));  
+            }
+            catch(AxisFault af) {
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("operationDescriptionErr1"));
+            }
+        }
+        
         // Register understood headers on axisOperation
         registerMustUnderstandHeaders();
     }
@@ -264,18 +304,69 @@ class OperationDescriptionImpl
             //                                              ROBUST_IN_ONLY
             //      Determine how these MEP's should be handled, if at all
         } catch (Exception e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Unable to build AxisOperation for OperationDescrition; caught exception.",
-                          e);
-            }
-            // TODO: NLS & RAS
-            throw ExceptionFactory.makeWebServiceException("Caught exception trying to create AxisOperation",
-                                                           e);
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("clientAxisOprErr"),e);
         }
 
         newAxisOperation.setName(determineOperationQName(seiMethod));
+        newAxisOperation.setSoapAction(this.getAction());
         
-        getEndpointInterfaceDescriptionImpl().getEndpointDescriptionImpl().getAxisService().addOperation(newAxisOperation);
+        //*************************************************************************************
+        //NOTE: assumption here is that all info. need to generate the actions will have to come
+        //      from annotations (or default values)
+        //*************************************************************************************
+        
+        String messageExchangePattern = newAxisOperation.getMessageExchangePattern();
+        String operationName = newAxisOperation.getName().getLocalPart();
+        String targetNS = getEndpointInterfaceDescriptionImpl().getTargetNamespace();        
+        String portTypeName = getEndpointInterfaceDescriptionImpl().getPortType().getLocalPart();
+         
+        //We don't have a name at this point, shouldn't matter if we have the MEP.
+        //On the client the input and output actions are reversed.
+        String inputName = null;
+        String inputAction = getOutputAction();
+
+        //If we still don't have an action then fall back to the Default Action Pattern.
+        if (inputAction == null || inputAction.length() == 0) {
+            inputAction =
+                WSDL11ActionHelper.getInputActionFromStringInformation( messageExchangePattern, 
+                                                                        targetNS, 
+                                                                        portTypeName, 
+                                                                        operationName, 
+                                                                        inputName);
+        }
+                
+        ArrayList inputActions = new ArrayList();
+        inputActions.add(inputAction);
+        newAxisOperation.setWsamappingList(inputActions);
+        
+        //Map the action to the operation on the actual axisService
+        //TODO: Determine whether this should be done at a higher level in the 
+        //      description hierarchy
+        getEndpointInterfaceDescriptionImpl().getEndpointDescriptionImpl().
+            getAxisService().mapActionToOperation(inputAction, newAxisOperation);        
+        
+        //set the OUTPUT ACTION
+
+        //We don't have a name at this point, shouldn't matter if we have the MEP
+        //On the client the input and output actions are reversed.
+        String outputName = null;
+        String outputAction = getInputAction();
+
+        if (outputAction == null || outputAction.length() == 0) {
+            outputAction =
+                WSDL11ActionHelper.getOutputActionFromStringInformation( messageExchangePattern, 
+                                                                         targetNS, 
+                                                                         portTypeName, 
+                                                                         operationName, 
+                                                                         outputName);
+        }
+        
+        newAxisOperation.setOutputAction(outputAction);
+
+        setFaultActions(newAxisOperation, operationName, targetNS, portTypeName);
+
+        getEndpointInterfaceDescriptionImpl().getEndpointDescriptionImpl().
+            getAxisService().addOperation(newAxisOperation);
         
         return newAxisOperation;
     }
@@ -300,14 +391,7 @@ class OperationDescriptionImpl
             //                                              ROBUST_IN_ONLY
             //      Determine how these MEP's should be handled, if at all
         } catch (Exception e) {
-            if (log.isDebugEnabled()) {
-                log.debug(
-                        "Unable to build AxisOperation for OperationDescrition; caught exception.",
-                        e);
-            }
-            // TODO: NLS & RAS
-            throw ExceptionFactory
-                    .makeWebServiceException("Caught exception trying to create AxisOperation", e);
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("clientAxisOprErr"), e);
         }
 
         newAxisOperation.setName(determineOperationQName(this.methodComposite));
@@ -319,24 +403,27 @@ class OperationDescriptionImpl
         //*************************************************************************************
         
         String messageExchangePattern = newAxisOperation.getMessageExchangePattern();
+        String operationName = newAxisOperation.getName().getLocalPart();
         String targetNS = getEndpointInterfaceDescriptionImpl().getTargetNamespace();        
-        String portTypeName = getEndpointInterfaceDescriptionImpl().getEndpointDescriptionImpl().getName();
-        ArrayList inputActions = new ArrayList();
+        String portTypeName = getEndpointInterfaceDescriptionImpl().getPortType().getLocalPart();
          
         //We don't have a name at this point, shouldn't matter if we have the MEP
-        //String inputName = newAxisOperation.getName().getLocalPart();
         String inputName = null;
-        String inputAction = 
+        String inputAction = getInputAction();
+        
+        //If we don't have an action then fall back to the Default Action Pattern.
+        if (inputAction == null || inputAction.length() == 0) {
+            inputAction =
                 WSDL11ActionHelper.getInputActionFromStringInformation(messageExchangePattern, 
                                                                        targetNS, 
                                                                        portTypeName, 
-                                                                       newAxisOperation.getName().getLocalPart(), 
+                                                                       operationName, 
                                                                        inputName);
-                
-        if (inputAction != null) {
-            inputActions.add(inputAction);
-            newAxisOperation.setWsamappingList(inputActions);
         }
+        
+        ArrayList inputActions = new ArrayList();
+        inputActions.add(inputAction);
+        newAxisOperation.setWsamappingList(inputActions);
         
         //Map the action to the operation on the actual axisService
         //TODO: Determine whether this should be done at a higher level in the 
@@ -347,50 +434,23 @@ class OperationDescriptionImpl
         //set the OUTPUT ACTION
 
         //We don't have a name at this point, shouldn't matter if we have the MEP
-        //String outputName = newAxisOperation.getName().getLocalPart();  //REVIEW:
         String outputName = null;
-        String outputAction = 
+        String outputAction = getOutputAction();
+        
+        //If we don't have an action then fall back to the Default Action Pattern.
+        if (outputAction == null || outputAction.length() == 0) {
+            outputAction =
                 WSDL11ActionHelper.getOutputActionFromStringInformation(messageExchangePattern,
                                                                         targetNS, 
                                                                         portTypeName, 
-                                                                        newAxisOperation.getName().getLocalPart(), 
+                                                                        operationName, 
                                                                         outputName);
-        
-        if (outputAction != null) {
-                newAxisOperation.setOutputAction(outputAction);
         }
+        
+        newAxisOperation.setOutputAction(outputAction);
         
         //Set the FAULT ACTION
-        // Walk the fault information
-        FaultDescription[] faultDescs = getFaultDescriptions();
-        if (faultDescs != null) {
-            for (int i=0; i <faultDescs.length; i++) {
-        
-                AxisMessage faultMessage = new AxisMessage();
-                String faultName = faultDescs[i].getName();
-                faultMessage.setName(faultName);
-                
-                String faultAction = 
-                        WSDL11ActionHelper.getFaultActionFromStringInformation( messageExchangePattern, 
-                                        portTypeName, 
-                                        newAxisOperation.getName().getLocalPart(), 
-                                        faultMessage.getName());
-                
-                if (faultAction != null) {
-                        newAxisOperation.addFaultAction(faultMessage.getName(), faultAction);
-                }
-                newAxisOperation.setFaultMessages(faultMessage);
-            }
-        }
-
-        //REVIEW: Determine if other axisOperation values may need to be set
-        //      Currently, the following values are being set on AxisOperation in 
-        //      ServiceBuilder.populateService which we are not setting:
-        //          AxisOperation.setPolicyInclude()
-        //          AxisOperation.setWsamappingList()
-        //          AxisOperation.setOutputAction()
-        //          AxisOperation.addFaultAction()
-        //          AxisOperation.setFaultMessages()
+        setFaultActions(newAxisOperation, operationName, targetNS, portTypeName);
 
         // If this is a DOC/LIT/BARE operation, then set the QName of the input AxisMessage to the 
         // part for the first IN or IN/OUT non-header parameter.  If there are no parameters, then don't set
@@ -420,17 +480,11 @@ class OperationDescriptionImpl
                                     + elementName + "; partTNS: " + partNamespace);
                         }
                         if (axisMessage == null) {
-                            // TODO: RAS & NLS
-                            throw ExceptionFactory.makeWebServiceException(
-                                    "Could not setup Doc/Lit/Bare operation because input message is null");
+                            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("createAxisOprErr1"));
                         } else if (DescriptionUtils.isEmpty(partNamespace)) {
-                            // TODO: RAS & NLS
-                            throw ExceptionFactory.makeWebServiceException(
-                                    "Could not setup Doc/Lit/Bare operation because part namespace is empty");
+                            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("createAxisOprErr2"));
                         } else if (DescriptionUtils.isEmpty(elementName)) {
-                            // TODO: RAS & NLS
-                            throw ExceptionFactory.makeWebServiceException(
-                                    "Could not setup Doc/Lit/Bare operation because name is empty");
+                            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("createAxisOprErr3"));
                         } else {
                             QName partQName = new QName(partNamespace, elementName);
                             if(log.isDebugEnabled()) {
@@ -445,6 +499,46 @@ class OperationDescriptionImpl
             }
         }
         return newAxisOperation;
+    }
+
+    private void setFaultActions(AxisOperation newAxisOperation,
+                                 String operationName,
+                                 String targetNS,
+                                 String portTypeName) {
+        // Walk the fault information
+        FaultDescription[] faultDescs = getFaultDescriptions();
+        
+        //Generate fault actions according to the Default Action Pattern.
+        if (faultDescs != null) {
+            for (FaultDescription faultDesc : faultDescs) {
+        
+                AxisMessage faultMessage = new AxisMessage();
+                String faultName = faultDesc.getName();
+                faultMessage.setName(faultName);
+                
+                String faultAction = 
+                        WSDL11ActionHelper.getFaultActionFromStringInformation( targetNS, 
+                                        portTypeName, 
+                                        operationName, 
+                                        faultMessage.getName());
+                
+                newAxisOperation.addFaultAction(faultDesc.getExceptionClassName(),  faultAction);
+                newAxisOperation.setFaultMessages(faultMessage);
+            }
+        }
+        
+        //Override the fault actions based on any FaultAction annotations that are defined.
+        FaultAction[] faultActions = getFaultActions();
+        
+        if (faultActions != null) {
+            for (FaultAction faultAction : faultActions) {
+                String className = faultAction.className().getName();
+                FaultDescription faultDesc = resolveFaultByExceptionName(className);
+                if (faultDesc != null)  {
+                    newAxisOperation.addFaultAction(className, faultAction.value());
+                }
+            }
+        }
     }
 
     /**
@@ -476,7 +570,8 @@ class OperationDescriptionImpl
             }
             if (axisMessage != null) {
                 QName elementQName = axisMessage.getElementQName();
-                if (!DescriptionUtils.isEmpty(elementQName)) {
+                if (!DescriptionUtils.isEmpty(elementQName) && 
+                    axisService.getOperationByMessageElementQName(elementQName) == null) {
                     axisService.addMessageElementQNameToOperationMapping(elementQName,
                             newAxisOperation);
                 }
@@ -486,14 +581,15 @@ class OperationDescriptionImpl
 
     void setSEIMethod(Method method) {
         if (seiMethod != null) {
-            // TODO: This is probably an error, but error processing logic is incorrect
-            throw new UnsupportedOperationException(
-                    "Can not set an SEI method once it has been set.");
+        	throw ExceptionFactory.makeWebServiceException(
+        			new UnsupportedOperationException(Messages.getMessage("seiMethodErr")));
         } else {
             seiMethod = method;
-            webMethodAnnotation = seiMethod.getAnnotation(WebMethod.class);
+            webMethodAnnotation = (WebMethod)
+                getAnnotation(seiMethod, WebMethod.class);
             parameterDescriptions = createParameterDescriptions();
             faultDescriptions = createFaultDescriptions();
+            isListType = ConverterUtils.hasXmlListAnnotation(seiMethod.getAnnotations());
         }
         // Register understood headers on axisOperation
         registerMustUnderstandHeaders();
@@ -692,6 +788,17 @@ class OperationDescriptionImpl
     // ANNOTATION: WebMethod
     // =====================================
     public WebMethod getAnnoWebMethod() {
+        if (webMethodAnnotation == null) {
+            if (isDBC() && methodComposite != null) {
+                webMethodAnnotation = methodComposite.getWebMethodAnnot();
+            } else if (!isDBC() && seiMethod != null) {
+                webMethodAnnotation = (WebMethod) getAnnotation(seiMethod, WebMethod.class);
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Unable to get WebMethod annotation");
+                }
+            }
+        }
         return webMethodAnnotation;
     }
 
@@ -713,7 +820,7 @@ class OperationDescriptionImpl
             return null;
         }
 
-        WebMethod wmAnnotation = javaMethod.getAnnotation(WebMethod.class);
+        WebMethod wmAnnotation = (WebMethod) getAnnotation(javaMethod,WebMethod.class);
         // Per JSR-181 MR Sec 4.2 "Annotation: javax.jws.WebMethod" pg 17,
         // if @WebMethod specifies and operation name, use that.  Otherwise
         // default is the Java method name
@@ -846,7 +953,8 @@ class OperationDescriptionImpl
     public RequestWrapper getAnnoRequestWrapper() {
         if (requestWrapperAnnotation == null) {
             if (!isDBC() && seiMethod != null) {
-                requestWrapperAnnotation = seiMethod.getAnnotation(RequestWrapper.class);
+                requestWrapperAnnotation = (RequestWrapper) 
+                    getAnnotation(seiMethod,RequestWrapper.class);
             } else if (isDBC() && methodComposite != null) {
                 requestWrapperAnnotation = methodComposite.getRequestWrapperAnnot();
             } else {
@@ -952,7 +1060,8 @@ class OperationDescriptionImpl
     public ResponseWrapper getAnnoResponseWrapper() {
         if (responseWrapperAnnotation == null) {
             if (!isDBC() && seiMethod != null) {
-                responseWrapperAnnotation = seiMethod.getAnnotation(ResponseWrapper.class);
+                responseWrapperAnnotation = (ResponseWrapper)
+                    getAnnotation(seiMethod,ResponseWrapper.class);
             } else if (isDBC() && methodComposite != null) {
                 responseWrapperAnnotation = methodComposite.getResponseWrapperAnnot();
             } else {
@@ -1178,7 +1287,8 @@ class OperationDescriptionImpl
     public WebResult getAnnoWebResult() {
         if (webResultAnnotation == null) {
             if (!isDBC() && seiMethod != null) {
-                webResultAnnotation = seiMethod.getAnnotation(WebResult.class);
+                webResultAnnotation = (WebResult)
+                    getAnnotation(seiMethod,WebResult.class);
             } else if (methodComposite != null) {
                 webResultAnnotation = methodComposite.getWebResultAnnot();
             } else {
@@ -1320,7 +1430,8 @@ class OperationDescriptionImpl
         //       JSR-181 Sec 4.7 p. 28
         if (soapBindingAnnotation == null) {
             if (!isDBC() && seiMethod != null) {
-                soapBindingAnnotation = seiMethod.getAnnotation(SOAPBinding.class);
+                soapBindingAnnotation = (SOAPBinding)
+                    getAnnotation(seiMethod,SOAPBinding.class);
             } else if (isDBC() && methodComposite != null) {
                 soapBindingAnnotation = methodComposite.getSoapBindingAnnot();
             } else {
@@ -1383,22 +1494,73 @@ class OperationDescriptionImpl
         }
         return soapBindingParameterStyle;
     }
+    
+    // ===========================================
+    // ANNOTATION: Action
+    // ===========================================
+    public Action getAnnoAction() {
+        if (actionAnnotation == null) {
+            if (!isDBC() && seiMethod != null) {
+                actionAnnotation = (Action) getAnnotation(seiMethod, Action.class);
+            }
+            else if (methodComposite != null) {
+                actionAnnotation = methodComposite.getActionAnnot();
+            }
+            else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Unable to get Action annotation.");
+                }
+            }
+        }
+        return actionAnnotation;
+    }
+    
+    private String getInputAction() {
+        String inputAction = null;
+        Action action = getAnnoAction();
+        
+        if (action != null) {
+            inputAction = action.input();
+        }
+        
+        return inputAction;
+    }
+    
+    private String getOutputAction() {
+        String outputAction = null;
+        Action action = getAnnoAction();
+        
+        if (action != null) {
+            outputAction = action.output();
+        }
+        
+        return outputAction;
+    }
+    
+    private FaultAction[] getFaultActions() {
+        FaultAction[] faultActions = null;
+        Action action = getAnnoAction();
+        
+        if (action !=  null) {
+            faultActions = action.fault();
+        }
+        
+        return faultActions;
+    }
 
     // ===========================================
     // ANNOTATION: OneWay
     // ===========================================
     public Oneway getAnnoOneway() {
-        //TODO: Shouldn't really do it this way...if there is not Oneway annotation, 
-        //      we will always be calling the methods to try to retrieve it, since
-        //      it will always be null, should consider relying on 'isOneWay'
-
         if (onewayAnnotation == null) {
+            // Get the onew-way annotation from either the method composite (server-side)
+            // or from the SEI method (client-side).  
             if (isDBC() && methodComposite != null) {
                 if (methodComposite.isOneWay()) {
                     onewayAnnotation = OneWayAnnot.createOneWayAnnotImpl();
                 }
             } else if (!isDBC() && seiMethod != null) {
-                onewayAnnotation = seiMethod.getAnnotation(Oneway.class);
+                onewayAnnotation = (Oneway) getAnnotation(seiMethod,Oneway.class);
             } else {
                 if (log.isDebugEnabled()) {
                     log.debug("Unable to get OneWay annotation");
@@ -1455,6 +1617,13 @@ class OperationDescriptionImpl
      * @see org.apache.axis2.jaxws.description.OperationDescription#getResultActualType()
      */
     public Class getResultActualType() {
+        if(resultActualTypeClazz == null) {
+            resultActualTypeClazz = findResultActualType();    
+        }
+        return resultActualTypeClazz;
+    }
+    
+    public Class findResultActualType() {
         // TODO: Fix this!  it isn't doing the right thing for DBC as noted below with FIXME comments
         //       This is used to marshall the rsp on the service (dbc) and demarshall on the client (reflection)
         //       But we shouldn't get an async OpDesc on the service since getDispatchableOperation(QN) removes them.
@@ -1514,8 +1683,7 @@ class OperationDescriptionImpl
             //        And this method is only used to parse out the JAX-WS Async parameter types to find
             //        AsyncHandler<T>.  The problem with the code that was removed is that a Type can not be
             //        instantiated, so we can't new up a Type inside the PDC.
-            throw new UnsupportedOperationException(
-                    "OperationDescriptionImpl.getParameterActualGenericType not supported for DBC");
+        	throw ExceptionFactory.makeWebServiceException(new UnsupportedOperationException(Messages.getMessage("genParamTypesErr")));
 //           Type [] type = new Type[parameterDescriptions.length];
 //           for (int i=0; i < parameterDescriptions.length; i++){
 //               type[i] = ((ParameterDescriptionImpl) parameterDescriptions[i]).getParameterActualGenericType();
@@ -1560,9 +1728,13 @@ class OperationDescriptionImpl
         }
         if (methodName != null && returnTypeName != null) {
             // REVIEW: Not sure the method MUST end with "Async"; I think it can be customized.
-            answer = methodName.endsWith("Async")
-                    && (returnTypeName.equals(Response.class.getName()) ||
-                    returnTypeName.equals(Future.class.getName()));
+            answer = (returnTypeName.contains(Response.class.getName()) ||
+                    returnTypeName.contains(Future.class.getName()));
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("Method = " + methodName);
+            log.debug("Return Type = " + returnTypeName);
+            log.debug("Is client async = " + answer);
         }
         return answer;
     }
@@ -1831,7 +2003,7 @@ class OperationDescriptionImpl
                 try {
                     File file = new File(wsdlLocation);
                     URL url = file.toURL();
-                    wsdl4j = new WSDL4JWrapper(url);
+                    wsdl4j = new WSDL4JWrapper(url, true, 2);  // In this context, limit the wsdl memory
                     def = wsdl4j.getDefinition();
                 } catch (Throwable t) {
                     if (log.isDebugEnabled()) {
@@ -1884,6 +2056,22 @@ class OperationDescriptionImpl
 
     public void addPartAttachmentDescription(String partName, AttachmentDescription attachmentDesc) {
         partAttachmentMap.put(partName, attachmentDesc);
+    }
+    
+    public boolean hasRequestSwaRefAttachments() {
+        return hasRequestSwaRefAttachments;
+    }
+    
+    public void setHasRequestSwaRefAttachments(boolean b) {
+        hasRequestSwaRefAttachments = b;
+    }
+    
+    public boolean hasResponseSwaRefAttachments() {
+        return hasResponseSwaRefAttachments;
+    }
+    
+    public void setHasResponseSwaRefAttachments(boolean b) {
+        hasResponseSwaRefAttachments = b;
     }
             
     public String toString() {
@@ -2050,10 +2238,21 @@ class OperationDescriptionImpl
             try {
                 theAxisOperation.addParameter(headerQNParameter);
             } catch (AxisFault e) {
-                // TODO: RAS
-                log.warn("Unable to add Parameter for header QNames to AxisOperation " + theAxisOperation, e);
+                log.warn(Messages.getMessage("regMUHeadersErr",theAxisOperation.getClass().getName()), e);
             }
         }
     }
-
+    /**
+     * Get an annotation.  This is wrappered to avoid a Java2Security violation.
+     * @param cls Class that contains annotation 
+     * @param annotation Class of requrested Annotation
+     * @return annotation or null
+     */
+    private static Annotation getAnnotation(final AnnotatedElement element, final Class annotation) {
+        return (Annotation) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                return element.getAnnotation(annotation);
+            }
+        });
+    }
 }

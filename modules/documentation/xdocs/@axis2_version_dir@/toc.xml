@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -63,6 +64,7 @@ Guide</a></li>
 Administrator's Guide</a></li>
 <li><a href="Axis2ArchitectureGuide.html" target=
 "mainFrame">Architecture Guide</a></li>
+<li><a href="jaxws-guide.html" target="mainFrame">JAXWS Guide</a></li>
 <li><a href="pojoguide.html" target="mainFrame">POJO Guide</a></li>
 <li><a href="spring.html" target="mainFrame">Spring Guide</a></li>
 <li><a href="modules.html" target="mainFrame">ModulesGuide</a></li>
@@ -151,8 +153,6 @@ target="mainFrame">Java2WSDL Maven2 Plug-in</a></li>
 <li>25.7 <a href=
 "../tools/@axis2_version_dir@/maven-plugins/maven-wsdl2code-plugin.html"
 target="mainFrame">WSDL2Code Maven2 Plug-in</a></li>
-<li>25.8 <a href="../tools/previous.html" target="mainFrame">Tools
-Archive</a></li>
 </ul>
 </li>
 <li><a href="migration.html" target="mainFrame">Migration Guide

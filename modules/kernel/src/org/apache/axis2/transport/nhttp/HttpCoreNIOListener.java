@@ -16,20 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.nhttp;
-
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
-
-import javax.net.ssl.SSLContext;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.ConfigurationContext;
-import org.apache.axis2.context.SessionContext;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.context.SessionContext;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.TransportInDescription;
 import org.apache.axis2.transport.TransportListener;
@@ -44,6 +38,12 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.params.HttpProtocolParams;
+
+import javax.net.ssl.SSLContext;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 
 /**
  * NIO transport listener for Axis2 based on HttpCore and NIO extensions
@@ -222,7 +222,7 @@ public class HttpCoreNIOListener implements TransportListener {
      * Return the EPR for the given service (implements deprecated method temporarily)
      */
     public EndpointReference getEPRForService(String serviceName, String ip) throws AxisFault {
-        return new EndpointReference(serviceEPRPrefix + serviceName);
+        return new EndpointReference(serviceEPRPrefix + serviceName + "/");
     }
 
     /**
@@ -234,7 +234,7 @@ public class HttpCoreNIOListener implements TransportListener {
      */
     public EndpointReference[] getEPRsForService(String serviceName, String ip) throws AxisFault {
         EndpointReference[] endpointReferences = new EndpointReference[1];
-        endpointReferences[0] = new EndpointReference(serviceEPRPrefix + serviceName);
+        endpointReferences[0] = new EndpointReference(serviceEPRPrefix + serviceName + "/");
         return endpointReferences;
     }
 

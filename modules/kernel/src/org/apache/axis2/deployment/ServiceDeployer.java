@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
 import org.apache.axis2.AxisFault;
@@ -23,6 +24,7 @@ import org.apache.axis2.Constants;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.deployment.repository.util.ArchiveReader;
 import org.apache.axis2.deployment.repository.util.DeploymentFileData;
+import org.apache.axis2.deployment.util.Utils;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisServiceGroup;
@@ -31,9 +33,10 @@ import org.apache.axis2.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.File;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -79,13 +82,15 @@ public class ServiceDeployer implements Deployer {
                     deploymentFileData.getAbsolutePath(), deploymentFileData,
                     serviceGroup, isDirectory, wsdlservice,
                     configCtx);
+            URL location = deploymentFileData.getFile().toURL();
             DeploymentEngine.addServiceGroup(serviceGroup,
                                              serviceList,
-                                             deploymentFileData.getFile().toURL(),
+                                             location,
                                              deploymentFileData,
                                              axisConfig);
             log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_WS,
-                                         deploymentFileData.getName()));
+                                         deploymentFileData.getName(),
+                                         location.toString()));
         } catch (DeploymentException de) {
             de.printStackTrace();
             log.error(Messages.getMessage(DeploymentErrorMsgs.INVALID_SERVICE,
@@ -157,6 +162,7 @@ public class ServiceDeployer implements Deployer {
 
     public void unDeploy(String fileName) throws DeploymentException {
         try {
+            fileName = Utils.getShortFileName(fileName);
             fileName = DeploymentEngine.getAxisServiceName(fileName);
             AxisServiceGroup serviceGroup = axisConfig.removeServiceGroup(fileName);
             if (serviceGroup != null) {

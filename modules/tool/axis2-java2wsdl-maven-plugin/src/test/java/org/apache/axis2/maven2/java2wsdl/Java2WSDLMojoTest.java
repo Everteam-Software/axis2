@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.maven2.java2wsdl;
 
-import java.io.File;
+package org.apache.axis2.maven2.java2wsdl;
 
 import org.apache.maven.plugin.testing.AbstractMojoTestCase;
 import org.apache.maven.plugin.testing.stubs.MavenProjectStub;
+
+import java.io.File;
 
 
 /**

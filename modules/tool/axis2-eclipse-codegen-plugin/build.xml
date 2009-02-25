@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <project basedir="." default="help">
 
     <!--Set your elcipse home directory  -->
@@ -44,7 +45,7 @@
     <property name="plugin.project.file.name" value=".project"></property>
     <property name="plugin.classpath.file.name" value=".classpath"></property>
     <property name="plugin.help.file.name" value="help_toc.xml"></property>
-    <property name="tool_docs_version" value="1_3"></property>
+    <property name="tool_docs_version" value="1_4"></property>
 
     <property name="codegen.resource.dir" value="../conf/codegen"></property>
     <property name="codegen.help.resource.file" value="../../../modules/documentation/xdocs/tools/${tool_docs_version}/eclipse/wsdl2java-plugin.html"></property>
@@ -61,7 +62,7 @@
      <filter token="neethi.version" value="${neethi.version}" />
      <filter token="stax.api.version" value="${stax.api.version}" />
      <filter token="stax.impl.version" value="${stax.impl.version}" />
-     <filter token="xbean.version" value="${xbean.version}" />
+     <filter token="xmlbeans.version" value="${xmlbeans.version}" />
      <filter token="XmlSchema.version" value="${XmlSchema.version}" />
      <filter token="log4j.version" value="${log4j.version}" />
      <filter token="wsdl4j.version" value="${wsdl4j.version}" />
@@ -86,7 +87,7 @@
 		<include name="stax-api-${stax.api.version}.jar" />
 		<include name="wsdl4j-${wsdl4j.version}.jar" />
 		<include name="wstx-${stax.impl.version}.jar" />
-		<include name="xbean-${xbean.version}.jar" />
+		<include name="xmlbeans-${xmlbeans.version}.jar" />
 		<include name="XmlSchema-${XmlSchema.version}.jar" />
 		<include name="woden-${woden.version}.jar" />
 		<include name="commons-httpclient-${commons.httpclient.version}.jar" />

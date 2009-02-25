@@ -16,26 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.server.dispatcher;
 
+
+import org.apache.axis2.AxisFault;
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.binding.BindingUtils;
 import org.apache.axis2.jaxws.context.utils.ContextUtils;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.core.util.MessageContextUtils;
 import org.apache.axis2.jaxws.description.EndpointDescription;
-import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.axis2.jaxws.description.OperationDescription;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.marshaller.MethodMarshaller;
 import org.apache.axis2.jaxws.marshaller.factory.MethodMarshallerFactory;
 import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
+import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.server.EndpointCallback;
+import org.apache.axis2.jaxws.server.EndpointInvocationContext;
+import org.apache.axis2.jaxws.server.InvocationHelper;
+import org.apache.axis2.jaxws.server.ServerConstants;
+import org.apache.axis2.jaxws.server.endpoint.Utils;
+import org.apache.axis2.jaxws.spi.Constants;
+import org.apache.axis2.jaxws.utility.ExecutorFactory;
+import org.apache.axis2.jaxws.utility.SingleThreadedExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.xml.ws.soap.SOAPBinding;
-import org.apache.axis2.AxisFault;
 import java.lang.reflect.Method;
+import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
 
 /**
  * The JavaBeanDispatcher is used to manage creating an instance of a JAX-WS service implementation
@@ -57,20 +69,16 @@ public class JavaBeanDispatcher extends JavaDispatcher {
     */
     public MessageContext invoke(MessageContext mc) throws Exception {
         if (log.isDebugEnabled()) {
-            log.debug("Preparing to invoke service endpoint implementation " +
-                    "class: " + serviceImplClass.getName());
+            log.debug("Invoking service endpoint: " + serviceImplClass.getName());
+            log.debug("Invocation pattern: two way, sync");
         }
 
         initialize(mc);
-        OperationDescription operationDesc =
-                getOperationDescription(mc); //mc.getOperationDescription();
-        //Set SOAP Operation Related properties in SOAPMessageContext.
-        ContextUtils.addWSDLProperties(mc);
-        Protocol requestProtocol = mc.getMessage().getProtocol();
-        MethodMarshaller methodMarshaller =
-                getMethodMarshaller(mc.getMessage().getProtocol(), mc.getOperationDescription());
-        Object[] methodInputParams =
-                methodMarshaller.demarshalRequest(mc.getMessage(), mc.getOperationDescription());
+        
+        OperationDescription operationDesc = Utils.getOperationDescription(mc);
+        
+        Object[] methodInputParams = createRequestParameters(mc);
+        
         Method target = getJavaMethod(mc, serviceImplClass);
         if (log.isDebugEnabled()) {
             // At this point, the OpDesc includes everything we know, including the actual method
@@ -79,81 +87,122 @@ public class JavaBeanDispatcher extends JavaDispatcher {
                     operationDesc.toString());
         }
 
-        //At this point, we have the method that is going to be invoked and
-        //the parameter data to invoke it with, so we use the instance and 
-        //do the invoke.
-        //Passing method input params to grab holder values, if any.
+        // We have the method that is going to be invoked and the parameter data to invoke it 
+        // with, so just invoke the operation.
         boolean faultThrown = false;
         Throwable fault = null;
-        Object response = null;
+        Object output = null;
         try {
-            response = invokeService(mc, target, serviceInstance, methodInputParams);
-        } catch (Exception e) {
+            output = invokeTargetOperation(target, methodInputParams);
+        } 
+        catch (Throwable e) {
             faultThrown = true;
             fault = e;
-            if (log.isDebugEnabled()) {
-                log.debug("Exception invoking a method of " +
-                        serviceImplClass.toString() + " of instance " +
-                        serviceInstance.toString());
-                log.debug("Exception type thrown: " + e.getClass().getName());
-                log.debug("Method = " + target.toGenericString());
-                for (int i = 0; i < methodInputParams.length; i++) {
-                    String value = (methodInputParams[i] == null) ? "null" :
-                            methodInputParams[i].getClass().toString();
-                    log.debug(" Argument[" + i + "] is " + value);
-                }
-            }
         }
 
-        Message message = null;
+        MessageContext response = null;
         if (operationDesc.isOneWay()) {
             // If the operation is one-way, then we can just return null because
             // we cannot create a MessageContext for one-way responses.
             return null;
         } else if (faultThrown) {
-            message = methodMarshaller.marshalFaultResponse(fault, mc.getOperationDescription(),
-                                                            requestProtocol); // Send the response using the same protocol as the request
-        } else if (target.getReturnType().getName().equals("void")) {
-            message = methodMarshaller
-                    .marshalResponse(null, methodInputParams, mc.getOperationDescription(),
-                                     requestProtocol); // Send the response using the same protocol as the request
+            response = createFaultResponse(mc, mc.getMessage().getProtocol(), fault);
         } else {
-            message = methodMarshaller
-                    .marshalResponse(response, methodInputParams, mc.getOperationDescription(),
-                                     requestProtocol); // Send the response using the same protocol as the request
+            response = createResponse(mc, mc.getMessage().getProtocol(), methodInputParams, output);
+        }
+                
+        return response;
+    }
+
+    public void invokeOneWay(MessageContext request) {
+        if (log.isDebugEnabled()) {
+            log.debug("Invoking service endpoint: " + serviceImplClass.getName());
+            log.debug("Invocation pattern: one way");
         }
 
-        MessageContext responseMsgCtx = null;
-        if (faultThrown) {
-            responseMsgCtx = MessageContextUtils.createFaultMessageContext(mc);
-            responseMsgCtx.setMessage(message);
-
-            AxisFault axisFault = new AxisFault("An error was detected during JAXWS processing",
-                                              responseMsgCtx.getAxisMessageContext(),
-                                              fault);
-            
-            responseMsgCtx.setCausedByException(axisFault);
-
-
-        } else {
-            responseMsgCtx = MessageContextUtils.createResponseMessageContext(mc);
-            responseMsgCtx.setMessage(message);
+        initialize(request);
+        
+        OperationDescription operationDesc = Utils.getOperationDescription(request);
+        
+        Object[] methodInputParams = createRequestParameters(request);
+        
+        Method target = getJavaMethod(request, serviceImplClass);
+        if (log.isDebugEnabled()) {
+            // At this point, the OpDesc includes everything we know, including the actual method
+            // on the service impl we will delegate to; it was set by getJavaMethod(...) above.
+            log.debug("JavaBeanDispatcher about to invoke using OperationDesc: "
+                    + operationDesc.toString());
         }
-
-        //Enable MTOM if necessary
-        EndpointInterfaceDescription epInterfaceDesc =
-                operationDesc.getEndpointInterfaceDescription();
-        EndpointDescription epDesc = epInterfaceDesc.getEndpointDescription();
-
-        String bindingType = epDesc.getBindingType();
-        if (bindingType != null) {
-            if (bindingType.equals(SOAPBinding.SOAP11HTTP_MTOM_BINDING) ||
-                    bindingType.equals(SOAPBinding.SOAP12HTTP_MTOM_BINDING)) {
-                message.setMTOMEnabled(true);
+        
+        EndpointInvocationContext eic = (EndpointInvocationContext) request.getInvocationContext();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        
+        AsyncInvocationWorker worker = new AsyncInvocationWorker(target, 
+                                                                 methodInputParams, 
+                                                                 cl, eic);
+        FutureTask task = new FutureTask<AsyncInvocationWorker>(worker);
+        
+        ExecutorFactory ef = (ExecutorFactory) FactoryRegistry.getFactory(ExecutorFactory.class);
+        Executor executor = ef.getExecutorInstance(ExecutorFactory.SERVER_EXECUTOR);
+        
+        // If the property has been set to disable thread switching, then we can 
+        // do so by using a SingleThreadedExecutor instance to continue processing
+        // work on the existing thread.
+        Boolean disable = (Boolean) 
+            request.getProperty(ServerConstants.SERVER_DISABLE_THREAD_SWITCH);
+        if (disable != null && disable.booleanValue()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Server side thread switch disabled.  " +
+                                "Setting Executor to the SingleThreadedExecutor.");
             }
+            executor = new SingleThreadedExecutor();
         }
 
-        return responseMsgCtx;
+        executor.execute(task);     
+        return;
+    }
+
+    public void invokeAsync(MessageContext request, EndpointCallback callback) {
+        if (log.isDebugEnabled()) {
+            log.debug("Invoking service endpoint: " + serviceImplClass.getName());
+            log.debug("Invocation pattern: two way, async");
+        }
+
+        initialize(request);
+        
+        OperationDescription operationDesc = Utils.getOperationDescription(request);
+        
+        Object[] methodInputParams = createRequestParameters(request);
+        
+        Method target = getJavaMethod(request, serviceImplClass);
+        if (log.isDebugEnabled()) {
+            // At this point, the OpDesc includes everything we know, including the actual method
+            // on the service impl we will delegate to; it was set by getJavaMethod(...) above.
+            log.debug("JavaBeanDispatcher about to invoke using OperationDesc: "
+                    + operationDesc.toString());
+        }
+        
+        EndpointInvocationContext eic = (EndpointInvocationContext) request.getInvocationContext();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        
+        AsyncInvocationWorker worker = new AsyncInvocationWorker(target, methodInputParams, cl, eic);
+        FutureTask task = new FutureTask<AsyncInvocationWorker>(worker);
+        
+        ExecutorFactory ef = (ExecutorFactory) FactoryRegistry.getFactory(ExecutorFactory.class);
+        Executor executor = ef.getExecutorInstance(ExecutorFactory.SERVER_EXECUTOR);
+        // If the property has been set to disable thread switching, then we can 
+        // do so by using a SingleThreadedExecutor instance to continue processing
+        // work on the existing thread.
+        Boolean disable = (Boolean) request.getProperty(ServerConstants.SERVER_DISABLE_THREAD_SWITCH);
+        if (disable != null && disable.booleanValue()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Server side thread switch disabled.  Setting Executor to the SingleThreadedExecutor.");
+            }
+            executor = new SingleThreadedExecutor();
+        }
+        executor.execute(task);
+        
+        return;
     }
 
     protected Object invokeService(MessageContext ctx,
@@ -165,69 +214,40 @@ public class JavaBeanDispatcher extends JavaDispatcher {
     
     private void initialize(MessageContext mc) {
         mc.setOperationName(mc.getAxisMessageContext().getAxisOperation().getName());
+        mc.setOperationDescription(Utils.getOperationDescription(mc));
         endpointDesc = mc.getEndpointDescription();
-        mc.setOperationDescription(getOperationDescription(mc));
-        String bindingType = endpointDesc.getBindingType();
-        if (bindingType != null) {
-            if (bindingType.equals(SOAPBinding.SOAP11HTTP_MTOM_BINDING)
-                    || bindingType.equals(SOAPBinding.SOAP12HTTP_MTOM_BINDING)) {
-                mc.getMessage().setMTOMEnabled(true);
-            }
+        if (endpointDesc.isMTOMEnabled()) {
+            mc.getMessage().setMTOMEnabled(true);
         }
-    }
-
-    /*
-     * Gets the OperationDescription associated with the request that is currently
-     * being processed.
-     * 
-     *  Note that this is not done in the EndpointController since operations are only relevant
-     *  to Endpoint-based implementation (i.e. not to Proxy-based ones)s
-     */
-    private OperationDescription getOperationDescription(MessageContext mc) {
-        EndpointDescription ed = mc.getEndpointDescription();
-        EndpointInterfaceDescription eid = ed.getEndpointInterfaceDescription();
-
-        OperationDescription[] ops = eid.getDispatchableOperation(mc.getOperationName());
-        // TODO: Implement signature matching.  Currently only matching on the wsdl:OperationName is supported.
-        //       That means that overloading of wsdl operations is not supported (although that's not supported in 
-        //       WSDL 1.1 anyway).
-        if (ops == null || ops.length == 0) {
-            // TODO: RAS & NLS
-            throw ExceptionFactory.makeWebServiceException(
-                    "No operation found.  WSDL Operation name: " + mc.getOperationName());
-        }
-        if (ops.length > 1) {
-            // TODO: RAS & NLS
-            throw ExceptionFactory.makeWebServiceException(
-                    "More than one operation found. Overloaded WSDL operations are not supported.  WSDL Operation name: " +
-                            mc.getOperationName());
-        }
-        OperationDescription op = ops[0];
-        if (log.isDebugEnabled()) {
-            log.debug("wsdl operation: " + op.getName());
-            log.debug("   java method: " + op.getJavaMethodName());
-        }
-
-        return op;
+      
+        
+        //Set SOAP Operation Related properties in SOAPMessageContext.
+        ContextUtils.addWSDLProperties(mc);
     }
 
     private MethodMarshaller getMethodMarshaller(Protocol protocol,
-                                                 OperationDescription operationDesc) {
+                                                 OperationDescription operationDesc,
+                                                 MessageContext mc) {
         javax.jws.soap.SOAPBinding.Style styleOnSEI =
                 endpointDesc.getEndpointInterfaceDescription().getSoapBindingStyle();
         javax.jws.soap.SOAPBinding.Style styleOnMethod = operationDesc.getSoapBindingStyle();
         if (styleOnMethod != null && styleOnSEI != styleOnMethod) {
             throw ExceptionFactory.makeWebServiceException(Messages.getMessage("proxyErr2"));
         }
-        return MethodMarshallerFactory.getMarshaller(operationDesc, false);
+        
+        // check for a stored classloader to be used as the cache key
+        ClassLoader cl = null;
+        if(mc != null) {
+            cl = (ClassLoader) mc.getProperty(Constants.CACHE_CLASSLOADER);
+        }
+        return MethodMarshallerFactory.getMarshaller(operationDesc, false, cl);
     }
 
-    private Method getJavaMethod(MessageContext mc, Class serviceImplClass) {
+    protected Method getJavaMethod(MessageContext mc, Class serviceImplClass) {
 
         OperationDescription opDesc = mc.getOperationDescription();
         if (opDesc == null) {
-            // TODO: NLS
-            throw ExceptionFactory.makeWebServiceException("Operation Description was not set");
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("proxyErr3"));
         }
 
         Method returnMethod = opDesc.getMethodFromServiceImpl(serviceImplClass);
@@ -238,28 +258,108 @@ public class JavaBeanDispatcher extends JavaDispatcher {
 
         return returnMethod;
     }
-    /*
-    protected boolean isDocLitBare(EndpointDescription endpointDesc, OperationDescription operationDesc){
-		javax.jws.soap.SOAPBinding.ParameterStyle methodParamStyle = operationDesc.getSoapBindingParameterStyle();
-		if(methodParamStyle!=null){
-			return methodParamStyle == javax.jws.soap.SOAPBinding.ParameterStyle.BARE;
-		}
-		else{
-			javax.jws.soap.SOAPBinding.ParameterStyle SEIParamStyle = endpointDesc.getEndpointInterfaceDescription().getSoapBindingParameterStyle();
-			return SEIParamStyle == javax.jws.soap.SOAPBinding.ParameterStyle.BARE;
-		}
-	}
-	
-	protected boolean isDocLitWrapped(EndpointDescription endpointDesc, OperationDescription operationDesc){
-		javax.jws.soap.SOAPBinding.ParameterStyle methodParamStyle = operationDesc.getSoapBindingParameterStyle();
-		if(methodParamStyle!=null){
-			return methodParamStyle == javax.jws.soap.SOAPBinding.ParameterStyle.WRAPPED;
-		}
-		else{
-		javax.jws.soap.SOAPBinding.ParameterStyle SEIParamStyle = endpointDesc.getEndpointInterfaceDescription().getSoapBindingParameterStyle();
-		return SEIParamStyle == javax.jws.soap.SOAPBinding.ParameterStyle.WRAPPED;
-		}
-	}
-    */
+    
+    private Object[] createRequestParameters(MessageContext request) {
+        // Get the appropriate MethodMarshaller for the WSDL type.  This will reflect
+        // the "style" and "use" of the WSDL.
+        Protocol requestProtocol = request.getMessage().getProtocol();
+        MethodMarshaller methodMarshaller =
+                getMethodMarshaller(requestProtocol, request.getOperationDescription(),
+                                    request);
+        
+        // The MethodMarshaller will return the input parameters that are needed to 
+        // invoke the target method.
+        Object[] methodInputParams =
+                methodMarshaller.demarshalRequest(request.getMessage(), request.getOperationDescription());
+        
+        if (log.isDebugEnabled()) {
+            log.debug("Unmarshalled parameters for request");
+            if (methodInputParams != null) {
+                log.debug(methodInputParams.length + " parameters were found.");    
+            }
+        }
+        
+        return methodInputParams;
+    }
+    
+    public MessageContext createResponse(MessageContext request, Object[] input, Object output) {
+        return createResponse(request, request.getMessage().getProtocol(), input, output);
+    }
+    
+    public MessageContext createResponse(MessageContext request, Protocol p, Object[] params, Object output) {
+        OperationDescription operationDesc = request.getOperationDescription();
+        Method method = operationDesc.getMethodFromServiceImpl(serviceImplClass);
+        
+        // Create the appropriate response message, using the protocol from the
+        // request message.
+        MethodMarshaller marshaller = getMethodMarshaller(p, request.getOperationDescription(),
+                                                          request);
+        Message m = null;
+        if (method.getReturnType().getName().equals("void")) {
+            m = marshaller.marshalResponse(null, params, operationDesc, p); 
+        } else {
+            m = marshaller.marshalResponse(output, params, operationDesc, p);
+        }
+        
+        // We'll need a MessageContext configured based on the response.
+        MessageContext response = MessageContextUtils.createResponseMessageContext(request);
+        response.setMessage(m);
+        
+        // Enable MTOM for the response if necessary.
+        // (MTOM is not enabled it this operation has SWA parameters
+           
+        EndpointDescription epDesc = request.getEndpointDescription();
+        String bindingType = epDesc.getBindingType();
+        boolean isMTOMBinding = epDesc.isMTOMEnabled();
+        boolean isDoingSWA = m.isDoingSWA();
+        if (log.isDebugEnabled()) {
+            log.debug("EndpointDescription = " + epDesc.toString());
+            log.debug("BindingType = " + bindingType);
+            log.debug("isMTOMBinding = " + isMTOMBinding);
+            log.debug("isDoingSWA = " + isDoingSWA);
+        }
+        if (!m.isDoingSWA() && isMTOMBinding) {
+            if (log.isDebugEnabled()) {
+                log.debug("MTOM enabled for the response message.");
+            }
+            m.setMTOMEnabled(true);
+        }
+        
+        return response;
+    }
+    
+    public MessageContext createFaultResponse(MessageContext request, Throwable t) {
+        return createFaultResponse(request, request.getMessage().getProtocol(), t);
+    }
+    
+    public MessageContext createFaultResponse(MessageContext request, Protocol p, Throwable t) {
+        
+        // call the InvocationListener instances before marshalling
+        // the fault into a message
+        // call the InvocationListener instances before marshalling
+        // the fault into a message
+        Throwable faultMessage = InvocationHelper.determineMappedException(t, request);
+        if(faultMessage != null) {
+            t = faultMessage;
+        }
+        
+        MethodMarshaller marshaller = getMethodMarshaller(p, request.getOperationDescription(),
+                                                          request);
+        
+        Message m = marshaller.marshalFaultResponse(t, request.getOperationDescription(), p);
+        
+        MessageContext response = MessageContextUtils.createFaultMessageContext(request);
+        response.setMessage(m);
 
+        AxisFault axisFault = new AxisFault("The endpoint returned a fault when invoking the target operation.",
+                                            response.getAxisMessageContext(),
+                                            t);
+        
+        response.setCausedByException(axisFault);
+        
+        setFaultResponseAction(t, request, response);
+        
+        return response;
+    }
+    
 }

@@ -30,7 +30,10 @@ import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.util.ObjectStateUtils;
+import org.apache.axis2.context.externalize.ExternalizeConstants;
+import org.apache.axis2.context.externalize.SafeObjectInputStream;
+import org.apache.axis2.context.externalize.SafeObjectOutputStream;
+import org.apache.axis2.context.externalize.SafeSerializable;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -38,11 +41,12 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Externalizable;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,11 +55,16 @@ import java.util.Map;
  * Since the models for this in Submission and Final versions are different, lets make this to comply with
  * WS-A Final version. So any information found with WS-A submission will be "pumped" in to this model.
  */
-public class EndpointReference implements Serializable {
+public class EndpointReference implements Externalizable, SafeSerializable {
 
     private static final long serialVersionUID = 5278892171162372439L;
 
     private static final Log log = LogFactory.getLog(EndpointReference.class);
+    
+    //  supported revision levels, add a new level to manage compatible changes
+    private static final int REVISION_2 = 2;
+    // current revision level of this object
+    private static final int revisionID = REVISION_2;
 
     private static final String myClassName = "EndpointReference";
 
@@ -63,7 +72,13 @@ public class EndpointReference implements Serializable {
      * An ID which can be used to correlate operations on an instance of
      * this object in the log files
      */
-    private String logCorrelationIDString = null;
+    private String logCorrelationIDString;
+    
+    /**
+     * The list of URIs that should be considered equivalent to 
+     * the WS-Addressing anonymous URI
+     */
+    private static List anonymousEquivalentURIs = new ArrayList();
 
 
     /**
@@ -84,6 +99,26 @@ public class EndpointReference implements Serializable {
     private ArrayList extensibleElements;
     private ArrayList attributes;
 
+    /**
+     * No-Arg Constructor
+     * Required for Externalizable objects
+     */
+    public EndpointReference() {}
+    
+    /**
+     * Adds a parameter to the list of anonymous equivalent URIs. 
+     * @param anonymousEquivalentURI any URI that has an address that
+     * begins with this value will be considered to be anonymous
+     */
+    public static void addAnonymousEquivalentURI(String anonymousEquivalentURI){
+        if (log.isTraceEnabled())
+        	log.trace("addAnonymousEquivalentURI: " + anonymousEquivalentURI);
+        
+        synchronized (anonymousEquivalentURIs) {
+            anonymousEquivalentURIs.add(anonymousEquivalentURI);
+        }
+    }
+ 
 
     /**
      * @param address
@@ -156,26 +191,52 @@ public class EndpointReference implements Serializable {
     public void setMetadataAttributes(ArrayList al) {
         metaDataAttributes = al;
     }
-
+    
+    /** 
+     * This method identifies whether the address is a WS-Addressing spec defined
+     * anonymous URI.
+     * 
+     * @return true if the address is a WS-Addressing spec defined anonymous URI.
+     * 
+     * @see #hasAnonymousAddress()
+     */ 
+    public boolean isWSAddressingAnonymous() {
+        return (AddressingConstants.Final.WSA_ANONYMOUS_URL.equals(address) ||
+                AddressingConstants.Submission.WSA_ANONYMOUS_URL.equals(address));
+    }
+    
     /**
-     * hasAnonymousAddress
+     * This method is used to identify when response messages should be sent using
+     * the back channel of a two-way transport.
      *
-     * @return true if address is 'Anonymous URI'
+     * @return true if the address is a WS-Addressing spec defined anonymous URI,
+     * or starts with a string that is specified to be equivalent to an anonymous
+     * URI.
+     * 
+     * @see #addAnonymousEquivalentURI(String)
      */
     public boolean hasAnonymousAddress() {
-        boolean result = (AddressingConstants.Final.WSA_ANONYMOUS_URL.equals(address) ||
-                AddressingConstants.Submission.WSA_ANONYMOUS_URL.equals(address) ||
+        boolean result = isWSAddressingAnonymous();
+        
+        if(!result && address != null) {
+        	//If the address is not WS-A anonymous it might still be considered anonymous
+        	synchronized(anonymousEquivalentURIs){
+        		if(!anonymousEquivalentURIs.isEmpty()){
+            		Iterator it = anonymousEquivalentURIs.iterator();
+            		while(it.hasNext()){
+            			result = address.startsWith((String)it.next());
+            			if(result){
+            				break;
+            			}
+            		}	
+        		}
+        	} //end sync      	
+        }
 
-                //The following is added to give WS-RM anonymous a semantics to indicate
-                //that any response messages should be sent synchronously, using the
-                //transports back channel, as opposed to asynchronously. No other
-                //semantics normally associated with WS-Addressing anonymous values should
-                //be assumed, by it's presence here.
-                (address != null && address.startsWith(
-                        "http://docs.oasis-open.org/ws-rx/wsmc/200702/anonymous?id=")));
         if (log.isTraceEnabled()) {
             log.trace("hasAnonymousAddress: " + address + " is Anonymous: " + result);
         }
+        
         return result;
     }
 
@@ -293,6 +354,10 @@ public class EndpointReference implements Serializable {
 
         if (metaData != null) {
             buffer.append(", Metadata: ").append(metaData);
+        }
+        
+        if (metaDataAttributes != null) {
+            buffer.append(", Metadata Attributes: ").append(metaDataAttributes);
         }
 
         if (referenceParameters != null) {
@@ -561,14 +626,21 @@ public class EndpointReference implements Serializable {
      * OMElements/Attributes, we need to actually serialize the OM structures
      * (at least in some cases.)
      */
-    private void writeObject(java.io.ObjectOutputStream out)
+    public void writeExternal(java.io.ObjectOutput o)
             throws IOException {
+        SafeObjectOutputStream out = SafeObjectOutputStream.install(o);
+        
+        // revision ID
+        out.writeInt(revisionID);
+        
+        // Correlation ID
         String logCorrelationIDString = getLogCorrelationIDString();
 
         // String object id
-        ObjectStateUtils.writeString(out, logCorrelationIDString, logCorrelationIDString
-                + ".logCorrelationIDString");
+        out.writeObject(logCorrelationIDString);
 
+        // Write out the content as xml
+        out.writeUTF("start xml"); // write marker
         OMElement om =
                 EndpointReferenceHelper.toOM(OMAbstractFactory.getOMFactory(),
                                              this,
@@ -594,7 +666,8 @@ public class EndpointReference implements Serializable {
         }
 
         out.writeInt(baos.size());
-        out.write(baos.toByteArray());
+        out.write(baos.toByteArray());  
+        out.writeUTF("end xml"); // write marker
 
         if (log.isDebugEnabled()) {
             byte[] buffer = baos.toByteArray();
@@ -610,12 +683,23 @@ public class EndpointReference implements Serializable {
     /**
      * Read the EPR to the specified InputStream.
      */
-    private void readObject(java.io.ObjectInputStream in)
+    public void readExternal(java.io.ObjectInput inObject)
             throws IOException, ClassNotFoundException {
-
+        SafeObjectInputStream in = SafeObjectInputStream.install(inObject);
+        
+        // revision ID
+        int revID = in.readInt();
+        
+        // make sure the object data is in a revision level we can handle
+        if (revID != REVISION_2) {
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_REVID);
+        }
+        
         // String object id
-        logCorrelationIDString = ObjectStateUtils.readString(in, "EndpointReference.logCorrelationIDString");
+        logCorrelationIDString = (String) in.readObject();
 
+        // Read xml content
+        in.readUTF(); // read marker
         int numBytes = in.readInt();
 
         byte[] serBytes = new byte[numBytes];
@@ -655,6 +739,7 @@ public class EndpointReference implements Serializable {
 
             throw ioe;
         }
+        in.readUTF(); // read marker
 
         ByteArrayInputStream bais = new ByteArrayInputStream(serBytes);
 

@@ -16,11 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMNamespace;
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.Constants.Configuration;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -55,13 +57,13 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.ws.WebServiceException;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * MessageImpl
@@ -287,6 +289,21 @@ public class MessageImpl implements Message {
         return resultCID;
     }
     
+
+    public String getAttachmentID(String partName) {
+        // Find the prefix that starts with the 
+        // partName=
+        String prefix = partName + "=";
+        List<String> cids = getAttachmentIDs();
+        for (String cid: cids) {
+            if (cid.startsWith(prefix)) {
+                return cid;
+            }
+        }
+        return null;
+    }
+
+    
     private String getSOAPPartContentID() {
         String contentID = null;
         if (messageContext == null) {
@@ -412,6 +429,12 @@ public class MessageImpl implements Message {
         return xmlPart.getHeaderBlock(namespace, localPart, context, blockFactory);
     }
     
+    public List<Block> getHeaderBlocks(String namespace, String localPart, 
+                                       Object context, BlockFactory blockFactory, 
+                                       RolePlayer rolePlayer) throws WebServiceException {
+        return xmlPart.getHeaderBlocks(namespace, localPart, context, blockFactory, rolePlayer);
+    }
+
     public int getNumBodyBlocks() throws WebServiceException {
         return xmlPart.getNumBodyBlocks();
     }
@@ -453,6 +476,11 @@ public class MessageImpl implements Message {
         xmlPart.setHeaderBlock(namespace, localPart, block);
     }
     
+    public void appendHeaderBlock(String namespace, String localPart, Block block) 
+    throws WebServiceException {
+        xmlPart.appendHeaderBlock(namespace, localPart, block);
+    }
+    
     public String traceString(String indent) {
         return xmlPart.traceString(indent);
     }
@@ -491,7 +519,8 @@ public class MessageImpl implements Message {
      * @return true if the binding for this message indicates mtom
      */
     public boolean isMTOMEnabled() {
-        return mtomEnabled;
+        // If the message has SWA attachments, this "wins" over the mtom setting.
+        return mtomEnabled && !doingSWA;
     }
     
     /**
@@ -623,4 +652,15 @@ public class MessageImpl implements Message {
     public boolean isDoingSWA() {
         return doingSWA;
     }
+    
+    public void close() {
+        if (xmlPart != null) {
+            xmlPart.close();
+        }
+    }
+
+    public Set<QName> getHeaderQNames() {
+        return (xmlPart == null) ? null : xmlPart.getHeaderQNames();     
+    }
+
 }

@@ -16,23 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message;
-
-import java.io.StringReader;
-
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamReader;
 
 import junit.framework.TestCase;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
+import org.apache.axis2.jaxws.TestLogger;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.message.factory.XMLStringBlockFactory;
 import org.apache.axis2.jaxws.message.util.Reader2Writer;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
-import org.apache.axis2.jaxws.TestLogger;
+import org.apache.log4j.BasicConfigurator;
+
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamReader;
+import java.io.StringReader;
 
 /**
  * This suite is used to test the creation of messages based on SOAP 1.2
@@ -65,6 +66,10 @@ public class SOAP12Tests extends TestCase {
         super(name);
     }
     
+    static {
+        BasicConfigurator.configure();
+    }
+
     /**
      * Simulate creating a SOAP 1.2 message when the business object
      * provided is just the payload. 

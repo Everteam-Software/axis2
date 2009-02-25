@@ -20,9 +20,13 @@
 
 package org.apache.axis2.deployment;
 
+import edu.emory.mathcs.backport.java.util.Collections;
+import org.apache.axiom.attachments.lifecycle.LifecycleManager;
 import org.apache.axiom.om.OMAttribute;
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.Constants;
 import org.apache.axis2.builder.ApplicationXMLBuilder;
 import org.apache.axis2.builder.Builder;
 import org.apache.axis2.builder.MIMEBuilder;
@@ -47,8 +51,11 @@ import org.apache.axis2.phaseresolver.PhaseException;
 import org.apache.axis2.transport.MessageFormatter;
 import org.apache.axis2.transport.TransportListener;
 import org.apache.axis2.transport.TransportSender;
+import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.Loader;
 import org.apache.axis2.util.TargetResolver;
+import org.apache.axis2.util.ThreadContextMigrator;
+import org.apache.axis2.util.ThreadContextMigratorUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -122,6 +129,11 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                     config_element.getFirstChildWithName(new QName(TAG_TARGET_RESOLVERS));
             processTargetResolvers(axisConfig, targetResolvers);
 
+            // Process ThreadContextMigrators
+            OMElement threadContextMigrators =
+                    config_element.getFirstChildWithName(new QName(TAG_THREAD_CONTEXT_MIGRATORS));
+            processThreadContextMigrators(axisConfig, threadContextMigrators);
+
             // Process Observers
             Iterator obs_ittr = config_element.getChildrenWithName(new QName(TAG_LISTENER));
 
@@ -142,8 +154,8 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                                                                                    TAG_POLICY));
 
             if (policyElements != null && policyElements.hasNext()) {
-                processPolicyElements(PolicyInclude.AXIS_POLICY, policyElements,
-                                      axisConfig.getPolicyInclude());
+                processPolicyElements(policyElements,
+                                      axisConfig.getPolicySubject());
             }
 
             // processing <wsp:PolicyReference> .. </..> elements
@@ -151,8 +163,8 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                                                                                       TAG_POLICY_REF));
 
             if (policyRefElements != null && policyRefElements.hasNext()) {
-                processPolicyRefElements(PolicyInclude.AXIS_POLICY, policyElements,
-                                         axisConfig.getPolicyInclude());
+                processPolicyRefElements(policyElements,
+                                         axisConfig.getPolicySubject());
             }
 
             //to process default module versions
@@ -200,6 +212,15 @@ public class AxisConfigBuilder extends DescriptionBuilder {
             if (dataLocatorElement != null) {
                 processDataLocatorConfig(dataLocatorElement);
             }
+            
+            // process roleplayer configuration
+            OMElement rolePlayerElement =
+                    config_element
+                            .getFirstChildWithName(new QName(Constants.SOAP_ROLE_CONFIGURATION_ELEMENT));
+
+            if (rolePlayerElement != null) {
+                processSOAPRoleConfig(axisConfig, rolePlayerElement);
+            }
 
             // process MessageFormatters
             OMElement messageFormattersElement =
@@ -217,6 +238,15 @@ public class AxisConfigBuilder extends DescriptionBuilder {
             Iterator deployerItr = config_element.getChildrenWithName(new QName(DEPLOYER));
             if (deployerItr != null) {
                 processDeployers(deployerItr);
+            }
+
+            //process Attachments Lifecycle manager configuration
+            OMElement attachmentsLifecycleManagerElement =
+                    config_element
+                            .getFirstChildWithName(new QName(ATTACHMENTS_LIFECYCLE_MANAGER));
+
+            if (attachmentsLifecycleManagerElement != null) {
+                processAttachmentsLifecycleManager(axisConfig, attachmentsLifecycleManagerElement);
             }
         } catch (XMLStreamException e) {
             throw new DeploymentException(e);
@@ -246,6 +276,79 @@ public class AxisConfigBuilder extends DescriptionBuilder {
         }
     }
 
+    private void processThreadContextMigrators(AxisConfiguration axisConfig, OMElement targetResolvers) {
+        if (targetResolvers != null) {
+            Iterator iterator = targetResolvers.getChildrenWithName(new QName(TAG_THREAD_CONTEXT_MIGRATOR));
+            while (iterator.hasNext()) {
+                OMElement threadContextMigrator = (OMElement) iterator.next();
+                OMAttribute listIdAttribute =
+                    threadContextMigrator.getAttribute(new QName(TAG_LIST_ID));
+                String listId = listIdAttribute.getAttributeValue();
+                OMAttribute classNameAttribute =
+                    threadContextMigrator.getAttribute(new QName(TAG_CLASS_NAME));
+                String className = classNameAttribute.getAttributeValue();
+                try {
+                    Class clazz = Loader.loadClass(className);
+                    ThreadContextMigrator migrator = (ThreadContextMigrator) clazz.newInstance();
+                    ThreadContextMigratorUtil.addThreadContextMigrator(axisConfig, listId, migrator);
+                } catch (UnsupportedClassVersionError e){
+                    log.info("Disabled - " + className + " - " + e.getMessage());
+                } catch (Exception e) {
+                    if (log.isTraceEnabled()) {
+                        log.trace(
+                                "processThreadContextMigrators: Exception thrown initialising ThreadContextMigrator: " +
+                                        e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    private void processAttachmentsLifecycleManager(AxisConfiguration axisConfig, OMElement element) {
+        String className = element.getAttributeValue(new QName(TAG_CLASS_NAME));
+        try {
+            Class classInstance = Loader.loadClass(className);
+            LifecycleManager manager = (LifecycleManager) classInstance.newInstance();
+            axisConfig.addParameter(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER, manager);
+        } catch (Exception e) {
+            if (log.isTraceEnabled()) {
+                log.trace(
+                        "processAttachmentsLifecycleManager: Exception thrown initialising LifecycleManager: " +
+                                e.getMessage());
+            }
+        }
+    }
+
+    private void processSOAPRoleConfig(AxisConfiguration axisConfig, OMElement soaproleconfigElement) {
+    	if (soaproleconfigElement != null) {
+    		final boolean isUltimateReceiever = JavaUtils.isTrue(soaproleconfigElement.getAttributeValue(new QName(Constants.SOAP_ROLE_IS_ULTIMATE_RECEIVER_ATTRIBUTE)), true);
+    		ArrayList roles = new ArrayList();
+    		Iterator iterator = soaproleconfigElement.getChildrenWithName(new QName(Constants.SOAP_ROLE_ELEMENT));
+    		while (iterator.hasNext()) {
+    			OMElement roleElement = (OMElement) iterator.next();
+    			roles.add(roleElement.getText());
+    		}
+    		final List unmodifiableRoles = Collections.unmodifiableList(roles);
+    		try{
+    			RolePlayer rolePlayer = new RolePlayer(){
+    				public List getRoles() {
+    					return unmodifiableRoles;
+    				}
+    				public boolean isUltimateDestination() {
+    					return isUltimateReceiever;
+    				}
+    			};
+    			axisConfig.addParameter("rolePlayer", rolePlayer);
+    		} catch (AxisFault e) {
+    			if (log.isTraceEnabled()) {
+    				log.trace(
+    						"processTargetResolvers: Exception thrown initialising TargetResolver: " +
+    						e.getMessage());
+    			}
+    		}
+    	}
+    }
+    
     private void processDeployers(Iterator deployerItr) {
         HashMap directoryToExtensionMappingMap = new HashMap();
         HashMap extensionToDeployerMappingMap = new HashMap();
@@ -271,9 +374,13 @@ public class AxisConfigBuilder extends DescriptionBuilder {
             try {
                 Class deployerClass = Loader.loadClass(deployerClassName);
                 deployer = (Deployer) deployerClass.newInstance();
+            } catch (UnsupportedClassVersionError ex) {
+                log.info("Disabled - " + deployerClassName + " - " + ex.getMessage());
+                continue;
             } catch (Exception e) {
-                log.error(e.getMessage(), e);
-                return;
+                log.info("Unable to instantiate deployer " + deployerClassName);
+                log.debug(e.getMessage(), e);
+                continue;
             }
             deployer.setDirectory(directory);
             deployer.setExtension(extension);
@@ -402,12 +509,16 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                 HandlerDescription handler = processHandler(omElement, axisConfig, phaseName);
 
                 handler.getRules().setPhaseName(phaseName);
-                Utils.loadHandler(axisConfig.getSystemClassLoader(), handler);
-
                 try {
-                    phase.addHandler(handler);
-                } catch (PhaseException e) {
-                    throw new DeploymentException(e);
+                    if (Utils.loadHandler(axisConfig.getSystemClassLoader(), handler)) {
+                        try {
+                            phase.addHandler(handler);
+                        } catch (PhaseException e) {
+                            throw new DeploymentException(e);
+                        }
+                    }
+                } catch (UnsupportedClassVersionError e) {
+                    log.info("Disabled - " + handler + " - " + e.getMessage());
                 }
             }
 

@@ -78,6 +78,14 @@ public interface CommandLineOptionConstants {
         String WSDL_LOCATION_URI_OPTION = "uri";
         String WSDL_VERSION_OPTION = "wv";
         String WSDL_VERSION_OPTION_LONG = "wsdl-version";
+        String HTTP_PROXY_HOST_OPTION_LONG = "http-proxy-host";
+        String HTTP_PROXY_PORT_OPTION_LONG = "http-proxy-port";
+        String EXCLUDE_PAKAGES_OPTION = "ep";
+        String EXCLUDE_PAKAGES_OPTION_LONG = "exclude-packages";
+        String SKELTON_INTERFACE_NAME_OPTION = "sin";
+        String SKELTON_INTERFACE_NAME_OPTION_LONG = "skelton-interface-name";
+        String SKELTON_CLASS_NAME_OPTION = "scn";
+        String SKELTON_CLASS_NAME_OPTION_LONG = "skelton-class-name";
 
         String INVALID_OPTION = "INVALID_OPTION";
         String EXTRA_OPTIONTYPE_PREFIX = "E";
@@ -85,6 +93,10 @@ public interface CommandLineOptionConstants {
         String WSDL_VERSION_2 = "2.0";
         String WSDL_VERSION_2_OPTIONAL = "2";
         String WSDL_VERSION_1 = "1.1";
+    }
+
+    interface ExtensionArguments {
+        String WITHOUT_DATABIND_CODE = "wdc";
     }
 
     public static final String SOLE_INPUT = "SOLE_INPUT";

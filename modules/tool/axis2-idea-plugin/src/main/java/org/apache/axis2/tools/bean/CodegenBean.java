@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tools.bean;
 
 import com.intellij.openapi.module.Module;
@@ -25,12 +26,11 @@ import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.WSDL11ToAxisServiceBuilder;
-import org.apache.axis2.util.URLProcessor;
-import org.apache.axis2.util.CommandLineOptionConstants;
 import org.apache.axis2.util.CommandLineOption;
+import org.apache.axis2.util.CommandLineOptionConstants;
+import org.apache.axis2.util.URLProcessor;
 import org.apache.axis2.wsdl.codegen.CodeGenConfiguration;
 import org.apache.axis2.wsdl.codegen.CodeGenerationEngine;
-
 
 import javax.wsdl.Definition;
 import javax.wsdl.Port;
@@ -43,7 +43,13 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 public class CodegenBean {
 
@@ -287,6 +293,7 @@ public class CodegenBean {
         WSDL11ToAxisServiceBuilder builder =
                 new WSDL11ToAxisServiceBuilder(url.openConnection().getInputStream());
 
+        builder.setDocumentBaseUri(url.toString());
         builder.setBaseUri(getBaseUri(wsdlURI));
         builder.setCodegen(true);
         return builder.populateService();
@@ -407,6 +414,9 @@ public class CodegenBean {
 
         WSDLReader reader = WSDLFactory.newInstance().newWSDLReader();
         wsdlDefinition = reader.readWSDL(WSDLFileName) ;
+        if (wsdlDefinition != null) {
+            wsdlDefinition.setDocumentBaseURI(WSDLFileName);
+        }
 
     }
 

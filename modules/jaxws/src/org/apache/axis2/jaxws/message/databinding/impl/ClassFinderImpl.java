@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.databinding.impl;
 
 import org.apache.axis2.java.security.AccessController;
@@ -78,7 +79,8 @@ public class ClassFinderImpl implements ClassFinder {
                                             // Don't add any interfaces or JAXWS specific classes.
                                             // Only classes that represent data and can be marshalled
                                             // by JAXB should be added.
-                                            if (!clazz.isInterface()
+                                            if (!clazz.isInterface() &&
+                                                    clazz.getPackage().getName().equals(pkg)
                                                     && ClassUtils
                                                     .getDefaultPublicConstructor(clazz) != null
                                                     && !ClassUtils.isJAXWSClass(clazz)) {

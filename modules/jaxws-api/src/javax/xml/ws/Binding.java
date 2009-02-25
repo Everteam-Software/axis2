@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package javax.xml.ws;
 
 import javax.xml.ws.handler.Handler;
@@ -23,6 +24,8 @@ import java.util.List;
 
 public interface Binding {
 
+    public abstract String getBindingID();
+    
     public abstract List<Handler> getHandlerChain();
 
     public abstract void setHandlerChain(List<Handler> list);

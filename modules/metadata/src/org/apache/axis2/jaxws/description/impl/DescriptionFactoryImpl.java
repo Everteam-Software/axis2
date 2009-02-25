@@ -16,12 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.impl;
 
 /**
  * 
  */
 
+import org.apache.axis2.addressing.EndpointReference;
+import org.apache.axis2.addressing.EndpointReferenceHelper;
+import org.apache.axis2.addressing.metadata.ServiceName;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.jaxws.ClientConfigurationFactory;
@@ -32,8 +36,9 @@ import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
 import org.apache.axis2.jaxws.description.builder.converter.JavaClassToDBCConverter;
-import org.apache.axis2.jaxws.description.validator.ServiceDescriptionValidator;
 import org.apache.axis2.jaxws.description.validator.EndpointDescriptionValidator;
+import org.apache.axis2.jaxws.description.validator.ServiceDescriptionValidator;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -55,8 +60,6 @@ import java.util.Map;
  */
 public class DescriptionFactoryImpl {
     private static final Log log = LogFactory.getLog(DescriptionFactoryImpl.class);
-    private static ClientConfigurationFactory clientConfigFactory =
-            ClientConfigurationFactory.newInstance();
     private static Map<DescriptionKey, ServiceDescription> cache =
             new Hashtable<DescriptionKey, ServiceDescription>();
 
@@ -65,12 +68,24 @@ public class DescriptionFactoryImpl {
     }
 
     /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescription(URL, QName, Class, DescriptionBuilderComposite)
+     */
+    public static ServiceDescription createServiceDescription(URL wsdlURL, 
+                                                              QName serviceQName, 
+                                                              Class serviceClass) {
+        return createServiceDescription(wsdlURL, serviceQName, serviceClass, null, null);
+        
+    }
+
+    /**
      * @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescription(URL,
      *      QName, Class)
      */
     public static ServiceDescription createServiceDescription(URL wsdlURL,
                                                               QName serviceQName,
-                                                              Class serviceClass) {
+                                                              Class serviceClass,
+                                                              DescriptionBuilderComposite sparseComposite,
+                                                              Object sparseCompositeKey) {
         ConfigurationContext configContext = DescriptionFactory.createClientConfigurationFactory()
                 .getClientConfigurationContext();
         DescriptionKey key = new DescriptionKey(serviceQName, wsdlURL, serviceClass, configContext);
@@ -98,7 +113,21 @@ public class DescriptionFactoryImpl {
                     log.debug(" creating new ServiceDescriptionImpl");
                 }
 
-                ServiceDescriptionImpl serviceDescImpl = new ServiceDescriptionImpl(wsdlURL, serviceQName, serviceClass);
+                ServiceDescriptionImpl serviceDescImpl = null;
+                if (sparseComposite != null) {
+                    serviceDescImpl = new ServiceDescriptionImpl(wsdlURL, serviceQName,
+                                                                 serviceClass, sparseComposite, 
+                                                                 sparseCompositeKey);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Client-side service description created with service class: " + serviceClass
+                                  + ", Service QN: " + serviceQName
+                                  + ", and DBC: " + sparseComposite);
+                        log.debug(serviceDescImpl.toString());
+                    }
+
+                } else {
+                    serviceDescImpl = new ServiceDescriptionImpl(wsdlURL, serviceQName, serviceClass);
+                }
                 serviceDescImpl.setAxisConfigContext(configContext);
                 
                 serviceDesc = serviceDescImpl;
@@ -111,6 +140,11 @@ public class DescriptionFactoryImpl {
                     log.debug("Caching new ServiceDescription in the cache");
                 }
                 cache.put(key, serviceDesc);
+            } else {
+                // A service description was found in the cache.  If a sparse composite was
+                // specified, then set it on the found service desc
+                ((ServiceDescriptionImpl) serviceDesc).getDescriptionBuilderComposite().
+                    setSparseComposite(sparseCompositeKey, sparseComposite);
             }
         }
         return serviceDesc;
@@ -161,30 +195,19 @@ public class DescriptionFactoryImpl {
         }
     }    
     
-    /**
-     * @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescriptionFromServiceImpl(Class,
-     *      AxisService)
-     * @deprecated
-     */
-    public static ServiceDescription createServiceDescriptionFromServiceImpl(
-            Class serviceImplClass, AxisService axisService) {
-        ServiceDescription serviceDesc = new ServiceDescriptionImpl(serviceImplClass, axisService);
-        if (log.isDebugEnabled()) {
-            log.debug("Deprecated method used!  ServiceDescription created with Class: " +
-                    serviceImplClass + "; AxisService: " + axisService);
-            log.debug(serviceDesc.toString());
-        }
-        return serviceDesc;
+    /** @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescription(Class) */
+    public static ServiceDescription createServiceDescription(Class serviceImplClass) {
+        return createServiceDescription(serviceImplClass, null);
     }
 
     /** @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescription(Class) */
-    public static ServiceDescription createServiceDescription(Class serviceImplClass) {
+    public static ServiceDescription createServiceDescription(Class serviceImplClass, ConfigurationContext configContext) {
         ServiceDescription serviceDesc = null;
 
         if (serviceImplClass != null) {
             JavaClassToDBCConverter converter = new JavaClassToDBCConverter(serviceImplClass);
             HashMap<String, DescriptionBuilderComposite> dbcMap = converter.produceDBC();
-            List<ServiceDescription> serviceDescList = createServiceDescriptionFromDBCMap(dbcMap);
+            List<ServiceDescription> serviceDescList = createServiceDescriptionFromDBCMap(dbcMap, configContext);
             if (serviceDescList != null && serviceDescList.size() > 0) {
                 serviceDesc = serviceDescList.get(0);
                 if (log.isDebugEnabled()) {
@@ -195,28 +218,27 @@ public class DescriptionFactoryImpl {
                 if (log.isDebugEnabled()) {
                     log.debug("ServiceDesciption was not created for class: " + serviceImplClass);
                 }
-                // TODO: NLS & RAS
-                throw ExceptionFactory.makeWebServiceException(
-                        "A ServiceDescription was not created for " + serviceImplClass);
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("createServiceDescrErr", serviceImplClass.getName()));
             }
         }
         return serviceDesc;
     }
 
-
     /** @see org.apache.axis2.jaxws.description.DescriptionFactory#createServiceDescriptionFromDBCMap(HashMap) */
     public static List<ServiceDescription> createServiceDescriptionFromDBCMap(
-            HashMap<String, DescriptionBuilderComposite> dbcMap) {
+            HashMap<String, DescriptionBuilderComposite> dbcMap, ConfigurationContext configContext) {
+        if (log.isDebugEnabled()) {
+            log.debug("createServiceDescriptionFromDBCMap(Hashmap<String,DescriptionBuilderComposite>,ConfigurationContext " );
+        }
 
         List<ServiceDescription> serviceDescriptionList = new ArrayList<ServiceDescription>();
-
         for (Iterator<DescriptionBuilderComposite> nameIter = dbcMap.values()
                 .iterator(); nameIter.hasNext();) {
             DescriptionBuilderComposite serviceImplComposite = nameIter.next();
             if (isImpl(serviceImplComposite)) {
                 // process this impl class
-                ServiceDescription serviceDescription = new ServiceDescriptionImpl(
-                        dbcMap, serviceImplComposite);
+                ServiceDescriptionImpl serviceDescription = new ServiceDescriptionImpl(
+                        dbcMap, serviceImplComposite, configContext);
                 ServiceDescriptionValidator validator =
                         new ServiceDescriptionValidator(serviceDescription);
                 if (validator.validate()) {
@@ -227,18 +249,10 @@ public class DescriptionFactoryImpl {
                     }
                 } else {
 
-                    String msg =
-                            "The ServiceDescription failed to validate due to the following errors: \n" +
-                                    validator.toString();
-
-                    if (log.isDebugEnabled()) {
-                        log.debug("Validation Phase 2 failure: " + msg);
-                        log.debug("Failing composite: " + serviceImplComposite.toString());
-                        log.debug("Failing Service Description: " + serviceDescription.toString());
-                    }
-
-                    // TODO: Validate all service descriptions before failing
-                    // TODO: Get more detailed failure information from the Validator
+                    String msg = Messages.getMessage("createSrvcDescrDBCMapErr",
+                    		                         validator.toString(),
+                    		                         serviceImplComposite.toString(),
+                    		                         serviceDescription.toString());
                     throw ExceptionFactory.makeWebServiceException(msg);
                 }
             } else {
@@ -263,34 +277,114 @@ public class DescriptionFactoryImpl {
     public static EndpointDescription updateEndpoint(
             ServiceDescription serviceDescription, Class sei, QName portQName,
             DescriptionFactory.UpdateType updateType) {
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, null);
+    }
+    
+    /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#updateEndpoint(ServiceDescription,
+     *      Class, QName, org.apache.axis2.jaxws.description.DescriptionFactory.UpdateType)
+     */
+    public static EndpointDescription updateEndpoint(
+            ServiceDescription serviceDescription, Class sei, QName portQName,
+            DescriptionFactory.UpdateType updateType, Object serviceDelegateKey ) {
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, serviceDelegateKey);
+    }
+    
+    /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#updateEndpoint(ServiceDescription, Class, QName, org.apache.axis2.jaxws.description.DescriptionFactory.UpdateType, DescriptionBuilderComposite)
+     */
+    public static EndpointDescription updateEndpoint(
+            ServiceDescription serviceDescription, Class sei, QName portQName,
+            DescriptionFactory.UpdateType updateType, 
+            DescriptionBuilderComposite composite,
+            Object serviceDelegateKey) {
         EndpointDescription endpointDesc = null;
         synchronized(serviceDescription) {
                 endpointDesc = 
                 ((ServiceDescriptionImpl)serviceDescription)
-                        .updateEndpointDescription(sei, portQName, updateType);
+                        .updateEndpointDescription(sei, portQName, updateType, composite, serviceDelegateKey);
         }
         EndpointDescriptionValidator endpointValidator = new EndpointDescriptionValidator(endpointDesc);
         
         boolean isEndpointValid = endpointValidator.validate();
         
         if (!isEndpointValid) {
-            String msg = "The Endpoint description validation failed to validate due to the following errors: \n" +
-            endpointValidator.toString();
-            
+            String msg = Messages.getMessage("endpointDescriptionValidationErrors",
+                                             endpointValidator.toString());
             throw ExceptionFactory.makeWebServiceException(msg);
         }
         if (log.isDebugEnabled()) {
             log.debug("EndpointDescription updated: " + endpointDesc);
         }
+        
+        setPropertiesOnEndpointDesc(endpointDesc, composite);
+        
         return endpointDesc;
     }
 
-    public static ClientConfigurationFactory getClientConfigurationFactory() {
+    /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#updateEndpoint(ServiceDescription,
+     * Class, EndpointReference, String, DescriptionFactory.UpdateType)
+     */
+    public static EndpointDescription updateEndpoint(
+            ServiceDescription serviceDescription, Class sei, EndpointReference epr,
+            String addressingNamespace,
+            DescriptionFactory.UpdateType updateType) {
+        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, null);
+    }
 
-        if (clientConfigFactory == null) {
-            clientConfigFactory = ClientConfigurationFactory.newInstance();
+    /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#updateEndpoint(ServiceDescription,
+     * Class, EndpointReference, String, DescriptionFactory.UpdateType, Object)
+     */
+    public static EndpointDescription updateEndpoint(
+            ServiceDescription serviceDescription, Class sei, EndpointReference epr,
+            String addressingNamespace,
+            DescriptionFactory.UpdateType updateType,
+            Object sparseCompositeKey) {
+        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, sparseCompositeKey);
+    }
+
+    /**
+     * @see org.apache.axis2.jaxws.description.DescriptionFactory#updateEndpoint(ServiceDescription,
+     * Class, EndpointReference, String, DescriptionFactory.UpdateType, DescriptionBuilderComposite, Object)
+     */
+    public static EndpointDescription updateEndpoint(
+            ServiceDescription serviceDescription, Class sei, EndpointReference epr,
+            String addressingNamespace,
+            DescriptionFactory.UpdateType updateType,
+            DescriptionBuilderComposite composite,
+            Object sparseCompositeKey) {
+        QName portQName = null;
+        
+        try {
+            ServiceName serviceName = EndpointReferenceHelper.getServiceNameMetadata(epr, addressingNamespace);
+            QName serviceQName = serviceDescription.getServiceQName();
+            
+            //We need to throw an exception if the service name in the EPR metadata does not
+            //match the service name associated with the JAX-WS service instance.
+            if (serviceName.getName() != null && !serviceQName.equals(serviceName.getName())) {
+                throw ExceptionFactory.makeWebServiceException(
+                       Messages.getMessage("serviceNameMismatch", 
+                                           serviceName.getName().toString(), 
+                                           serviceQName.toString()));
+            }
+            //If a port name is available from the EPR metadata then use that, otherwise
+            //leave it to the runtime to find a suitable port, based on WSDL/annotations.
+            if (serviceName.getEndpointName() != null) {
+                portQName = new QName(serviceQName.getNamespaceURI(), serviceName.getEndpointName());
+            }
         }
-        return clientConfigFactory;
+        catch (Exception e) {
+            throw ExceptionFactory.makeWebServiceException(
+                 Messages.getMessage("updateEndpointError", e.getMessage()));
+        }
+        
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, composite, sparseCompositeKey);
+    }
+
+    public static ClientConfigurationFactory getClientConfigurationFactory() {
+        return ClientConfigurationFactory.newInstance();
     }
 
     /**
@@ -329,6 +423,29 @@ public class DescriptionFactoryImpl {
             return true;
         }
         return false;
+    }
+    
+    /**
+     * This method will set any properties supplied on the DescriptionBuilderComposite instance
+     * on the EndpointDescription. If the DBC is null or there are no properties present, this
+     * method will have no effect.
+     */
+    static void setPropertiesOnEndpointDesc(EndpointDescription endpointDesc, DescriptionBuilderComposite 
+                                     composite) {
+        if(composite != null 
+                && 
+                composite.getProperties() != null
+                &&
+                !composite.getProperties().isEmpty()) {
+            for(String key : composite.getProperties().keySet()) {
+                Object value = composite.getProperties().get(key);
+                if(log.isDebugEnabled()) {
+                    log.debug("Setting property from DBC onto EndpointDescription, key= " + 
+                              key + ", value= " + value);
+                }
+                endpointDesc.setProperty(key, value);
+            }
+        }
     }
 
 }

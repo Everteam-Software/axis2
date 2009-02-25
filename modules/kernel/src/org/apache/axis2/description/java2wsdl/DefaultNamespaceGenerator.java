@@ -16,9 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.description.java2wsdl;
 
-import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
+package org.apache.axis2.description.java2wsdl;
 
 /**
  * This class provides the default implementatoin for mapping java classes to namespaces

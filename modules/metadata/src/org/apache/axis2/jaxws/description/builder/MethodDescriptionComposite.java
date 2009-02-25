@@ -39,7 +39,6 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
 	private boolean 				isListType = false;
     private WebMethodAnnot webMethodAnnot;
     private WebResultAnnot webResultAnnot;
-    private WebServiceContextAnnot webServiceContextAnnot;
     private HandlerChainAnnot handlerChainAnnot;
     private SoapBindingAnnot soapBindingAnnot;
     private WebServiceRefAnnot webServiceRefAnnot;
@@ -49,6 +48,8 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
     private List<ParameterDescriptionComposite> parameterDescriptions;//TODO EDIT CHECK: only on methods of SEI
 
     private DescriptionBuilderComposite parentDBC;
+    
+    private ActionAnnot actionAnnot;
 
     /*
       * Default Constructor
@@ -68,8 +69,7 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
             WebServiceRefAnnot webServiceRefAnnot,
             WebEndpointAnnot webEndpointAnnot,
             RequestWrapperAnnot requestWrapperAnnot,
-            ResponseWrapperAnnot responseWrapperAnnot,
-            WebServiceContextAnnot webServiceContextAnnot
+            ResponseWrapperAnnot responseWrapperAnnot
     ) {
 
         this.methodName = methodName;
@@ -83,7 +83,6 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
         this.webEndpointAnnot = webEndpointAnnot;
         this.requestWrapperAnnot = requestWrapperAnnot;
         this.responseWrapperAnnot = responseWrapperAnnot;
-        this.webServiceContextAnnot = webServiceContextAnnot;
     }
 
     /** @return Returns the methodName */
@@ -165,11 +164,6 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
         return responseWrapperAnnot;
     }
 
-    /** @return Returns the webServiceContextAnnot. */
-    public WebServiceContextAnnot getWebServiceContextAnnot() {
-        return webServiceContextAnnot;
-    }
-
     /** @return Returns the handlerChainAnnot. */
     public HandlerChainAnnot getHandlerChainAnnot() {
         return handlerChainAnnot;
@@ -193,6 +187,11 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
     /** @return Returns the webServiceRefAnnot. */
     public WebServiceRefAnnot getWebServiceRefAnnot() {
         return webServiceRefAnnot;
+    }
+
+    /** @return Returns the actionAnnot. */
+    public ActionAnnot getActionAnnot() {
+        return actionAnnot;
     }
 
     /** @return Returns the exceptions. */
@@ -255,12 +254,6 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
         this.responseWrapperAnnot = responseWrapperAnnot;
     }
 
-    /** @param webServiceContextAnnot The webServiceContextAnnot to set. */
-    public void setWebServiceContextAnnot(WebServiceContextAnnot webServiceContextAnnot) {
-        this.webServiceContextAnnot = webServiceContextAnnot;
-    }
-
-
     /** @param handlerChainAnnot The handlerChainAnnot to set. */
     public void setHandlerChainAnnot(HandlerChainAnnot handlerChainAnnot) {
         this.handlerChainAnnot = handlerChainAnnot;
@@ -284,6 +277,11 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
     /** @param webServiceRefAnnot The webServiceRefAnnot to set. */
     public void setWebServiceRefAnnot(WebServiceRefAnnot webServiceRefAnnot) {
         this.webServiceRefAnnot = webServiceRefAnnot;
+    }
+
+    /** @param actionAnnot The actionAnnot to set. */
+    public void setActionAnnot(ActionAnnot actionAnnot) {
+        this.actionAnnot = actionAnnot;
     }
 
     /** @param parameterDescription The parameterDescription to add to the set. */
@@ -434,6 +432,12 @@ public class MethodDescriptionComposite implements TMAnnotationComposite, TMFAnn
             sb.append(newLine);
             sb.append("WebServiceRef: ");
             sb.append(webServiceRefAnnot.toString());
+        }
+
+        if (actionAnnot != null) {
+            sb.append(newLine);
+            sb.append("Action: ");
+            sb.append(actionAnnot.toString());
         }
 
         if (handlerChainAnnot != null) {

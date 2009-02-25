@@ -36,7 +36,6 @@ public interface DeploymentConstants {
 
     String TAG_AXISCONFIG = "axisconfig";
     String TAG_PHASE_ORDER = "phaseOrder";
-    String TAG_PHASE = "phase";
     String TAG_PARAMETER = "parameter";
     String TAG_MAPPING = "mapping";
     String TAG_PACKAGE_NAME = "packageName";
@@ -51,6 +50,8 @@ public interface DeploymentConstants {
     String TAG_TYPE = "type";
     String TAG_TARGET_RESOLVERS = "targetResolvers";
     String TAG_TARGET_RESOLVER = "targetResolver";
+    String TAG_THREAD_CONTEXT_MIGRATORS = "threadContextMigrators";
+    String TAG_THREAD_CONTEXT_MIGRATOR = "threadContextMigrator";
     String TAG_TRANSPORT_SENDER = "transportSender";
     String TAG_TRANSPORT_RECEIVER = "transportReceiver";
     String TAG_SERVICE_GROUP = "serviceGroup";
@@ -60,6 +61,7 @@ public interface DeploymentConstants {
     String TAG_PHASE_FIRST = "phaseFirst";
     String TAG_ORDER = "order";           // to resolve the order tag
     String TAG_OPERATION = "operation";       // operation start tag
+    String TAG_PHASE = "phase";       // operation start tag
     String TAG_OBJECT_SUPPLIER = "ObjectSupplier";       // operation start tag
     String TAG_EXCLUDE_OPERATIONS = "excludeOperations";
     String TAG_MESSAGE_RECEIVER = "messageReceiver";
@@ -91,6 +93,9 @@ public interface DeploymentConstants {
     String TAG_DISPATCHER = "dispatcher";
     String TAG_DESCRIPTION = "Description";
     String TAG_CLASS_NAME = "class";
+    String TAG_LIST_ID = "listId";
+    String TAG_EXCLUDE_PROPERTIES= "excludeProperties";
+    String TAG_INCLUDE_PROPERTIES= "includeProperties";
     String TAG_AFTER = "after";
     String TAG_BEFORE = "before";
     String TAG_SUPPORTED_POLICY_NAMESPACES = "supported-policy-namespaces";
@@ -109,6 +114,9 @@ public interface DeploymentConstants {
     String DIRECTORY = "directory";
     String EXTENSION = "extension";
     String DEPLOYER = "deployer";
+
+    //Attachments LifecycleManager 
+    String ATTACHMENTS_LIFECYCLE_MANAGER = "attachmentsLifecycleManager";
 
     // for parameters
     String ATTRIBUTE_NAME = "name";
@@ -150,5 +158,7 @@ public interface DeploymentConstants {
     String POLICY_NS_URI = Constants.URI_POLICY;
     String TAG_POLICY = "Policy";
     String TAG_POLICY_REF = "PolicyReference";
-
+    
+    String TAG_POLICY_ATTACHMENT = "PolicyAttachment";
+    String TAG_APPLIES_TO = "AppliesTo";
 }

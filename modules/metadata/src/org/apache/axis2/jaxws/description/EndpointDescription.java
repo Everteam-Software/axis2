@@ -22,6 +22,7 @@ package org.apache.axis2.jaxws.description;
 
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.description.AxisService;
+import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
 import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
 
 import javax.xml.namespace.QName;
@@ -107,6 +108,25 @@ public interface EndpointDescription {
 
     public abstract void setHandlerChain(HandlerChainsType handlerChain);
     
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.  If the
+     * key is non-null then it is used to look for handler chain configuration information in the
+     * sparse metadata.  The order in which the configuration information is resolved is:
+     * 1) Look in sparse composite if the key is not null
+     * 2) Look in the composite
+     * 3) Look for a HandlerChain annotation and read in the file it specifies  
+     * 
+     * @param serviceDelegateKey May be null.  If non-null, used to look for service-delegate
+     *     specific sparse composite information.
+     * @return A HandlerChainsType object or null
+     */
+    public abstract HandlerChainsType getHandlerChain(Object serviceDelegateKey);
+
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.
+     * This is the same as calling getHandlerChain(null).
+     * @see #getHandlerChain(Object)
+     */
     public abstract HandlerChainsType getHandlerChain();
 
     /**
@@ -135,4 +155,54 @@ public interface EndpointDescription {
     public abstract QName getServiceQName();
 
     public abstract Service.Mode getServiceMode();
+    
+    /**
+     * Signals whether or not MTOM has been turned on for the endpoint 
+     * based on the annotation configuration.
+     * 
+     * Both the @MTOM and @BindingType are inspected.  The @MTOM
+     * annotation is inspected first.  If the @MTOM
+     * annotation is not present, then the @BindingType is inspected.
+     * 
+     * @return a boolean value 
+     */
+    public boolean isMTOMEnabled();
+    
+    /**
+     * If MTOM is enabled, returns the threshold value.
+     * 
+     * @return -1 if MTOM is not enabled, a positive integer value if 
+     * one was configured.
+     */
+    public int getMTOMThreshold();
+    
+    /**
+     * Returns true if the contents of the <code>&lt;wsdl:binding&gt;</code> must be 
+     * strictly respected by the runtime.
+     * 
+     * @return a boolean value
+     */
+    public boolean respectBinding();
+    
+    /**
+     * Indicate whether or not strict binding support should be used.
+     */
+    public void setRespectBinding(boolean respect);
+    
+    /**
+     * Return the DescriptionBuilderComposite, if any, used to build this service description.
+     * @return
+     */
+    public DescriptionBuilderComposite getDescriptionBuilderComposite();
+    
+    /**
+     * Return the Object that corresponds to the property key supplied.
+     */
+    public Object getProperty(String key);
+    
+    /**
+     * Store the property by the key specified.
+     */
+    public void setProperty(String key, Object value);
+    
 }

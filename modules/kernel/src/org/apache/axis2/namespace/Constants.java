@@ -112,6 +112,8 @@ public class Constants {
 
     public static final String URI_POLICY =
             "http://schemas.xmlsoap.org/ws/2004/09/policy";
+    public static final String FORMAT_BINDING = "http://schemas.xmlsoap.org/wsdl/formatbinding/";
+    public static final String JAVA_NS = "http://schemas.xmlsoap.org/wsdl/java/";
     /**
      * WSDL Namespace.
      */
@@ -119,7 +121,7 @@ public class Constants {
             "http://schemas.xmlsoap.org/wsdl/";
 
     public static final String NS_URI_WSDL20 =
-            "http://www.w3.org/2004/03/wsdl";
+            "http://www.w3.org/ns/wsdl";
 
     //
     // WSDL extensions for SOAP in DIME

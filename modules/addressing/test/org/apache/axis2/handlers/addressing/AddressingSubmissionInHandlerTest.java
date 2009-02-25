@@ -19,6 +19,7 @@
 
 package org.apache.axis2.handlers.addressing;
 
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axis2.addressing.EndpointReference;
@@ -26,9 +27,12 @@ import org.apache.axis2.client.Options;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class AddressingSubmissionInHandlerTest extends AddressingInHandlerTestBase {
 
-    private Log log = LogFactory.getLog(getClass());
+    private static Log log = LogFactory.getLog(AddressingSubmissionInHandlerTest.class);
 
     /** @param testName  */
     public AddressingSubmissionInHandlerTest(String testName) {
@@ -37,22 +41,32 @@ public class AddressingSubmissionInHandlerTest extends AddressingInHandlerTestBa
 
     protected void setUp() throws Exception {
         super.setUp();
-        inHandler = new AddressingSubmissionInHandler();
+        inHandler = new AddressingInHandler();
         addressingNamespace = AddressingConstants.Submission.WSA_NAMESPACE;
         versionDirectory = "submission";
         fromAddress = "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous";
         secondRelationshipType = "axis2:some.custom.relationship";
     }
 
-    public void testExtractAddressingInformationFromHeaders() {
-        try {
-            Options options = extractAddressingInformationFromHeaders();
-            // Cannot check refparams in 2004/08 case as they can't be extracted until later
-        } catch (Exception e) {
-            e.printStackTrace();
-            log.error(e.getMessage());
-            fail(" An Exception has occured " + e.getMessage());
-        }
+    public void testExtractAddressingInformationFromHeaders() throws Exception{
+    	Options options = extractAddressingInformationFromHeaders(null);
+
+        assertNotNull(options);
+        assertNotNull(options.getTo());
+    }
+    
+    public void testExtractAddressingInformationFromHeadersCustomRole() throws Exception{
+    	testFileName = "soapmessage.customrole.xml";
+    	extractAddressingInformationFromHeaders(new RolePlayer(){
+			public List getRoles() {
+				ArrayList al = new ArrayList();
+				al.add("http://my/custom/role");
+				return al;
+			}
+			public boolean isUltimateDestination() {
+				return false;
+			}
+    	});
     }
 
     public void testMessageWithOmittedAction() {

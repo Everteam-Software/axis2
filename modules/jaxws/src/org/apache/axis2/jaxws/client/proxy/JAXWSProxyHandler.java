@@ -16,23 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.client.proxy;
 
-import javax.xml.ws.handler.HandlerResolver;
+import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.jaxws.BindingProvider;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.client.async.AsyncResponse;
 import org.apache.axis2.jaxws.core.InvocationContext;
 import org.apache.axis2.jaxws.core.InvocationContextFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
-import org.apache.axis2.jaxws.core.controller.AxisInvocationController;
 import org.apache.axis2.jaxws.core.controller.InvocationController;
+import org.apache.axis2.jaxws.core.controller.InvocationControllerFactory;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.OperationDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.marshaller.factory.MethodMarshallerFactory;
 import org.apache.axis2.jaxws.message.Message;
+import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.spi.Binding;
 import org.apache.axis2.jaxws.spi.Constants;
 import org.apache.axis2.jaxws.spi.ServiceDelegate;
 import org.apache.axis2.jaxws.spi.migrator.ApplicationContextMigratorUtil;
@@ -40,8 +43,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.xml.ws.AsyncHandler;
-import javax.xml.ws.Binding;
 import javax.xml.ws.Response;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.WebServiceFeature;
 import javax.xml.ws.soap.SOAPBinding;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -77,16 +81,29 @@ public class JAXWSProxyHandler extends BindingProvider implements
         InvocationHandler {
     private static Log log = LogFactory.getLog(JAXWSProxyHandler.class);
 
+    private Class seiClazz = null;
+    private Method method = null;
+    
     //Reference to ServiceDelegate instance that was used to create the Proxy
     protected ServiceDescription serviceDesc = null;
 
-    private Class seiClazz = null;
+    protected InvocationController controller;
+    
+    public JAXWSProxyHandler(ServiceDelegate delegate,
+                             Class seiClazz,
+                             EndpointDescription epDesc,
+                             WebServiceFeature... features) {
+        this(delegate, seiClazz, epDesc, null, null, features);
+    }
 
-    private Method method = null;
-
-    public JAXWSProxyHandler(ServiceDelegate delegate, Class seiClazz, EndpointDescription epDesc) {
-        super(delegate, epDesc);
-
+    public JAXWSProxyHandler(ServiceDelegate delegate,
+            Class seiClazz,
+            EndpointDescription epDesc,
+            EndpointReference epr,
+            String addressingNamespace,
+            WebServiceFeature... features) {
+        super(delegate, epDesc, epr, addressingNamespace, features);
+        
         this.seiClazz = seiClazz;
         this.serviceDesc = delegate.getServiceDescription();
     }
@@ -161,7 +178,7 @@ public class JAXWSProxyHandler extends BindingProvider implements
         request.setOperationDescription(operationDesc);
 
         // Enable MTOM on the Message if the property was set on the SOAPBinding.
-        Binding bnd = getBinding();
+        Binding bnd = (Binding) getBinding();
         if (bnd != null && bnd instanceof SOAPBinding) {
             if (((SOAPBinding)bnd).isMTOMEnabled()) {
                 Message requestMsg = request.getMessage();
@@ -185,10 +202,6 @@ public class JAXWSProxyHandler extends BindingProvider implements
 
         requestIC.setRequestMessageContext(request);
         requestIC.setServiceClient(serviceDelegate.getServiceClient(endpointDesc.getPortQName()));
-
-        // TODO: Change this to some form of factory so that we can change the IC to
-        // a more simple one for marshaller/unmarshaller testing.
-        InvocationController controller = new AxisInvocationController();
         
         // Migrate the properties from the client request context bag to
         // the request MessageContext.
@@ -196,6 +209,17 @@ public class JAXWSProxyHandler extends BindingProvider implements
                 Constants.APPLICATION_CONTEXT_MIGRATOR_LIST_ID, 
                 getRequestContext(), request);
 
+        // Perform the WebServiceFeature configuration requested by the user.
+        bnd.configure(request, this);
+
+        // We'll need an InvocationController instance to send the request.
+        InvocationControllerFactory icf = (InvocationControllerFactory) FactoryRegistry.getFactory(InvocationControllerFactory.class);
+        controller = icf.getInvocationController();
+        
+        if (controller == null) {
+            throw new WebServiceException(Messages.getMessage("missingInvocationController"));
+        }
+        
         // Check if the call is OneWay, Async or Sync
         if (operationDesc.isOneWay()) {
             if (log.isDebugEnabled()) {
@@ -287,7 +311,7 @@ public class JAXWSProxyHandler extends BindingProvider implements
 
         return null;
     }
-
+    
     private AsyncResponse createProxyListener(Object[] args, OperationDescription operationDesc) {
         ProxyAsyncListener listener = new ProxyAsyncListener(operationDesc);
         listener.setHandler(this);
@@ -318,7 +342,7 @@ public class JAXWSProxyHandler extends BindingProvider implements
         OperationDescription operationDesc =
                 endpointDesc.getEndpointInterfaceDescription().getOperation(method);
 
-        Message message = MethodMarshallerFactory.getMarshaller(operationDesc, true)
+        Message message = MethodMarshallerFactory.getMarshaller(operationDesc, true, null)
                 .marshalRequest(args, operationDesc);
 
         if (log.isDebugEnabled()) {
@@ -327,9 +351,6 @@ public class JAXWSProxyHandler extends BindingProvider implements
 
         MessageContext request = new MessageContext();
         request.setMessage(message);
-
-        // TODO: What happens here might be affected by the property migration plugpoint.  
-        request.setProperties(getRequestContext());
 
         if (log.isDebugEnabled()) {
             log.debug("Request MessageContext created successfully.");
@@ -351,24 +372,29 @@ public class JAXWSProxyHandler extends BindingProvider implements
     protected Object createResponse(Method method, Object[] args, MessageContext responseContext,
                                     OperationDescription operationDesc) throws Throwable {
         Message responseMsg = responseContext.getMessage();
+        try {
 
-        if (log.isDebugEnabled()) {
-            log.debug("Processing the response Message to create the return value(s).");
-        }
+            if (log.isDebugEnabled()) {
+                log.debug("Processing the response Message to create the return value(s).");
+            }
 
-        // Find out if there was a fault on the response and create the appropriate 
-        // exception type.
-        if (hasFaultResponse(responseContext)) {
-            Throwable t = getFaultResponse(responseContext, operationDesc);
-            throw t;
+            // Find out if there was a fault on the response and create the appropriate 
+            // exception type.
+            if (hasFaultResponse(responseContext)) {
+                Throwable t = getFaultResponse(responseContext, operationDesc);
+                throw t;
+            }
+            ClassLoader cl = (ClassLoader) responseContext.getProperty(Constants.CACHE_CLASSLOADER);
+            Object object =
+                    MethodMarshallerFactory.getMarshaller(operationDesc, true, cl)
+                                       .demarshalResponse(responseMsg, args, operationDesc);
+            if (log.isDebugEnabled()) {
+                log.debug("The response was processed and the return value created successfully.");
+            }
+            return object;
+        } finally {
+            responseMsg.close();
         }
-
-        Object object = MethodMarshallerFactory.getMarshaller(operationDesc, false)
-                .demarshalResponse(responseMsg, args, operationDesc);
-        if (log.isDebugEnabled()) {
-            log.debug("The response was processed and the return value created successfully.");
-        }
-        return object;
     }
 
     protected static Throwable getFaultResponse(MessageContext msgCtx,
@@ -383,7 +409,8 @@ public class JAXWSProxyHandler extends BindingProvider implements
             opDesc = opDesc.getSyncOperation();
         }
         if (msg != null && msg.isFault()) {
-            Object object = MethodMarshallerFactory.getMarshaller(opDesc, true)
+            ClassLoader cl = (ClassLoader) msgCtx.getProperty(Constants.CACHE_CLASSLOADER);
+            Object object = MethodMarshallerFactory.getMarshaller(opDesc, true, cl)
                     .demarshalFaultResponse(msg, opDesc);
             if (log.isDebugEnabled() && object != null) {
                 log.debug("A fault was found and processed.");

@@ -16,30 +16,39 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.util;
 
-import org.apache.axis2.description.AxisMessage;
-import org.apache.axis2.description.WSDL2Constants;
-import org.apache.axis2.description.AxisOperation;
-import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.AxisDescription;
-import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
-import org.apache.axis2.wsdl.SOAPHeaderMessage;
-import org.apache.axis2.wsdl.SOAPModuleMessage;
-import org.apache.axis2.wsdl.HTTPHeaderMessage;
-import org.apache.axis2.namespace.Constants;
-import org.apache.axis2.AxisFault;
-import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMFactory;
 import org.apache.axiom.om.OMNamespace;
-import org.apache.axiom.om.OMText;
+import org.apache.axiom.om.OMNode;
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.addressing.AddressingConstants;
+import org.apache.axis2.description.AxisDescription;
+import org.apache.axis2.description.AxisMessage;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.PolicySubject;
+import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
+import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.namespace.Constants;
+import org.apache.axis2.wsdl.HTTPHeaderMessage;
+import org.apache.axis2.wsdl.SOAPHeaderMessage;
+import org.apache.axis2.wsdl.SOAPModuleMessage;
+import org.apache.neethi.Policy;
+import org.apache.neethi.PolicyComponent;
+import org.apache.neethi.PolicyReference;
 
 import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamConstants;
-import java.util.Map;
-import java.util.Iterator;
+import javax.xml.stream.FactoryConfigurationError;
+import javax.xml.stream.XMLStreamException;
+
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -176,10 +185,10 @@ public class WSDLSerializationUtil {
      */
     public static OMElement generateSOAP11Binding(OMFactory fac, AxisService axisService,
                                                   OMNamespace wsdl, OMNamespace wsoap,
-                                                  OMNamespace tns) {
+                                                  OMNamespace tns, String serviceName) {
         OMElement binding = fac.createOMElement(WSDL2Constants.BINDING_LOCAL_NAME, wsdl);
         binding.addAttribute(
-                fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME, null, axisService.getName() +
+                fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME, null, serviceName +
                         Java2WSDLConstants.BINDING_NAME_SUFFIX));
         binding.addAttribute(fac.createOMAttribute(WSDL2Constants.INTERFACE_LOCAL_NAME, null, tns
                 .getPrefix() + ":" + WSDL2Constants.DEFAULT_INTERFACE_NAME));
@@ -188,6 +197,8 @@ public class WSDLSerializationUtil {
                                                    WSDL2Constants.URI_WSDL2_SOAP));
         binding.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_VERSION, wsoap,
                                                    WSDL2Constants.SOAP_VERSION_1_1));
+        binding.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_PROTOCOL, wsoap,
+                                                           WSDL2Constants.HTTP_PROTOCAL));
         generateDefaultSOAPBindingOperations(axisService, fac, binding, wsdl, tns, wsoap);
         return binding;
     }
@@ -203,10 +214,10 @@ public class WSDLSerializationUtil {
      */
     public static OMElement generateSOAP12Binding(OMFactory fac, AxisService axisService,
                                                   OMNamespace wsdl, OMNamespace wsoap,
-                                                  OMNamespace tns) {
+                                                  OMNamespace tns, String serviceName) {
         OMElement binding = fac.createOMElement(WSDL2Constants.BINDING_LOCAL_NAME, wsdl);
         binding.addAttribute(
-                fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME, null, axisService.getName() +
+                fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME, null, serviceName +
                         Java2WSDLConstants.SOAP12BINDING_NAME_SUFFIX));
         binding.addAttribute(fac.createOMAttribute(WSDL2Constants.INTERFACE_LOCAL_NAME, null, tns
                 .getPrefix() + ":" + WSDL2Constants.DEFAULT_INTERFACE_NAME));
@@ -215,6 +226,8 @@ public class WSDLSerializationUtil {
                                                    WSDL2Constants.URI_WSDL2_SOAP));
         binding.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_VERSION, wsoap,
                                                    WSDL2Constants.SOAP_VERSION_1_2));
+        binding.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_PROTOCOL, wsoap,
+                                                           WSDL2Constants.HTTP_PROTOCAL));
         generateDefaultSOAPBindingOperations(axisService, fac, binding, wsdl, tns, wsoap);
         return binding;
     }
@@ -230,9 +243,8 @@ public class WSDLSerializationUtil {
      */
     public static OMElement generateHTTPBinding(OMFactory fac, AxisService axisService,
                                                 OMNamespace wsdl, OMNamespace whttp,
-                                                OMNamespace tns) {
+                                                OMNamespace tns, String serviceName) {
         OMElement binding = fac.createOMElement(WSDL2Constants.BINDING_LOCAL_NAME, wsdl);
-        String serviceName = axisService.getName();
         binding.addAttribute(
                 fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME, null, serviceName +
                         Java2WSDLConstants.HTTP_BINDING));
@@ -250,12 +262,16 @@ public class WSDLSerializationUtil {
             opElement.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_REF, null,
                                                          tns.getPrefix() + ":" + name));
             opElement.addAttribute(fac.createOMAttribute(WSDL2Constants.ATTRIBUTE_LOCATION, whttp,
-                                                         serviceName + "/" + name));
+                                                         name));
         }
         return binding;
     }
 
-private static void generateDefaultSOAPBindingOperations(AxisService axisService, OMFactory omFactory, OMElement binding, OMNamespace wsdl, OMNamespace tns, OMNamespace wsoap) {        Iterator iterator = axisService.getChildren();
+    private static void generateDefaultSOAPBindingOperations(AxisService axisService,
+                                                             OMFactory omFactory, OMElement binding,
+                                                             OMNamespace wsdl, OMNamespace tns,
+                                                             OMNamespace wsoap) {
+        Iterator iterator = axisService.getChildren();
         while (iterator.hasNext()) {
             AxisOperation axisOperation = (AxisOperation) iterator.next();
             if (axisOperation.isControlOperation()) {
@@ -281,14 +297,17 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
      * @param tns - The targetnamespace
      * @param axisService - The AxisService
      * @param disableREST only generate REST endpoint if this is false
+     * @param disableSOAP12 only generate SOAP 1.2 endpoint if this is false
      * @return - The generated service element
      * @throws AxisFault - Thrown in case an exception occurs
      */
     public static OMElement generateServiceElement(OMFactory omFactory, OMNamespace wsdl,
                                                    OMNamespace tns, AxisService axisService,
-                                                   boolean disableREST)
+                                                   boolean disableREST, boolean disableSOAP12,
+                                                   String serviceName)
             throws AxisFault {
-        return generateServiceElement(omFactory, wsdl, tns, axisService, disableREST, null);
+        return generateServiceElement(omFactory, wsdl, tns, axisService, disableREST, disableSOAP12,
+                                      null, serviceName);
     }
     
     /**
@@ -298,23 +317,25 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
      * @param tns - The targetnamespace
      * @param axisService - The AxisService
      * @param disableREST only generate REST endpoint if this is false
+     * @param disableSOAP12 only generate SOAP 1.2 endpoint if this is false
      * @return - The generated service element
      * @throws AxisFault - Thrown in case an exception occurs
      */
     public static OMElement generateServiceElement(OMFactory omFactory, OMNamespace wsdl,
                                                    OMNamespace tns, AxisService axisService,
-                                                   boolean disableREST, String[] eprs)
+                                                   boolean disableREST, boolean disableSOAP12,
+                                                   String[] eprs, String serviceName)
             throws AxisFault {
         if(eprs == null){
             eprs = axisService.getEPRs();
             if (eprs == null) {
-                eprs = new String[]{axisService.getName()};
+                eprs = new String[]{serviceName};
             }
         }
         OMElement serviceElement;
         serviceElement = omFactory.createOMElement(WSDL2Constants.SERVICE_LOCAL_NAME, wsdl);
                     serviceElement.addAttribute(omFactory.createOMAttribute(WSDL2Constants.ATTRIBUTE_NAME,
-                                                                            null, axisService.getName()));
+                                                                            null, serviceName));
                     serviceElement.addAttribute(omFactory.createOMAttribute(
                             WSDL2Constants.INTERFACE_LOCAL_NAME, null,
                             tns.getPrefix() + ":" + WSDL2Constants.DEFAULT_INTERFACE_NAME));
@@ -324,6 +345,7 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
             if (epr.startsWith("https://")) {
                 name = WSDL2Constants.DEFAULT_HTTPS_PREFIX;
             }
+            
             OMElement soap11EndpointElement =
                     omFactory.createOMElement(WSDL2Constants.ENDPOINT_LOCAL_NAME, wsdl);
             soap11EndpointElement.addAttribute(omFactory.createOMAttribute(
@@ -331,23 +353,28 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
                     name + WSDL2Constants.DEFAULT_SOAP11_ENDPOINT_NAME));
             soap11EndpointElement.addAttribute(omFactory.createOMAttribute(
                     WSDL2Constants.BINDING_LOCAL_NAME, null,
-                    tns.getPrefix() + ":" + axisService.getName() +
+                    tns.getPrefix() + ":" + serviceName +
                             Java2WSDLConstants.BINDING_NAME_SUFFIX));
             soap11EndpointElement.addAttribute(
                     omFactory.createOMAttribute(WSDL2Constants.ATTRIBUTE_ADDRESS, null, epr));
             serviceElement.addChild(soap11EndpointElement);
-            OMElement soap12EndpointElement =
-                    omFactory.createOMElement(WSDL2Constants.ENDPOINT_LOCAL_NAME, wsdl);
-            soap12EndpointElement.addAttribute(omFactory.createOMAttribute(
-                    WSDL2Constants.ATTRIBUTE_NAME, null,
-                    name + WSDL2Constants.DEFAULT_SOAP12_ENDPOINT_NAME));
-            soap12EndpointElement.addAttribute(omFactory.createOMAttribute(
-                    WSDL2Constants.BINDING_LOCAL_NAME, null,
-                    tns.getPrefix() + ":" + axisService.getName() +
-                            Java2WSDLConstants.SOAP12BINDING_NAME_SUFFIX));
-            soap12EndpointElement.addAttribute(
-                    omFactory.createOMAttribute(WSDL2Constants.ATTRIBUTE_ADDRESS, null, epr));
-            serviceElement.addChild(soap12EndpointElement);
+            
+            OMElement soap12EndpointElement = null;
+            if (!disableSOAP12) {
+                soap12EndpointElement =
+                        omFactory.createOMElement(WSDL2Constants.ENDPOINT_LOCAL_NAME, wsdl);
+                soap12EndpointElement.addAttribute(omFactory.createOMAttribute(
+                        WSDL2Constants.ATTRIBUTE_NAME, null,
+                        name + WSDL2Constants.DEFAULT_SOAP12_ENDPOINT_NAME));
+                soap12EndpointElement.addAttribute(omFactory.createOMAttribute(
+                        WSDL2Constants.BINDING_LOCAL_NAME, null,
+                        tns.getPrefix() + ":" + serviceName +
+                                Java2WSDLConstants.SOAP12BINDING_NAME_SUFFIX));
+                soap12EndpointElement.addAttribute(
+                        omFactory.createOMAttribute(WSDL2Constants.ATTRIBUTE_ADDRESS, null, epr));
+                serviceElement.addChild(soap12EndpointElement);
+            }
+            
             OMElement httpEndpointElement = null;
             if (!disableREST) {
                 httpEndpointElement =
@@ -357,19 +384,22 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
                         name + WSDL2Constants.DEFAULT_HTTP_ENDPOINT_NAME));
                 httpEndpointElement.addAttribute(omFactory.createOMAttribute(
                         WSDL2Constants.BINDING_LOCAL_NAME, null,
-                        tns.getPrefix() + ":" + axisService.getName() + Java2WSDLConstants
+                        tns.getPrefix() + ":" + serviceName + Java2WSDLConstants
                                 .HTTP_BINDING));
                 httpEndpointElement.addAttribute(
                         omFactory.createOMAttribute(WSDL2Constants.ATTRIBUTE_ADDRESS, null, epr));
                 serviceElement.addChild(httpEndpointElement);
             }
+            
             if (epr.startsWith("https://")) {
                 OMElement soap11Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
                 soap11Documentation.setText("This endpoint exposes a SOAP 11 binding over a HTTPS");
                 soap11EndpointElement.addChild(soap11Documentation);
-                OMElement soap12Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
-                soap12Documentation.setText("This endpoint exposes a SOAP 12 binding over a HTTPS");
-                soap12EndpointElement.addChild(soap12Documentation);
+                if (!disableSOAP12) {
+                    OMElement soap12Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
+                    soap12Documentation.setText("This endpoint exposes a SOAP 12 binding over a HTTPS");
+                    soap12EndpointElement.addChild(soap12Documentation);
+                }
                 if (!disableREST) {
                     OMElement httpDocumentation =
                             omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
@@ -380,9 +410,11 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
                 OMElement soap11Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
                 soap11Documentation.setText("This endpoint exposes a SOAP 11 binding over a HTTP");
                 soap11EndpointElement.addChild(soap11Documentation);
-                OMElement soap12Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
-                soap12Documentation.setText("This endpoint exposes a SOAP 12 binding over a HTTP");
-                soap12EndpointElement.addChild(soap12Documentation);
+                if (!disableSOAP12) {
+                    OMElement soap12Documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
+                    soap12Documentation.setText("This endpoint exposes a SOAP 12 binding over a HTTP");
+                    soap12EndpointElement.addChild(soap12Documentation);
+                }
                 if (!disableREST) {
                     OMElement httpDocumentation =
                             omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
@@ -417,7 +449,7 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
     public static void addWSAWActionAttribute(OMElement element,
                                               String action ,
                                               OMNamespace wsaw) {
-        if (action == null || action.length() == 0) {
+        if (action == null || action.length() == 0 || "\\\"\\\"".equals(action)) {
             return;
         }
         element.addAttribute("Action", action, wsaw);
@@ -450,21 +482,84 @@ private static void generateDefaultSOAPBindingOperations(AxisService axisService
         }
     }
 
-    public static void addWSDLDocumentationElement(AxisDescription axisDescription, OMElement omElement, OMFactory omFactory, OMNamespace wsdl) {
-        String documentationString = axisDescription.getDocumentation();
+    public static void addWSDLDocumentationElement(AxisDescription axisDescription,
+                                                   OMElement omElement, OMFactory omFactory,
+                                                   OMNamespace wsdl) {
+        OMNode documentationNode = axisDescription.getDocumentationNode();
         OMElement documentation;
-        if (documentationString != null && !"".equals(documentationString)) {
+        if (documentationNode != null) {
             documentation = omFactory.createOMElement(WSDL2Constants.DOCUMENTATION, wsdl);
-            OMText omText;
-            if (documentationString.indexOf(CDATA_START) > -1) {
-                documentationString = documentationString.replaceFirst(CDATA_START_REGEX, "");
-                documentationString = documentationString.replaceFirst(CDATA_END_REGEX, "");
-                omText = omFactory.createOMText(documentationString, XMLStreamConstants.CDATA);
-            } else {
-            omText =  omFactory.createOMText(documentationString);
-            }
-            documentation.addChild(omText);
+            documentation.addChild(documentationNode);
             omElement.addChild(documentation);
         }
     }
+    
+    public static void addPoliciesAsExtensibleElement(
+			AxisDescription description, OMElement descriptionElement) {
+		PolicySubject policySubject = description.getPolicySubject();
+		Collection attachPolicyComponents = policySubject
+				.getAttachedPolicyComponents();
+		ArrayList policies = new ArrayList();
+
+		for (Iterator iterator = attachPolicyComponents.iterator(); iterator
+				.hasNext();) {
+			Object policyElement = iterator.next();
+
+			if (policyElement instanceof Policy) {
+				policies.add(policyElement);
+
+			} else if (policyElement instanceof PolicyReference) {
+				String key = ((PolicyReference) policyElement).getURI();
+
+				if (key.startsWith("#")) {
+					key = key.substring(key.indexOf("#") + 1);
+				}
+				AxisService service = getAxisService(description);
+				PolicyLocator locator = new PolicyLocator(service);
+				Policy p = locator.lookup(key);
+
+				if (p == null) {
+					throw new RuntimeException("Policy not found for uri : "
+							+ key);
+				}
+				policies.add(p);
+			}
+		}
+
+		ExternalPolicySerializer filter = null;
+		if (!policies.isEmpty()) {
+			filter = new ExternalPolicySerializer();
+			AxisConfiguration axisConfiguration = description
+					.getAxisConfiguration();
+			if (axisConfiguration != null) {
+				filter.setAssertionsToFilter(axisConfiguration
+						.getLocalPolicyAssertions());
+			}
+		}
+
+		for (Iterator iterator = policies.iterator(); iterator.hasNext();) {
+			Policy policy = (Policy) iterator.next();
+			OMElement policyElement;
+			try {
+				policyElement = PolicyUtil.getPolicyComponentAsOMElement(
+						policy, filter);
+			} catch (Exception ex) {
+				throw new RuntimeException(ex);
+			}
+			OMNode firstChild = descriptionElement.getFirstOMChild();
+			if (firstChild != null) {
+				firstChild.insertSiblingBefore(policyElement);
+			} else {
+				descriptionElement.addChild(policyElement);
+			}
+		}
+	}
+
+	private static AxisService getAxisService(AxisDescription description) {
+		if (description == null || description instanceof AxisService) {
+			return (AxisService) description;
+		} else {
+			return getAxisService(description.getParent());
+		}
+	}
 }

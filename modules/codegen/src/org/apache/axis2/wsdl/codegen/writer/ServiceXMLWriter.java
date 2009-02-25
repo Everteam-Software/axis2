@@ -42,9 +42,10 @@ public class ServiceXMLWriter extends FileWriter {
                                                      ".xml");
         //set the existing flag
         fileExists = outputFile.exists();
-        if (!fileExists) {
+        if (!fileExists || this.isOverride) {
             this.stream = new FileOutputStream(outputFile);
         }
+        
     }
 }
 

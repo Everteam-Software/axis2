@@ -16,12 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.nhttp;
-
-import java.io.IOException;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLException;
 
 import org.apache.http.impl.DefaultHttpRequestFactory;
 import org.apache.http.impl.nio.DefaultNHttpServerConnection;
@@ -33,6 +29,10 @@ import org.apache.http.nio.reactor.IOEventDispatch;
 import org.apache.http.nio.reactor.IOSession;
 import org.apache.http.nio.util.HeapByteBufferAllocator;
 import org.apache.http.params.HttpParams;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import java.io.IOException;
 
 public class SSLServerIOEventDispatch implements IOEventDispatch {
 

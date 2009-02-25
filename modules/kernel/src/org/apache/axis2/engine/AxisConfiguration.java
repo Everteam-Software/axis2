@@ -28,9 +28,17 @@ import org.apache.axis2.deployment.DeploymentException;
 import org.apache.axis2.deployment.ModuleDeployer;
 import org.apache.axis2.deployment.repository.util.DeploymentFileData;
 import org.apache.axis2.deployment.util.PhasesInfo;
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisDescription;
+import org.apache.axis2.description.AxisModule;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.description.ModuleConfiguration;
+import org.apache.axis2.description.TransportInDescription;
+import org.apache.axis2.description.TransportOutDescription;
 import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
 import org.apache.axis2.i18n.Messages;
+import org.apache.axis2.phaseresolver.PhaseMetadata;
 import org.apache.axis2.phaseresolver.PhaseResolver;
 import org.apache.axis2.transport.MessageFormatter;
 import org.apache.axis2.util.TargetResolver;
@@ -42,7 +50,12 @@ import javax.xml.namespace.QName;
 import java.io.File;
 import java.net.URL;
 import java.security.PrivilegedAction;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Class AxisConfiguration
@@ -81,8 +94,8 @@ public class AxisConfiguration extends AxisDescription {
 
     private URL axis2Repository = null;
 
-    private HashMap allServices = new HashMap();
-    private HashMap allEndpoints = new HashMap();
+    private Map allServices = new Hashtable();
+    private Map allEndpoints = new Hashtable();
 
     /**
      * Stores the module specified in the server.xml at the document parsing time.
@@ -278,6 +291,7 @@ public class AxisConfiguration extends AxisDescription {
         axisServiceGroup.setParent(this);
         axisServiceGroup.addService(service);
         addServiceGroup(axisServiceGroup);
+//        processEndpoints(service, service.getAxisConfiguration());
     }
 
     public synchronized void addServiceGroup(AxisServiceGroup axisServiceGroup)
@@ -289,7 +303,7 @@ public class AxisConfiguration extends AxisDescription {
         Iterator services = axisServiceGroup.getServices();
         while (services.hasNext()) {
             axisService = (AxisService) services.next();
-            if (axisService.getSchematargetNamespace() == null) {
+            if (axisService.getSchemaTargetNamespace() == null) {
                 axisService.setSchemaTargetNamespace(Java2WSDLConstants.AXIS2_XSD);
             }
         }
@@ -312,6 +326,7 @@ public class AxisConfiguration extends AxisDescription {
         ArrayList servicesIAdded = new ArrayList();
         while (services.hasNext()) {
             axisService = (AxisService) services.next();
+            processEndpoints(axisService, axisService.getAxisConfiguration());
 
             Map endpoints = axisService.getEndpoints();
             String serviceName = axisService.getName();
@@ -372,6 +387,15 @@ public class AxisConfiguration extends AxisDescription {
             if (!axisService.isClientSide()) {
                 notifyObservers(AxisEvent.SERVICE_REMOVE, axisService);
             }
+
+            //removes the endpoints to this service
+            String serviceName = axisService.getName();
+            String key = null;
+            for (Iterator iter = axisService.getEndpoints().keySet().iterator(); iter.hasNext();){
+                key = serviceName + "." + (String)iter.next();
+                this.allEndpoints.remove(key);
+            }
+
         }
         removeChild(serviceGroupName);
         notifyObservers(AxisEvent.SERVICE_REMOVE, axisServiceGroup);
@@ -674,7 +698,7 @@ public class AxisConfiguration extends AxisDescription {
      * @return The AxisModule having name=moduleName & version=moduleVersion
      */
     public AxisModule getModule(String moduleName, String moduleVersion) {
-        if (moduleVersion == null && moduleVersion.trim().length() == 0) {
+        if (moduleVersion == null || moduleVersion.trim().length() == 0) {
             moduleVersion = getDefaultModuleVersion(moduleName);
         }
         return (AxisModule) allModules.get(Utils.getModuleName(moduleName, moduleVersion));
@@ -761,11 +785,13 @@ public class AxisConfiguration extends AxisDescription {
      * @return AxisService
      */
     public AxisService getServiceForActivation(String serviceName) {
-        AxisService axisService = (AxisService) allServices.get(serviceName);
+        AxisService axisService = null;
+        axisService = (AxisService) allServices.get(serviceName);
         if (axisService != null) {
             return axisService;
         } else {
-            return null;
+            axisService = (AxisService) allEndpoints.get(serviceName);
+            return axisService;
         }
     }
 
@@ -787,7 +813,13 @@ public class AxisConfiguration extends AxisDescription {
 
     // To get all the services in the system
     public HashMap getServices() {
-        return allServices;
+        HashMap hashMap = new HashMap(this.allServices.size());
+        Object key;
+        for (Iterator iter = this.allServices.keySet().iterator(); iter.hasNext();){
+            key = iter.next();
+            hashMap.put(key, this.allServices.get(key));
+        }
+        return hashMap;
     }
 
     // The class loader which become the top most parent of all the modules and
@@ -810,6 +842,17 @@ public class AxisConfiguration extends AxisDescription {
 
     public HashMap getTransportsOut() {
         return transportsOut;
+    }
+
+    /**
+     * This method needs to remain for a few Axis2 releases to support
+     * legacy apps still using it.
+     *
+     * @param qname
+     * @deprecated Use {@link #isEngaged(String)}
+     */
+    public boolean isEngaged(QName qname) {
+        return isEngaged(qname.getLocalPart());
     }
 
     public boolean isEngaged(String moduleId) {
@@ -1095,4 +1138,116 @@ public class AxisConfiguration extends AxisDescription {
             configurator.cleanup();
         }
     }
+
+    /**
+     * This method can be used to insert a phase at the runtime for a given location
+     * And the relative location can be specified by beforePhase and afterPhase. Parameters
+     * Either or both of them can be null , if both the parameters are null then the phase
+     * will be added some where in the global phase. If one of them are null then the phase
+     * will be added
+     *  - If the beforePhase is null then the phase will be added after the afterPhase
+     *  - If the after phase is null then the phase will be added before the beforePhase
+     * Type of the flow will be specified by the parameter flow.
+     *   1 - Inflow
+     *   2 - out flow
+     *   3 - fault in flow
+     *   4 - fault out flow
+     *
+     * @param d the Deployable representing the Phase to deploy
+     * @param flow the type of the flow
+     * @throws org.apache.axis2.AxisFault : If something went wrong
+     */
+    public void insertPhase(Deployable d, int flow) throws AxisFault {
+
+        switch (flow) {
+            case PhaseMetadata.IN_FLOW : {
+                List phaseList = phasesinfo.getINPhases();
+                phaseList = findAndInsertPhase(d, phaseList);
+                if (phaseList != null) {
+                    phasesinfo.setINPhases((ArrayList)phaseList);
+                }
+                break;
+            }
+            case PhaseMetadata.OUT_FLOW : {
+                List phaseList = phasesinfo.getOUTPhases();
+                phaseList = findAndInsertPhase(d, phaseList);
+                if (phaseList != null) {
+                    phasesinfo.setOUTPhases((ArrayList)phaseList);
+                }
+                break;
+            }
+            case PhaseMetadata.FAULT_OUT_FLOW : {
+                List phaseList = phasesinfo.getOutFaultPhaseList();
+                phaseList = findAndInsertPhase(d, phaseList);
+                if (phaseList != null) {
+                    phasesinfo.setOUT_FaultPhases((ArrayList)phaseList);
+                }
+                break;
+            }
+            case PhaseMetadata.FAULT_IN_FLOW : {
+                List phaseList = phasesinfo.getIN_FaultPhases();
+                phaseList = findAndInsertPhase(d, phaseList);
+                if (phaseList != null) {
+                    phasesinfo.setIN_FaultPhases((ArrayList)phaseList);
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * Insert a Phase
+     * @param d
+     * @param phaseList
+     * @return
+     * @throws AxisFault
+     */
+    private List findAndInsertPhase(Deployable d, List phaseList) throws AxisFault {
+        DeployableChain ec = new DeployableChain();
+        String last = null;
+        for (Iterator i = phaseList.iterator(); i.hasNext();) {
+            Phase phase = (Phase)i.next();
+            String name = phase.getName();
+            Deployable existing = new Deployable(name);
+            existing.setTarget(phase);
+            if (last != null) {
+                // Set up explicit chain relationship for preexisting phases, for now.
+                ec.addRelationship(last, name);
+            }
+            last = name;
+            try {
+                ec.deploy(existing);
+            } catch (Exception e) {
+                // This should never happen when building a simple list like the above
+                throw AxisFault.makeFault(e);
+            }
+        }
+
+        try {
+            ec.deploy(d);
+
+            if (d.getTarget() == null) {
+                Phase phase = new Phase();
+                phase.setName(d.getName());
+                d.setTarget(phase);
+            }
+
+            ec.rebuild();
+        } catch (Exception e) {
+            throw AxisFault.makeFault(e);
+        }
+
+        phaseList = ec.getChain();
+
+        return phaseList;
+    }
+    
+    private void processEndpoints(AxisService axisService,
+    		AxisConfiguration axisConfiguration) throws AxisFault {
+        Map enspoints = axisService.getEndpoints();
+        if (enspoints == null || enspoints.size() == 0) {
+			org.apache.axis2.deployment.util.Utils.addEndpointsToService(
+					axisService, axisConfiguration);
+		}
+	}
 }

@@ -19,17 +19,20 @@
 
 package org.apache.axis2.util;
 
+import edu.emory.mathcs.backport.java.util.concurrent.ConcurrentHashMap;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.RelatesTo;
 import org.apache.axis2.client.async.AsyncResult;
-import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.client.async.AxisCallback;
+import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.engine.MessageReceiver;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
-import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This is a MessageReceiver which is used on the client side to accept the
@@ -37,23 +40,46 @@ import java.util.HashMap;
  * the related messages and makes a call to the appropriate callback.
  */
 public class CallbackReceiver implements MessageReceiver {
+
+	private static final Log log = LogFactory.getLog(CallbackReceiver.class);
+	
     public static String SERVICE_NAME = "ClientService";
-    private HashMap callbackStore;
+    private ConcurrentHashMap callbackStore;
 
     public CallbackReceiver() {
-        callbackStore = new HashMap();
+        callbackStore = new ConcurrentHashMap();
     }
 
-    public void addCallback(String MsgID, Callback callback) {
-        callbackStore.put(MsgID, callback);
+    public void addCallback(String msgID, Callback callback) throws AxisFault {
+    	putIfAbsent(msgID, callback);
     }
 
-    public void addCallback(String msgID, AxisCallback callback) {
-        callbackStore.put(msgID, callback);
+    public void addCallback(String msgID, AxisCallback callback) throws AxisFault {
+    	putIfAbsent(msgID, callback);
+    }
+    
+    /**
+     * Inserts the specified key, value into the callback map. It throws an
+     * exception if the message id was a duplicate.
+     * 
+     * @param msgID The message id.
+     * @param callback The callback object.
+     * @throws AxisFault If the message id was a duplicate.
+     */
+    private final void putIfAbsent(String msgID, Object callback) throws AxisFault {
+    	if (callbackStore.putIfAbsent(msgID, callback) == null) {
+    		if (log.isDebugEnabled()) {
+                log.debug("CallbackReceiver: add callback " + msgID + ", " + callback + " ," + this);
+            }
+    	} else {
+    		throw new AxisFault("The Callback for MessageID " + msgID + " is a duplicate");
+    	}
     }
 
     public Object lookupCallback(String msgID) {
-        return callbackStore.remove(msgID);
+		Object o = callbackStore.remove(msgID);
+		if (log.isDebugEnabled()) log.debug("CallbackReceiver: lookup callback " + msgID + ", " + o + " ," + this);
+        return o;
     }
 
     public void receive(MessageContext msgContext) throws AxisFault {
@@ -64,7 +90,7 @@ public class CallbackReceiver implements MessageReceiver {
         String messageID = relatesTO.getValue();
 
         Object callbackObj = callbackStore.remove(messageID);
-
+		if (log.isDebugEnabled()) log.debug("CallbackReceiver: receive found callback " + callbackObj + ", " + messageID + ", " + this + ", " + msgContext.getAxisOperation());
 
         if (callbackObj == null) {
             throw new AxisFault("The Callback for MessageID " + messageID + " was not found");
@@ -97,7 +123,7 @@ public class CallbackReceiver implements MessageReceiver {
                 opContext.addMessageContext(msgContext);
             }
 
-            if (envelope.getBody().hasFault()) {
+            if (envelope.hasFault()) {
                 AxisFault axisFault =
                         Utils.getInboundFaultFromMessageContext(msgContext);
                 callback.onError(axisFault);
@@ -112,7 +138,7 @@ public class CallbackReceiver implements MessageReceiver {
     }
 
     //to get the pending request
-    public HashMap getCallbackStore() {
+    public Map getCallbackStore() {
         return callbackStore;
     }
 }

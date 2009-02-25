@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tools.idea;
 
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import org.apache.axis2.tools.bean.CodegenBean;
-import org.apache.axis2.tools.component.WizardPanel;
 import org.apache.axis2.tools.component.WizardComponents;
+import org.apache.axis2.tools.component.WizardPanel;
 import org.apache.axis2.tools.wizardframe.CodegenFrame;
 
 import javax.swing.*;
@@ -32,11 +33,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 
-/**
- * Author : Deepal Jayasinghe
- * Date: Jul 22, 2005
- * Time: 12:52:31 PM
- */
 public class WSDL2JavaOutputPanel extends WizardPanel {
 
     private JTextField txtoutput;

@@ -16,13 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.maven2.wsdl2code;
 
 import org.apache.maven.plugin.testing.AbstractMojoTestCase;
 import org.apache.maven.plugin.testing.stubs.MavenProjectStub;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashSet;
 
 /** Test class for running the wsdl2code mojo. */
@@ -39,9 +39,8 @@ public class WSDL2CodeMojoTest extends AbstractMojoTestCase {
         MavenProjectStub project = new MavenProjectStub();
         project.setDependencyArtifacts(new HashSet());
         setVariableValueToObject(mojo, "project", project);
-        setVariableValueToObject(mojo, "pluginArtifacts", new ArrayList());
         setVariableValueToObject(mojo, "wsdlFile",
-                                 new File(baseDir, "src/main/axis2/service.wsdl"));
+                                 new File(baseDir, "src/main/axis2/service.wsdl").getAbsolutePath());
         setVariableValueToObject(mojo, "outputDirectory",
                                  new File(baseDir, "target/generated-sources/axis2/wsdl2code"));
         setVariableValueToObject(mojo, "syncMode", "both");

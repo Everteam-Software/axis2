@@ -30,6 +30,7 @@ import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.context.ServiceContext;
 import org.apache.axis2.context.ServiceGroupContext;
+import org.apache.axis2.context.externalize.ActivateUtils;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
@@ -47,7 +48,6 @@ import org.apache.axis2.receivers.RawXMLINOnlyMessageReceiver;
 import org.apache.axis2.receivers.RawXMLINOutMessageReceiver;
 import org.apache.axis2.transport.http.CommonsHTTPTransportSender;
 import org.apache.axis2.transport.http.SimpleHTTPServer;
-import org.apache.axis2.util.ObjectStateUtils;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -590,7 +590,7 @@ public class MessageContextSaveBTest extends TestCase {
         showProperties(properties4, "service properties from other active MsgCtx");
 
         // the service level properties should be the same
-        boolean isOk = ObjectStateUtils.isEquivalent(properties3, properties4, true);
+        boolean isOk = ActivateUtils.isEquivalent(properties3, properties4, true);
         assertTrue(isOk);
 
     }

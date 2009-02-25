@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -607,9 +608,9 @@ server, and provides the following information:</p>
 </ol>
 <a name="servicearchive" id="servicearchive"></a>
 <h3>Service Archive</h3>
-<p>The Service archive must have a <em>META-INF/<a href=
-"resources/schemas/services.xsd">services.xml</a></em> file and may
-contain the dependent classes. The <em>services.xml</em> file has
+<p>The Service archive must have a <em>META-INF/services.xml</em> file and may
+contain the dependent classes. Please see modules/kernel/resources/services.xsd in 
+the source distribution for the schema for services.xml. The <em>services.xml</em> file has
 the following information.</p>
 <ol>
 <li>Service level parameters</li>
@@ -762,7 +763,7 @@ and is likely to complain for certain schemas!</li>
 <li><strong>XMLBeans</strong> - XMLbeans claims that it supports
 the complete schema specification, and it is preferred if full
 schema support is needed!</li>
-<li><strong>JAX-Me</strong> - JaxMe support has been added in a
+<li><strong>JAXB-RI</strong> - JAXB2 support has been added in a
 similar manner to XMLbeans and serves as another option for the
 user</li>
 <li><strong>JibX</strong> - This is the most recent addition to the

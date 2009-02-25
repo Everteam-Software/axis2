@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ideaplugin.frames.table;
 
 import org.apache.ideaplugin.bean.OperationObj;
@@ -24,11 +25,6 @@ import javax.swing.table.AbstractTableModel;
 import java.util.HashMap;
 import java.util.Iterator;
 
-/**
- * Author: Deepal Jayasinghe
- * Date: Sep 22, 2005
- * Time: 11:57:24 AM
- */
 public class ArchiveTableModel extends AbstractTableModel {
 
     final String[] columnNames = {"Operation Name", "Return Value", "Parameters ", "Select"};

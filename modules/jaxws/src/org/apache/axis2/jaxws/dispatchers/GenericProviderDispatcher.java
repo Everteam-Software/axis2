@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.dispatchers;
 
 import org.apache.axis2.AxisFault;
@@ -23,7 +24,6 @@ import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.engine.AbstractDispatcher;
-import org.apache.axis2.engine.SOAPActionBasedDispatcher;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

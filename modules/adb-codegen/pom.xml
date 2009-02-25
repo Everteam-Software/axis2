@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   ~ Licensed to the Apache Software Foundation (ASF) under one
   ~ or more contributor license agreements. See the NOTICE file
@@ -17,17 +18,18 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.3</version>
+        <version>1.4.1</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-adb-codegen</artifactId>
-    <name>Apache Axis 2.0 - ADB Codegen</name>
+    <name>Apache Axis2 - ADB Codegen</name>
     <description>ADB code generation support for Axis2</description>
     <dependencies>
         <dependency>
@@ -54,6 +56,14 @@
         <sourceDirectory>src</sourceDirectory>
         <testSourceDirectory>test</testSourceDirectory>
         <resources>
+            <resource>
+                <directory>../..</directory>
+                <includes>
+                    <include>NOTICE.txt</include>
+                    <include>LICENSE.txt</include>
+                </includes>
+                <filtering>false</filtering>
+            </resource>
             <resource>
                 <directory>conf</directory>
                 <excludes>
@@ -115,18 +125,20 @@
                         <phase>generate-test-sources</phase>
                         <configuration>
                             <tasks>
-								<property name="maven.junit.jvmargs" value=""/>
+                                <property name="maven.junit.jvmargs" value=""/>
                                 <path id="maven.dependency.classpath">
                                     <path refid="maven.compile.classpath"/>
                                 </path>
                                 <property name="compiled.classes.dir" value="target/classes"/>
-								<!-- Theres got to be a better way to do this -->
-								<property name="schema.source.dir" value="test-resources/xsd"/>
-								<property name="testsuite.source.dir" value="test-resources/testsuite"/>
-								<property name="schema.output.base.dir" value="target/schema"/>
-								<property name="schema.generated.src.dir" value="${schema.output.base.dir}/src"/>
-								<property name="schema.generated.classes.dir" value="${schema.output.base.dir}/classes"/>
-                                <ant antfile="sub-build.xml" inheritall="true" inheritrefs="true" dir="." target="main"/>
+                                <!-- Theres got to be a better way to do this -->
+                                <property name="schema.source.dir" value="test-resources/xsd"/>
+                                <property name="testsuite.source.dir" value="test-resources/testsuite"/>
+                                <property name="schema.output.base.dir" value="target/schema"/>
+                                <property name="schema.generated.src.dir" value="${schema.output.base.dir}/src"/>
+                                <property name="schema.generated.classes.dir"
+                                          value="${schema.output.base.dir}/classes"/>
+                                <ant antfile="sub-build.xml" inheritall="true" inheritrefs="true" dir="."
+                                     target="main"/>
                             </tasks>
                         </configuration>
                         <goals>

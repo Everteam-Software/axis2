@@ -16,14 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description.java2wsdl;
 
-import org.codehaus.jam.JMethod;
 import org.apache.axis2.description.AxisService;
+import org.codehaus.jam.JMethod;
 
-import java.util.Collection;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 
 public interface SchemaGenerator {
@@ -54,4 +54,13 @@ public interface SchemaGenerator {
     void setNonRpcMethods(ArrayList nonRpcMethods);
 
     void setAxisService(AxisService service);
+
+    String getCustomSchemaLocation();
+
+
+    void setCustomSchemaLocation(String customSchemaLocation);
+
+    String getMappingFileLocation() ;
+
+    void setMappingFileLocation(String mappingFileLocation) ;
 }

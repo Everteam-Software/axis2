@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   ~ Licensed to the Apache Software Foundation (ASF) under one
   ~ or more contributor license agreements. See the NOTICE file
@@ -17,6 +18,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -38,7 +40,7 @@ tricky and confusing at first glance. However, Axis2 RPC strategy
 is based on a set of well defined rules. This document aims to
 drill down to the details of the strategy and resolve most of the
 unknown bits and pieces. Note that Axis2 currently does not support
-the rpc/encoded style fully. Its main support is for the rpc/lit
+the rpc/encoded style. But it fully supports the rpc/literal 
 style.</p>
 <p>We will discuss the Axis2 RPC strategy in the following
 steps</p>

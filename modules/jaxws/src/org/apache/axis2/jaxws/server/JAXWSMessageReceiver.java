@@ -20,23 +20,29 @@
 package org.apache.axis2.jaxws.server;
 
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.engine.AxisEngine;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.jaxws.ExceptionFactory;
-import org.apache.axis2.jaxws.core.InvocationContext;
 import org.apache.axis2.jaxws.core.InvocationContextFactory;
-import org.apache.axis2.jaxws.core.InvocationContextImpl;
 import org.apache.axis2.jaxws.core.MessageContext;
+import org.apache.axis2.jaxws.description.DescriptionFactory;
+import org.apache.axis2.jaxws.description.EndpointDescription;
+import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.handler.AttachmentsAdapter;
 import org.apache.axis2.jaxws.handler.MEPContext;
+import org.apache.axis2.jaxws.handler.SOAPHeadersAdapter;
 import org.apache.axis2.jaxws.handler.TransportHeadersAdapter;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.message.util.MessageUtils;
+import org.apache.axis2.jaxws.registry.InvocationListenerRegistry;
 import org.apache.axis2.jaxws.util.Constants;
+import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.ThreadContextMigratorUtil;
 import org.apache.axis2.wsdl.WSDLConstants.WSDL20_2004_Constants;
 import org.apache.axis2.wsdl.WSDLConstants.WSDL20_2006Constants;
@@ -60,6 +66,8 @@ public class JAXWSMessageReceiver implements MessageReceiver {
     /**
      * We should have already determined which AxisService we're targetting at this point.  So now,
      * just get the service implementation and invoke the appropriate method.
+     * @param axisRequestMsgCtx
+     * @throws org.apache.axis2.AxisFault
      */
     public void receive(org.apache.axis2.context.MessageContext axisRequestMsgCtx)
             throws AxisFault {
@@ -72,20 +80,27 @@ public class JAXWSMessageReceiver implements MessageReceiver {
         //Get the name of the service impl that was stored as a parameter
         // inside of the services.xml.
         AxisService service = axisRequestMsgCtx.getAxisService();
+        
+        org.apache.axis2.description.Parameter svcClassParam =
+                service.getParameter(PARAM_SERVICE_CLASS);
+
+        if (svcClassParam == null) {
+            throw new RuntimeException(
+                    Messages.getMessage("JAXWSMessageReceiverNoServiceClass"));
+        }
+
+        Parameter endpointDescParam =
+                service.getParameter(EndpointDescription.AXIS_SERVICE_PARAMETER);
+        if (endpointDescParam == null) {
+            throw new RuntimeException(Messages.getMessage("JAXWSMessageReceiverNoServiceClass"));
+        }
         AxisOperation operation = axisRequestMsgCtx.getAxisOperation();
         String mep = operation.getMessageExchangePattern();
         if (log.isDebugEnabled()) {
             log.debug("MEP: " + mep);
         }
 
-        org.apache.axis2.description.Parameter svcClassParam =
-                service.getParameter(PARAM_SERVICE_CLASS);
-
         try {
-            if (svcClassParam == null) {
-                throw new RuntimeException(
-                        Messages.getMessage("JAXWSMessageReceiverNoServiceClass"));
-            }
 
             //This assumes that we are on the ultimate execution thread
             ThreadContextMigratorUtil.performMigrationToThread(
@@ -97,31 +112,63 @@ public class JAXWSMessageReceiver implements MessageReceiver {
             EndpointController endpointCtlr = new EndpointController();
 
             MessageContext requestMsgCtx = new MessageContext(axisRequestMsgCtx);
+            requestMsgCtx.setServer(true);
             requestMsgCtx.setMEPContext(new MEPContext(requestMsgCtx));
+            ClassLoader loader = getCachedClassLoader(axisRequestMsgCtx);
+            if (loader != null) {
+                requestMsgCtx.setProperty(org.apache.axis2.jaxws.spi.Constants.CACHE_CLASSLOADER,
+                        loader);
+            }
             // The adapters need to be installed on the new request Message Context
             AttachmentsAdapter.install(requestMsgCtx);
             TransportHeadersAdapter.install(requestMsgCtx);
+            SOAPHeadersAdapter.install(requestMsgCtx);
             
             Binding binding = (Binding)axisRequestMsgCtx.getProperty(PARAM_BINDING);
-            InvocationContext ic = InvocationContextFactory.createInvocationContext(binding);
-            ic.setRequestMessageContext(requestMsgCtx);
+            EndpointInvocationContext eic = InvocationContextFactory.createEndpointInvocationContext(binding);
+            addInvocationListenerFactories(eic);
+            eic.setRequestMessageContext(requestMsgCtx);
 
-            //TODO:Once we the JAX-WS MessageContext one of the next things that
-            //needs to be done here is setting up all of the javax.xml.ws.* 
-            //properties for the MessageContext.
+            // WARNING: This should be left disabled for now.  This locks the server side
+            // into a single threaded invocation.
+            eic.getRequestMessageContext().setProperty(ServerConstants.SERVER_DISABLE_THREAD_SWITCH, true);
 
-            ic = endpointCtlr.invoke(ic);
-            MessageContext responseMsgCtx = ic.getResponseMessageContext();
+            if (isMepInOnly(mep)) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Detected a one way invocation.");
+                }
+                eic.setIsOneWay(true);
+                endpointCtlr.invokeOneWay(eic);
+            } else if (JavaUtils.isTrueExplicitly(axisRequestMsgCtx.getProperty(
+                AddressingConstants.IS_ADDR_INFO_ALREADY_PROCESSED))
+                && (axisRequestMsgCtx.getReplyTo() != null
+                && !axisRequestMsgCtx.getReplyTo().hasAnonymousAddress())) {
+                
+                if (log.isDebugEnabled()) {
+                    log.debug("Detected an async invocation.");
+                }
+                
+                EndpointCallback ecb = new EndpointCallback();
+                eic.setCallback(ecb);
+                
+                endpointCtlr.invokeAsync(eic);
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Detected a sync invocation.");
+                }
+                eic = endpointCtlr.invoke(eic);
 
-            //If there is a fault it could be Robust In-Only
-            if (!isMepInOnly(mep) || hasFault(responseMsgCtx)) {
-                // If this is a two-way exchange, there should already be a
+                // If this is a two-way exchange, there should already be a 
                 // JAX-WS MessageContext for the response.  We need to pull 
                 // the Message data out of there and set it on the Axis2 
                 // MessageContext.
+                MessageContext responseMsgCtx = eic.getResponseMessageContext();
                 org.apache.axis2.context.MessageContext axisResponseMsgCtx =
                         responseMsgCtx.getAxisMessageContext();
-
+                if (loader != null) {
+                    responseMsgCtx.setProperty(org.apache.axis2.jaxws.spi.Constants.CACHE_CLASSLOADER,
+                            loader);
+                }
                 MessageUtils.putMessageOnMessageContext(responseMsgCtx.getMessage(),
                                                         axisResponseMsgCtx);
 
@@ -155,10 +202,17 @@ public class JAXWSMessageReceiver implements MessageReceiver {
                 }
             }
 
+        } catch (AxisFault af) {
+            throw af;
         } catch (Exception e) {
             ThreadContextMigratorUtil.performThreadCleanup(
                     Constants.THREAD_CONTEXT_MIGRATOR_LIST_ID, axisRequestMsgCtx);
 
+            //e.printStackTrace();
+
+            // TODO.  This is throwing a client exception ?
+            // TODO Why are we preserving the stack information  ?  
+            
             // Make a webservice exception (which will strip out a unnecessary stuff)
             WebServiceException wse = ExceptionFactory.makeWebServiceException(e);
 
@@ -176,12 +230,6 @@ public class JAXWSMessageReceiver implements MessageReceiver {
         }
     }
 
-    private boolean hasFault(MessageContext responseMsgCtx) {
-        if (responseMsgCtx == null || responseMsgCtx.getMessage() == null) {
-            return false;
-        }
-        return responseMsgCtx.getMessage().isFault();
-    }
 
     private boolean isMepInOnly(String mep) {
         boolean inOnly = mep.equals(WSDL20_2004_Constants.MEP_URI_ROBUST_IN_ONLY) ||
@@ -192,5 +240,17 @@ public class JAXWSMessageReceiver implements MessageReceiver {
                 mep.equals(WSDL20_2006Constants.MEP_URI_IN_ONLY);
         return inOnly;
     }
+    
+    /**
+     * Retrieves the registered InvocationListenerFactory instances and sets them
+     * on the current EndpointInvocationContext.
+     * @param eic
+     */
+    void addInvocationListenerFactories(EndpointInvocationContext eic) {
+        eic.setInvocationListenerFactories(InvocationListenerRegistry.getFactories());
+    }
 
+    public ClassLoader getCachedClassLoader(org.apache.axis2.context.MessageContext msgContext) {
+        return (ClassLoader) msgContext.getAxisService().getParameterValue(org.apache.axis2.jaxws.spi.Constants.CACHE_CLASSLOADER);
+    }
 }

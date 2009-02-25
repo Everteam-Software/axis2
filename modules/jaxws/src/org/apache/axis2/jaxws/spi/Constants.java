@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.spi;
 
 /** JAXWS SPI Constants */
@@ -49,7 +50,23 @@ public class Constants {
     // Usage: A list of ApplicationContextMigrator objects that are to be called for an invocation.
     public static final String APPLICATION_CONTEXT_MIGRATOR_LIST_ID =
             "org.apache.axis2.jaxws.spi.ApplicationContextMigrators";
-
+    
+    // Value = ClassLoader
+    // Usage: Stores ClassLoader instance on response message context that ensures the 
+    // JAXBUtils class will use the same ClassLoader to retrieve a JAXBContext as the
+    // one that was used to create the request
+    public static final String CACHE_CLASSLOADER = "CACHE_CLASSLOADER";
+    
+    // Value = List
+    // Usage: Store list of InvocationListener instances for a given request/response
+    public static final String INVOCATION_LISTENER_LIST = 
+        "org.apache.axis2.jaxws.spi.INVOCATION_LISTENER_LIST";
+    
+    // Value = Throwable
+    // Usage: Store Throwable type that should be used when constructing message to be
+    // sent back to the client
+    public static final String MAPPED_EXCEPTION = "org.apache.axis2.jaxws.spi.MAPPED_EXCEPTION";
+    
     /** Intentionally Private */
     private Constants() {
     }

@@ -27,13 +27,20 @@ import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.deployment.repository.util.ArchiveReader;
 import org.apache.axis2.deployment.repository.util.DeploymentFileData;
 import org.apache.axis2.deployment.repository.util.WSInfo;
+import org.apache.axis2.deployment.resolver.AARBasedWSDLLocator;
+import org.apache.axis2.deployment.resolver.AARFileBasedURIResolver;
 import org.apache.axis2.deployment.scheduler.DeploymentIterator;
 import org.apache.axis2.deployment.scheduler.Scheduler;
 import org.apache.axis2.deployment.scheduler.SchedulerTask;
 import org.apache.axis2.deployment.util.Utils;
-import org.apache.axis2.deployment.resolver.AARBasedWSDLLocator;
-import org.apache.axis2.deployment.resolver.AARFileBasedURIResolver;
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisModule;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.description.Flow;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.WSDL11ToAxisServiceBuilder;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.i18n.Messages;
@@ -43,7 +50,13 @@ import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -188,7 +201,8 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                             fileUrl.substring(0, fileUrl.indexOf(".aar")));
                     addServiceGroup(serviceGroup, servicelist, servicesURL, null, axisConfig);
                     log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_WS,
-                                                 org.apache.axis2.util.Utils.getModuleName(serviceGroup.getServiceGroupName())));
+                                                 org.apache.axis2.util.Utils.getModuleName(serviceGroup.getServiceGroupName()),
+                                                 servicesURL.toString()));
                 }
             }
         } catch (MalformedURLException e) {
@@ -236,7 +250,8 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                     addNewModule(module, axisConfig);
                     log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_MODULE,
                                                  org.apache.axis2.util.Utils.getModuleName(module.getName(),
-                                                                                           module.getVersion())));
+                                                                                           module.getVersion()),
+                                                 moduleurl.toString()));
                 }
             }
             org.apache.axis2.util.Utils.
@@ -336,10 +351,12 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                 String wsdlLocation =  "META-INF/service.wsdl";
                 InputStream wsdlStream =
                         serviceClassLoader.getResourceAsStream(wsdlLocation);
+                URL wsdlURL = serviceClassLoader.getResource(metainf + "/service.wsdl");
                 if (wsdlStream == null) {
                     wsdlLocation =  "META-INF/" + serviceName + ".wsdl";
                     wsdlStream = serviceClassLoader
                             .getResourceAsStream(wsdlLocation);
+                    wsdlURL = serviceClassLoader.getResource(wsdlLocation);
                 }
                 if (wsdlStream != null) {
                     WSDL11ToAxisServiceBuilder wsdl2AxisServiceBuilder =
@@ -350,6 +367,9 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                     new AARBasedWSDLLocator(wsdlLocation, file, wsdlStream));
                         wsdl2AxisServiceBuilder.setCustomResolver(
                                 new AARFileBasedURIResolver(file));
+                    }
+                    if (wsdlURL != null) {
+                        wsdl2AxisServiceBuilder.setDocumentBaseUri(wsdlURL.toString());
                     }
                     axisService = wsdl2AxisServiceBuilder.populateService();
                     axisService.setWsdlFound(true);
@@ -379,10 +399,13 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                     String wsdlLocation =  "META-INF/service.wsdl";
                     InputStream wsdlStream =
                             serviceClassLoader.getResourceAsStream(wsdlLocation);
+                    URL wsdlURL = serviceClassLoader.getResource(wsdlLocation);
                     if (wsdlStream == null) {
                         wsdlLocation =  "META-INF/" + serviceName + ".wsdl";
                         wsdlStream = serviceClassLoader
                                 .getResourceAsStream(wsdlLocation);
+                        wsdlURL =
+                                serviceClassLoader.getResource(wsdlLocation);
                     }
                     if (wsdlStream != null) {
                         WSDL11ToAxisServiceBuilder wsdl2AxisServiceBuilder =
@@ -393,6 +416,9 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                         new AARBasedWSDLLocator(wsdlLocation, file, wsdlStream));
                             wsdl2AxisServiceBuilder.setCustomResolver(
                                     new AARFileBasedURIResolver(file));
+                        }
+                        if (wsdlURL != null) {
+                            wsdl2AxisServiceBuilder.setDocumentBaseUri(wsdlURL.toString());
                         }
                         axisService = wsdl2AxisServiceBuilder.populateService();
                         axisService.setWsdlFound(true);
@@ -743,7 +769,7 @@ public abstract class DeploymentEngine implements DeploymentConstants {
         }
     }
 
-    public String getWebLocationString() {
+    public static String getWebLocationString() {
         return webLocationString;
     }
 
@@ -1035,9 +1061,7 @@ public abstract class DeploymentEngine implements DeploymentConstants {
             throws AxisFault {
         try {
             DeploymentFileData currentDeploymentFile = new DeploymentFileData(serviceFile, null);
-            DeploymentClassLoader classLoader = new DeploymentClassLoader(new URL[]{serviceFile.toURL()},
-                                                                          new ArrayList(),
-                                                                          Thread.currentThread().getContextClassLoader());
+            DeploymentClassLoader classLoader = Utils.createClassLoader(serviceFile);
             currentDeploymentFile.setClassLoader(classLoader);
             AxisServiceGroup serviceGroup = new AxisServiceGroup();
             serviceGroup.setServiceGroupClassLoader(classLoader);
@@ -1061,7 +1085,6 @@ public abstract class DeploymentEngine implements DeploymentConstants {
             throw new DeploymentException(e);
         }
     }
-
 
     public File getServicesDir() {
         return servicesDir;

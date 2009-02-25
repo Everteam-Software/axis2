@@ -32,6 +32,7 @@ import org.apache.axis2.transport.MessageFormatter;
 import org.apache.axis2.transport.OutTransportInfo;
 import org.apache.axis2.transport.TransportSender;
 import org.apache.axis2.transport.TransportUtils;
+import org.apache.axis2.transport.http.server.AxisHttpResponseImpl;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpException;
@@ -40,12 +41,14 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.xml.stream.FactoryConfigurationError;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 
 public class CommonsHTTPTransportSender extends AbstractHandler implements
@@ -172,7 +175,7 @@ public class CommonsHTTPTransportSender extends AbstractHandler implements
                     if (parameterValue != null && JavaUtils.isTrueExplicitly(parameterValue)) {
                         //Check whether user has already overridden this.
                         Object propertyValue = msgContext.getProperty(Constants.Configuration.DISABLE_SOAP_ACTION);
-                        if (propertyValue == null | !JavaUtils.isFalseExplicitly(propertyValue)) {
+                        if (propertyValue == null || !JavaUtils.isFalseExplicitly(propertyValue)) {
                             msgContext.setProperty(Constants.Configuration.DISABLE_SOAP_ACTION,
                                     Boolean.TRUE);
                         }
@@ -204,7 +207,7 @@ public class CommonsHTTPTransportSender extends AbstractHandler implements
             if (epr != null) {
                 if (!epr.hasNoneAddress()) {
                     writeMessageWithCommons(msgContext, epr, format);
-                    TransportUtils.setResponseWritten(msgContext, true);
+                    //TransportUtils.setResponseWritten(msgContext, true);
                 }
             } else {
                 if (msgContext.getProperty(MessageContext.TRANSPORT_OUT) != null) {
@@ -251,14 +254,54 @@ public class CommonsHTTPTransportSender extends AbstractHandler implements
         if (transportInfo instanceof ServletBasedOutTransportInfo) {
             servletBasedOutTransportInfo =
                     (ServletBasedOutTransportInfo) transportInfo;
-            List customHeaders = (List) msgContext.getProperty(HTTPConstants.HTTP_HEADERS);
+
+            // if sending a fault, set HTTP status code to 500
+            if (msgContext.isFault()) {
+                servletBasedOutTransportInfo.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            }
+
+            Object customHeaders = msgContext.getProperty(HTTPConstants.HTTP_HEADERS);
             if (customHeaders != null) {
-                Iterator iter = customHeaders.iterator();
-                while (iter.hasNext()) {
-                    Header header = (Header) iter.next();
-                    if (header != null) {
-                        servletBasedOutTransportInfo
-                                .addHeader(header.getName(), header.getValue());
+                if (customHeaders instanceof List) {
+                    Iterator iter = ((List) customHeaders).iterator();
+                    while (iter.hasNext()) {
+                        Header header = (Header) iter.next();
+                        if (header != null) {
+                            servletBasedOutTransportInfo
+                                    .addHeader(header.getName(), header.getValue());
+                        }
+                    }
+                } else if (customHeaders instanceof Map) {
+                    Iterator iter = ((Map) customHeaders).entrySet().iterator();
+                    while (iter.hasNext()) {
+                        Map.Entry header = (Map.Entry) iter.next();
+                        if (header != null) {
+                            servletBasedOutTransportInfo
+                                    .addHeader((String) header.getKey(), (String) header.getValue());
+                        }
+                    }
+                }
+            }
+        } else if (transportInfo instanceof AxisHttpResponseImpl) {
+            Object customHeaders = msgContext.getProperty(HTTPConstants.HTTP_HEADERS);
+            if (customHeaders != null) {
+                if (customHeaders instanceof List) {
+                    Iterator iter = ((List) customHeaders).iterator();
+                    while (iter.hasNext()) {
+                        Header header = (Header) iter.next();
+                        if (header != null) {
+                            ((AxisHttpResponseImpl) transportInfo)
+                                    .addHeader(header.getName(), header.getValue());
+                        }
+                    }
+                } else if (customHeaders instanceof Map) {
+                    Iterator iter = ((Map) customHeaders).entrySet().iterator();
+                    while (iter.hasNext()) {
+                        Map.Entry header = (Map.Entry) iter.next();
+                        if (header != null) {
+                            ((AxisHttpResponseImpl) transportInfo)
+                                    .addHeader((String) header.getKey(), (String) header.getValue());
+                        }
                     }
                 }
             }
@@ -295,6 +338,7 @@ public class CommonsHTTPTransportSender extends AbstractHandler implements
             }
         } catch (AxisFault axisFault) {
             log.error(axisFault.getMessage(), axisFault);
+            throw axisFault;
         }
     }
 

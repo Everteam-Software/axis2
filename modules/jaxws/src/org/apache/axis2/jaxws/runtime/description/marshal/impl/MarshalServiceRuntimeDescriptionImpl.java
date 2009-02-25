@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.runtime.description.marshal.impl;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -111,7 +112,7 @@ public class MarshalServiceRuntimeDescriptionImpl implements
         try {
             pdMap = XMLRootElementUtil.createPropertyDescriptorMap(cls);
         } catch (Throwable t) {
-            ExceptionFactory.makeWebServiceException(t);
+            throw ExceptionFactory.makeWebServiceException(t);
         }
         return pdMap;
     }

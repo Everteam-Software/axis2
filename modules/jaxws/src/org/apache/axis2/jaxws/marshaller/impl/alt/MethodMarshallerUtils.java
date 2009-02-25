@@ -16,10 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.description.AttachmentDescription;
 import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescription;
@@ -49,8 +55,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.activation.DataHandler;
-import javax.jws.WebService;
 import javax.jws.WebParam.Mode;
+import javax.jws.WebService;
 import javax.xml.bind.JAXBElement;
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPBody;
@@ -62,7 +68,6 @@ import javax.xml.ws.Holder;
 import javax.xml.ws.ProtocolException;
 import javax.xml.ws.WebServiceException;
 import javax.xml.ws.soap.SOAPFaultException;
-
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -219,16 +224,14 @@ public class MethodMarshallerUtils {
             // Create an Attachment object with the signature value
             Attachment attachment = new Attachment(value, 
                                                    formalType, 
-                                                   attachmentDesc);  
+                                                   attachmentDesc,
+                                                   pd.getPartName());
             pde = new PDElement(pd, 
                     null, // For SWA Attachments, there is no element reference to the attachment
                     null, 
                     attachment);
         } else {
-            // TODO NLS and clean this up
-            throw ExceptionFactory.
-            makeWebServiceException("SWAREF and MTOM attachment parameters are not " +
-                        "supported in this style/use.");
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("pdElementErr"));
         }
         return pde;
     }
@@ -337,17 +340,29 @@ public class MethodMarshallerUtils {
                 } else {
                     // Attachment Processing
                     if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
-                        String cid = message.getAttachmentID(swaIndex);
+                        String partName = pd.getPartName();
+                        String cid = null;
+                        if (log.isDebugEnabled()) {
+                            log.debug("Getting the attachment dataHandler for partName=" + partName);
+                        }
+                        if (partName != null && partName.length() > 0) {
+                            // Compliant WS-I behavior
+                            cid = message.getAttachmentID(partName);
+                        }
+                        if (cid == null) {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Attachment dataHandler was not found.  Fallback to use attachment " + swaIndex);
+                            }
+                            // Toleration mode for non-compliant attachment names
+                            cid = message.getAttachmentID(swaIndex);
+                        }
                         DataHandler dh = message.getDataHandler(cid);
                         Attachment attachment = new Attachment(dh, cid);
                         PDElement pde = new PDElement(pd, null, null, attachment);
                         pdeList.add(pde);
                         swaIndex++;
                     } else {
-                        // TODO NLS and clean this up
-                        throw ExceptionFactory.makeWebServiceException("SWAREF and MTOM " +
-                                        "attachment parameters are not supported " +
-                                        "in this style/use.");
+                        throw ExceptionFactory.makeWebServiceException(Messages.getMessage("pdElementErr"));
                     }
                 }
             }
@@ -555,10 +570,7 @@ public class MethodMarshallerUtils {
                                            attachment.getContentID());
                     message.setDoingSWA(true);
                 } else {
-                    // TODO NLS and cleanup
-                    throw ExceptionFactory.
-                       makeWebServiceException("SWAREF and MTOM attachment parameters " +
-                                "are not supported in this style/use.");
+                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage("pdElementErr"));
                 }
             }
         }
@@ -639,18 +651,31 @@ public class MethodMarshallerUtils {
             context.setIsxmlList(isList);
         }
         Block block = null;
+        boolean isBody = false;
         if (isHeader) {
             block = message.getHeaderBlock(headerNS, headerLocalPart, context, factory);
         } else {
             if (hasOutputBodyParams) {
                 block = message.getBodyBlock(0, context, factory);
+                isBody = true;
             } else {
                 // If there is only 1 block, we can use the get body block method
                 // that streams the whole block content.
                 block = message.getBodyBlock(context, factory);
+                //We look for body block only when the return type associated with operation is not void.
+                //If a null body block is returned in response on a operation that is not void, its a user error.               
+                isBody = true;
             }
         }
-
+        //We look for body block only when the return type associated with operation is not void.
+        //If a null body block is returned in response on a operation that has non void return type, its a user error.
+        if(isBody && block == null){
+           	if(log.isDebugEnabled()){
+           		log.debug("Empty Body Block Found in response Message for wsdl Operation defintion that expects an Output");
+           		log.debug("Return type associated with SEI operation is not void, Body Block cannot be null");
+           	}
+           	throw ExceptionFactory.makeWebServiceException(Messages.getMessage("MethodMarshallerUtilErr1"));	
+        }
         // Get the business object.  We want to return the object that represents the type.
         Element returnElement = new Element(block.getBusinessObject(true), block.getQName());
         return returnElement;
@@ -753,7 +778,7 @@ public class MethodMarshallerUtils {
                 Block[] detailBlocks = new Block[1];
                 detailBlocks[0] = factory.createFrom(faultBeanObject, context, faultBeanQName);
 
-                if (log.isErrorEnabled()) {
+                if (log.isDebugEnabled()) {
                     log.debug("Create the xmlFault for the Service Exception");
                 }
                 // Get the fault text using algorithm defined in JAX-WS 10.2.2.3
@@ -894,6 +919,7 @@ public class MethodMarshallerUtils {
             NoSuchMethodException {
 
         Throwable exception = null;
+        
         // Get the fault from the message and get the detail blocks (probably one)
         XMLFault xmlfault = message.getXMLFault();
         Block[] detailBlocks = xmlfault.getDetailBlocks();
@@ -911,15 +937,19 @@ public class MethodMarshallerUtils {
                  i++) {
                 FaultDescription fd = operationDesc.getFaultDescriptions()[i];
                 FaultBeanDesc faultBeanDesc = marshalDesc.getFaultBeanDesc(fd);
-                QName tryQName = new QName(faultBeanDesc.getFaultBeanNamespace(),
-                                           faultBeanDesc.getFaultBeanLocalName());
-                if (log.isErrorEnabled()) {
-                    log.debug("  FaultDescription qname is (" + tryQName +
-                            ") and detail element qname is (" + elementQName + ")");
-                }
-                if (elementQName.equals(tryQName)) {
-                    faultDesc = fd;
-                }
+
+				if (faultBeanDesc != null) {
+					QName tryQName = new QName(faultBeanDesc.getFaultBeanNamespace(),
+							faultBeanDesc.getFaultBeanLocalName());
+					if (log.isErrorEnabled()) {
+						log.debug("  FaultDescription qname is (" + tryQName +
+								") and detail element qname is (" + elementQName + ")");
+					}
+
+					if (elementQName.equals(tryQName)) {
+						faultDesc = fd;
+					}
+				}
             }
         }
 
@@ -929,9 +959,11 @@ public class MethodMarshallerUtils {
                  i++) {
                 FaultDescription fd = operationDesc.getFaultDescriptions()[i];
                 FaultBeanDesc faultBeanDesc = marshalDesc.getFaultBeanDesc(fd);
-                String tryName = faultBeanDesc.getFaultBeanLocalName();
-                if (elementQName.getLocalPart().equals(tryName)) {
-                    faultDesc = fd;
+                if (faultBeanDesc != null) {
+                	String tryName = faultBeanDesc.getFaultBeanLocalName();
+                	if (elementQName.getLocalPart().equals(tryName)) {
+                		faultDesc = fd;
+                	}
                 }
             }
         }
@@ -954,7 +986,12 @@ public class MethodMarshallerUtils {
             JAXBBlockContext blockContext = new JAXBBlockContext(marshalDesc.getPackages());
 
             // Note that faultBean may not be a bean, it could be a primitive 
-            Class faultBeanFormalClass = loadClass(faultBeanDesc.getFaultBeanClassName());
+            Class faultBeanFormalClass;
+            try {
+                faultBeanFormalClass = loadClass(faultBeanDesc.getFaultBeanClassName());
+            } catch (ClassNotFoundException e){
+                faultBeanFormalClass = loadClass(faultBeanDesc.getFaultBeanClassName(), operationDesc.getEndpointInterfaceDescription().getEndpointDescription().getAxisService().getClassLoader());
+            }
 
             // Use "by java type" marshalling if necessary
             if (blockContext.getConstructionType() != 
@@ -978,7 +1015,12 @@ public class MethodMarshallerUtils {
             }
 
             // Construct the JAX-WS generated exception that holds the faultBeanObject
-            Class exceptionClass = loadClass(faultDesc.getExceptionClassName());
+            Class exceptionClass;
+            try {
+                exceptionClass = loadClass(faultDesc.getExceptionClassName());
+            } catch (ClassNotFoundException e){
+                exceptionClass = loadClass(faultDesc.getExceptionClassName(), operationDesc.getEndpointInterfaceDescription().getEndpointDescription().getAxisService().getClassLoader());
+            }
             if (log.isErrorEnabled()) {
                 log.debug("Found FaultDescription.  The exception name is " +
                         exceptionClass.getName());
@@ -1067,12 +1109,27 @@ public class MethodMarshallerUtils {
     }
 
     /**
+     * Load the class
+     *
+     * @param className
+     * @return loaded class
+     * @throws ClassNotFoundException
+     */
+    static Class loadClass(String className, ClassLoader cl) throws ClassNotFoundException {
+        // Don't make this public, its a security exposure
+        Class cls = ClassUtils.getPrimitiveClass(className);
+        if (cls == null) {
+            cls = forName(className, true, cl);
+        }
+        return cls;
+    }
+    /**
      * Return the class for this name
      *
      * @return Class
      */
     private static Class forName(final String className, final boolean initialize,
-                                 final ClassLoader classLoader) {
+                                 final ClassLoader classLoader) throws ClassNotFoundException {
         // NOTE: This method must remain private because it uses AccessController
         Class cl = null;
         try {
@@ -1092,7 +1149,7 @@ public class MethodMarshallerUtils {
             if (log.isDebugEnabled()) {
                 log.debug("Exception thrown from AccessController: " + e);
             }
-            throw ExceptionFactory.makeWebServiceException(e.getException());
+            throw (ClassNotFoundException) e.getException();
         }
 
         return cl;
@@ -1268,5 +1325,45 @@ public class MethodMarshallerUtils {
     static boolean isSWAAttachment(ParameterDescription pd) {
         return pd.getAttachmentDescription() != null &&
             pd.getAttachmentDescription().getAttachmentType() == AttachmentType.SWA;
+    }
+    
+    /**
+     * Register the unmarshalling information so that it can 
+     * be used to speed up subsequent marshalling events.
+     * @param mc
+     * @param packages
+     * @param packagesKey
+     */
+    static void registerUnmarshalInfo(MessageContext mc, 
+                                 TreeSet<String> packages, 
+                                 String packagesKey) throws AxisFault {
+        
+        // The information is registered on the AxisOperation.
+        if (mc == null ||
+            mc.getAxisMessageContext() == null ||
+            mc.getAxisMessageContext().getAxisService() == null ||
+            mc.getAxisMessageContext().getAxisOperation() == null) {
+            return;
+        }
+        
+        // This needs to be stored on the AxisOperation as unmarshalling
+        // info will be specific to a method and its parameters
+        AxisOperation axisOp = mc.getAxisMessageContext().getAxisOperation();
+        
+        // There are two things that need to be saved.
+        // 1) The UnmarshalInfo object containing the packages 
+        //    (which will be used by the CustomBuilder)
+        // 2) A MessageContextListener which (when triggered) registers
+        //    the JAXBCustomBuilder
+        Parameter param = axisOp.getParameter(UnmarshalInfo.KEY);
+        if (param == null) {
+            UnmarshalInfo info = new UnmarshalInfo(packages, packagesKey);
+            axisOp.addParameter(UnmarshalInfo.KEY, info);
+            param = axisOp.getParameter(UnmarshalInfo.KEY);
+            param.setTransient(true);
+            // Add a listener that will set the JAXBCustomBuilder
+            UnmarshalMessageContextListener.
+                create(mc.getAxisMessageContext().getServiceContext());
+        }
     }
 }

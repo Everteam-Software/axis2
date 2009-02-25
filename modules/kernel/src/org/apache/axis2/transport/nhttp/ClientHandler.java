@@ -16,13 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.transport.nhttp;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
+package org.apache.axis2.transport.nhttp;
 
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
@@ -52,17 +47,23 @@ import org.apache.http.nio.ContentDecoder;
 import org.apache.http.nio.ContentEncoder;
 import org.apache.http.nio.NHttpClientConnection;
 import org.apache.http.nio.NHttpClientHandler;
+import org.apache.http.params.DefaultedHttpParams;
 import org.apache.http.params.HttpParams;
-import org.apache.http.params.HttpParamsLinker;
 import org.apache.http.protocol.BasicHttpProcessor;
+import org.apache.http.protocol.ExecutionContext;
 import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpExecutionContext;
 import org.apache.http.protocol.HttpProcessor;
 import org.apache.http.protocol.RequestConnControl;
 import org.apache.http.protocol.RequestContent;
 import org.apache.http.protocol.RequestExpectContinue;
 import org.apache.http.protocol.RequestTargetHost;
 import org.apache.http.protocol.RequestUserAgent;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 
 /**
  * The client connection handler. An instance of this class is used by each IOReactor, to
@@ -132,18 +133,19 @@ public class ClientHandler implements NHttpClientHandler {
         try {
             HttpContext context = conn.getContext();
 
-            context.setAttribute(HttpExecutionContext.HTTP_CONNECTION, conn);
-            context.setAttribute(HttpExecutionContext.HTTP_TARGET_HOST, axis2Req.getHttpHost());
+            context.setAttribute(ExecutionContext.HTTP_CONNECTION, conn);
+            context.setAttribute(ExecutionContext.HTTP_TARGET_HOST, axis2Req.getHttpHost());
 
             context.setAttribute(OUTGOING_MESSAGE_CONTEXT, axis2Req.getMsgContext());
             context.setAttribute(REQUEST_SOURCE_CHANNEL, axis2Req.getSourceChannel());
 
             HttpRequest request = axis2Req.getRequest();
-            HttpParamsLinker.link(request, this.params);
+            request.setParams(
+                new DefaultedHttpParams(request.getParams(), this.params));
             this.httpProcessor.process(request, context);
 
             conn.submitRequest(request);
-            context.setAttribute(HttpExecutionContext.HTTP_REQUEST, request);
+            context.setAttribute(ExecutionContext.HTTP_REQUEST, request);
 
         } catch (IOException e) {
             handleException("I/O Error : " + e.getMessage(), e, conn);
@@ -162,8 +164,8 @@ public class ClientHandler implements NHttpClientHandler {
             HttpContext context = conn.getContext();
             Axis2HttpRequest axis2Req = (Axis2HttpRequest) attachment;
 
-            context.setAttribute(HttpExecutionContext.HTTP_CONNECTION, conn);
-            context.setAttribute(HttpExecutionContext.HTTP_TARGET_HOST, axis2Req.getHttpHost());
+            context.setAttribute(ExecutionContext.HTTP_CONNECTION, conn);
+            context.setAttribute(ExecutionContext.HTTP_TARGET_HOST, axis2Req.getHttpHost());
 
             // allocate temporary buffers to process this request
             context.setAttribute(REQUEST_BUFFER, ByteBuffer.allocate(cfg.getBufferZise()));
@@ -173,11 +175,12 @@ public class ClientHandler implements NHttpClientHandler {
             context.setAttribute(REQUEST_SOURCE_CHANNEL, axis2Req.getSourceChannel());
 
             HttpRequest request = axis2Req.getRequest();
-            HttpParamsLinker.link(request, this.params);
+            request.setParams(
+                new DefaultedHttpParams(request.getParams(), this.params));
             this.httpProcessor.process(request, context);
 
             conn.submitRequest(request);
-            context.setAttribute(HttpExecutionContext.HTTP_REQUEST, request);
+            context.setAttribute(ExecutionContext.HTTP_REQUEST, request);
 
         } catch (IOException e) {
             handleException("I/O Error : " + e.getMessage(), e, conn);
@@ -368,11 +371,11 @@ public class ClientHandler implements NHttpClientHandler {
             context.setAttribute(RESPONSE_SINK_CHANNEL, responsePipe.sink());
 
             BasicHttpEntity entity = new BasicHttpEntity();
-            if (response.getStatusLine().getHttpVersion().greaterEquals(HttpVersion.HTTP_1_1)) {
+            if (response.getStatusLine().getProtocolVersion().greaterEquals(HttpVersion.HTTP_1_1)) {
                 entity.setChunked(true);
             }
             response.setEntity(entity);
-            context.setAttribute(HttpContext.HTTP_RESPONSE, response);
+            context.setAttribute(ExecutionContext.HTTP_RESPONSE, response);
 
             workerPool.execute(
                 new ClientWorker(cfgCtx, Channels.newInputStream(responsePipe.source()), response,

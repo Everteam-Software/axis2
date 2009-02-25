@@ -16,20 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.databinding.utils;
 
 
-import org.apache.axiom.om.*;
+import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMAttribute;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMFactory;
+import org.apache.axiom.om.OMText;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.impl.llom.factory.OMXMLBuilderFactory;
 import org.apache.axiom.om.util.Base64;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.description.java2wsdl.TypeTable;
+import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.databinding.typemapping.SimpleTypeMapper;
 import org.apache.axis2.databinding.utils.reader.ADBXMLStreamReaderImpl;
+import org.apache.axis2.deployment.util.BeanExcludeInfo;
+import org.apache.axis2.deployment.util.ExcludeInfo;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.java2wsdl.TypeTable;
 import org.apache.axis2.engine.ObjectSupplier;
-import org.apache.axis2.util.StreamWrapper;
 import org.apache.axis2.util.Loader;
+import org.apache.axis2.util.StreamWrapper;
 import org.codehaus.jam.JClass;
 import org.codehaus.jam.JProperty;
 import org.codehaus.jam.JamClassIterator;
@@ -102,20 +111,39 @@ public class BeanUtil {
                 elemntNameSpace = new QName(qNamefortheType.getNamespaceURI(),
                                             "elementName");
             }
-
+            AxisService axisService = null;
+            if (MessageContext.getCurrentMessageContext() != null) {
+                axisService = MessageContext.getCurrentMessageContext().getAxisService();
+            }
+            BeanExcludeInfo beanExcludeInfo = null;
+            if (axisService != null && axisService.getExcludeInfo() != null) {
+                beanExcludeInfo = axisService.getExcludeInfo().getBeanExcludeInfoForClass(
+                        jClass.getQualifiedName());
+            }
             // properties from JAM
             ArrayList propertyList = new ArrayList();
             JProperty properties [] = jClass.getDeclaredProperties();
             for (int i = 0; i < properties.length; i++) {
                 JProperty property = properties[i];
-                propertyList.add(property);
+                String propertyName = getCorrectName(property.getSimpleName());
+                if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)){
+                    propertyList.add(property);
+                }
+
             }
             JClass supClass = jClass.getSuperclass();
-            while (!"java.lang.Object".equals(supClass.getQualifiedName())) {
+            while (!supClass.getQualifiedName().startsWith("java.")) {
                 properties = supClass.getDeclaredProperties();
+                ExcludeInfo excludeInfo = axisService.getExcludeInfo();
+                if (excludeInfo != null) {
+                    beanExcludeInfo = excludeInfo.getBeanExcludeInfoForClass(supClass.getQualifiedName());
+                }
                 for (int i = 0; i < properties.length; i++) {
                     JProperty property = properties[i];
-                    propertyList.add(property);
+                    String propertyName = getCorrectName(property.getSimpleName());
+                    if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)) {
+                        propertyList.add(property);
+                    }
                 }
                 supClass = supClass.getSuperclass();
             }
@@ -130,6 +158,9 @@ public class BeanUtil {
             HashMap propertMap = new HashMap();
             for (int i = 0; i < propDescs.length; i++) {
                 PropertyDescriptor propDesc = propDescs[i];
+                if (propDesc.getName().equals("class")) {
+                    continue;
+                }
                 propertMap.put(propDesc.getName(), propDesc);
             }
             ArrayList object = new ArrayList();
@@ -138,7 +169,10 @@ public class BeanUtil {
                 PropertyDescriptor propDesc = (PropertyDescriptor)propertMap.get(
                         getCorrectName(property.getSimpleName()));
                 if (propDesc == null) {
-                    // JAM does bad thing so I need to add this
+                    propDesc = (PropertyDescriptor)propertMap.get(
+                        (property.getSimpleName()));
+                }
+                 if (propDesc == null) {
                     continue;
                 }
                 Class ptype = propDesc.getPropertyType();
@@ -149,7 +183,10 @@ public class BeanUtil {
                     Method readMethod = propDesc.getReadMethod();
                     Object value;
                     if(readMethod!=null){
-                      value = readMethod.invoke(beanObject, null);
+                        if (property.getGetter() !=null && property.getGetter().isPublic()){
+                            readMethod.setAccessible(true);
+                        }
+                        value = readMethod.invoke(beanObject, null);
                     } else {
                         throw new AxisFault("can not find read method for : "  + propDesc.getName());
                     }
@@ -161,8 +198,10 @@ public class BeanUtil {
                         Method readMethod = propDesc.getReadMethod();
                         Object value;
                         if(readMethod!=null){
-                            value = readMethod.invoke(beanObject,
-                                    null);
+                            if (property.getGetter() !=null && property.getGetter().isPublic()){
+                                readMethod.setAccessible(true);
+                            }
+                            value = readMethod.invoke(beanObject,null);
                         } else {
                             throw new AxisFault("can not find read method for : "  + propDesc.getName());
                         }
@@ -183,8 +222,16 @@ public class BeanUtil {
                             object.add(value);
                         }
                     } else {
-                        Object value [] = (Object[])propDesc.getReadMethod().invoke(beanObject,
-                                                                                    null);
+                        Method readMethod = propDesc.getReadMethod();
+                        Object value [] = null;
+                        if(readMethod!=null){
+                            if (property.getGetter() !=null && property.getGetter().isPublic()){
+                                readMethod.setAccessible(true);
+                            }
+                            value = (Object[])propDesc.getReadMethod().invoke(beanObject,
+                                    null);
+                        }
+
                         if (value != null) {
                             for (int j = 0; j < value.length; j++) {
                                 Object o = value[j];
@@ -197,7 +244,11 @@ public class BeanUtil {
                         }
                     }
                 } else if (SimpleTypeMapper.isCollection(ptype)) {
-                    Object value = propDesc.getReadMethod().invoke(beanObject,
+                    Method readMethod = propDesc.getReadMethod();
+                    if (property.getGetter() !=null && property.getGetter().isPublic()){
+                        readMethod.setAccessible(true);
+                    }
+                    Object value = readMethod.invoke(beanObject,
                                                                    null);
                     Collection objList = (Collection)value;
                     if (objList != null && objList.size() > 0) {
@@ -221,8 +272,22 @@ public class BeanUtil {
                     }
                 } else {
                     addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                    Object value = propDesc.getReadMethod().invoke(beanObject,
-                                                                   null);
+                    Method readMethod = propDesc.getReadMethod();
+                    if (property.getGetter() !=null && property.getGetter().isPublic()){
+                        readMethod.setAccessible(true);
+                    }
+                    Object value = readMethod.invoke(beanObject,
+                            null);
+                    if ("java.lang.Object".equals(ptype.getName())){
+                        if ((value instanceof Integer ) ||
+                                (value instanceof Short) ||
+                                (value instanceof Long) ||
+                                (value instanceof Float)) {
+                            object.add(value.toString());
+                            continue;
+                        }
+                    }
+
                     object.add(value);
                 }
             }
@@ -254,13 +319,13 @@ public class BeanUtil {
                                      boolean processingDocLitBare) {
         if (elemntNameSpace != null) {
             object.add(new QName(elemntNameSpace.getNamespaceURI(),
-                    propDesc.getName(), elemntNameSpace.getPrefix()));
+                   getCorrectName(propDesc.getName()) , elemntNameSpace.getPrefix()));
         } else {
             if(processingDocLitBare){
-                object.add(new QName(propDesc.getName()));
+                object.add(new QName(getCorrectName(propDesc.getName())));
             } else {
                 object.add(new QName(beanName.getNamespaceURI(),
-                        propDesc.getName(), beanName.getPrefix()));
+                        getCorrectName(propDesc.getName()), beanName.getPrefix()));
             }
 
         }
@@ -388,6 +453,7 @@ public class BeanUtil {
                         Object [] parms = new Object[] { partObj };
                         Method writeMethod = prty.getWriteMethod();
                         if (writeMethod != null) {
+                            writeMethod.setAccessible(true);
                             writeMethod.invoke(beanObj, parms);
                         }
                     }
@@ -453,6 +519,7 @@ public class BeanUtil {
                     Object [] parms = new Object[] { partObj };
                     Method writeMethod = prty.getWriteMethod();
                     if (writeMethod != null) {
+                        writeMethod.setAccessible(true);
                         writeMethod.invoke(beanObj, parms);
                     }
                 }

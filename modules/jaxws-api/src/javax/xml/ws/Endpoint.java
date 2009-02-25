@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package javax.xml.ws;
 
 import javax.xml.ws.spi.Provider;
@@ -63,6 +64,10 @@ public abstract class Endpoint {
     public abstract Map<java.lang.String, java.lang.Object> getProperties();
 
     public abstract void setProperties(Map<java.lang.String, java.lang.Object> map);
+
+    public abstract EndpointReference getEndpointReference(org.w3c.dom.Element... referenceParameters);
+
+    public abstract <T extends EndpointReference> T getEndpointReference(Class<T> clazz, org.w3c.dom.Element... referenceParameters);
 
     public static final String WSDL_SERVICE = "javax.xml.ws.wsdl.service";
     public static final String WSDL_PORT = "javax.xml.ws.wsdl.port";

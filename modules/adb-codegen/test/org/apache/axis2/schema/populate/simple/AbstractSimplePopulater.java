@@ -16,25 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.populate.simple;
 
-import junit.framework.TestCase;
+import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axis2.schema.populate.Util;
+import org.custommonkey.xmlunit.XMLTestCase;
 
-import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
-import javax.xml.stream.XMLOutputFactory;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
-
-import org.apache.axiom.om.util.StAXUtils;
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.OMAbstractFactory;
-import org.custommonkey.xmlunit.XMLTestCase;
 
 public abstract class AbstractSimplePopulater extends XMLTestCase {
 
@@ -55,9 +54,7 @@ public abstract class AbstractSimplePopulater extends XMLTestCase {
     protected Object process(String testString,String className) throws Exception{
         XMLStreamReader reader = StAXUtils.createXMLStreamReader(new ByteArrayInputStream(testString.getBytes()));
         Class clazz = Class.forName(className);
-        Class[] declaredClasse = clazz.getDeclaredClasses();
-        //ideally this should be 1
-        Class innerClazz = declaredClasse[0];
+        Class innerClazz = Util.getFactory(clazz);
         Method parseMethod = innerClazz.getMethod("parse",new Class[]{XMLStreamReader.class});
         Object obj = parseMethod.invoke(null,new Object[]{reader});
         assertNotNull(obj);

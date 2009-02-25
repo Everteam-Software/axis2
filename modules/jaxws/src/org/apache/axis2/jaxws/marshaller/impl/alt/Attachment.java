@@ -1,21 +1,22 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership. The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * 
- *      http://www.apache.org/licenses/LICENSE-2.0
- *      
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axiom.om.util.UUIDGenerator;
@@ -35,8 +36,7 @@ import javax.mail.internet.InternetHeaders;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimePartDataSource;
 import javax.xml.transform.Source;
-
-import java.awt.Image;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -62,6 +62,7 @@ class Attachment {
     AttachmentDescription aDesc = null;
     Object sigValue = null;
     Class sigClass = null;
+    String partName = null;
 
     /**
      * Constructor used to set Attachment from wire unmarshalling
@@ -81,10 +82,11 @@ class Attachment {
      * @param sigValue
      * @param sigClass
      */
-    public Attachment(Object sigValue, Class sigClass, AttachmentDescription aDesc) {
+    public Attachment(Object sigValue, Class sigClass, AttachmentDescription aDesc, String partName) {
         this.sigValue = sigValue;
         this.sigClass = sigClass;
         this.aDesc = aDesc;
+        this.partName = partName;
     }
 
 
@@ -104,6 +106,11 @@ class Attachment {
     public String getContentID() {
         if (cid == null) {
             cid = UUIDGenerator.getUUID();
+            // Per spec, use the partName in the content-id
+            // http://www.ws-i.org/Profiles/AttachmentsProfile-1.0.html#Value-space_of_Content-Id_Header
+            if (partName != null) {
+                cid = partName + "=" + cid;
+            }
         }
         return cid;
     }

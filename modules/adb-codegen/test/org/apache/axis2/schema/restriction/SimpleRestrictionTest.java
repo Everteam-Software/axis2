@@ -16,13 +16,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.restriction;
 
 import junit.framework.TestCase;
 import org.apache.axiom.om.OMAbstractFactory;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.StAXUtils;
-import org.tempuri.*;
+import org.tempuri.Address;
+import org.tempuri.ComplexRestrictionTypeTestElement;
+import org.tempuri.EnumerationSimpleTypeElement;
+import org.tempuri.HairColor_type1;
+import org.tempuri.NormalSimpleTypeElement;
+import org.tempuri.ParentEnumerationSimpleType;
+import org.tempuri.ParentNormalSimpleType;
+import org.tempuri.ParentRestrictionType;
+import org.tempuri.ParentSimpleType;
+import org.tempuri.Person;
+import org.tempuri.PersonElement;
+import org.tempuri.TestSimpleAttribute;
+import org.tempuri.TestSimpleAttributeElement;
+import org.tempuri.Zip_type1;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamReader;

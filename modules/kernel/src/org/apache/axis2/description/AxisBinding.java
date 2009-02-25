@@ -16,24 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
+import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMFactory;
+import org.apache.axiom.om.OMNamespace;
+import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.util.PolicyUtil;
 import org.apache.axis2.util.WSDLSerializationUtil;
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.OMNamespace;
-import org.apache.axiom.om.OMFactory;
-import org.apache.axiom.om.OMAbstractFactory;
-import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.neethi.Policy;
 
 import javax.xml.namespace.QName;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 /**
  * An AxisBinding represents a WSDL binding, and contains AxisBindingOperations.
@@ -74,6 +75,12 @@ public class AxisBinding extends AxisDescription {
         Object obj = options.get(name);
         if (obj != null) {
             return obj;
+        }
+
+        // need this here to guarantee that we dont return a SOAP version for HTTP Bindings
+        if (WSDL2Constants.ATTR_WSOAP_VERSION.equals(name) &&
+                WSDL2Constants.URI_WSDL2_HTTP.equals(type)) {
+            return null;
         }
 
         obj = WSDL20DefaultValueHolder.getDefaultValue(name);
@@ -204,8 +211,11 @@ public class AxisBinding extends AxisDescription {
             Iterator iterator = faults.values().iterator();
             while (iterator.hasNext()) {
                 AxisBindingMessage axisBindingFault = (AxisBindingMessage)iterator.next();
+                OMElement omElement =
+                        axisBindingFault.toWSDL20(wsdl, tns, wsoap, whttp, nameSpaceMap);
+                omElement.setLocalName(WSDL2Constants.FAULT_LOCAL_NAME);
                 bindingElement
-                        .addChild(axisBindingFault.toWSDL20(wsdl, tns, wsoap, whttp, nameSpaceMap));
+                        .addChild(omElement);
             }
         }
 
@@ -217,6 +227,8 @@ public class AxisBinding extends AxisDescription {
                                                                   nameSpaceMap, serviceName));
         }
         WSDLSerializationUtil.addWSDLDocumentationElement(this, bindingElement, omFactory, wsdl);
+        WSDLSerializationUtil.addPoliciesAsExtensibleElement(this,
+				bindingElement);
         return bindingElement;
     }
     

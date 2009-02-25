@@ -16,15 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema;
 
 import org.apache.axis2.schema.i18n.SchemaCompilerMessages;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.Map;
-import java.util.HashMap;
 
 /**
  * This is a bean class that captures all the compiler options.
@@ -46,6 +47,7 @@ public class CompilerOptions {
     private boolean generateAll = false;
 
     private boolean offStrictValidation = false;
+    private boolean isUseWrapperClasses = false;
 
     /**
      * Package for the mapper
@@ -195,5 +197,11 @@ public class CompilerOptions {
         this.offStrictValidation = offStrictValidation;
     }
 
+    public boolean isUseWrapperClasses() {
+        return isUseWrapperClasses;
+    }
 
+    public void setUseWrapperClasses(boolean useWrapperClasses) {
+        this.isUseWrapperClasses = useWrapperClasses;
+    }
 }

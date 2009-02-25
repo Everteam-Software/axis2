@@ -16,21 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.engine;
 
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.soap.SOAPHeader;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingHelper;
 import org.apache.axis2.addressing.EndpointReference;
+import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.context.ServiceContext;
 import org.apache.axis2.context.ServiceGroupContext;
 import org.apache.axis2.context.SessionContext;
-import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.RequestResponseTransport;
 import org.apache.axis2.transport.TransportListener;
@@ -38,8 +43,6 @@ import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.wsdl.WSDLConstants.WSDL20_2004_Constants;
 import org.apache.axis2.wsdl.WSDLConstants.WSDL20_2006Constants;
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.soap.SOAPHeader;
 
 import javax.xml.namespace.QName;
 import java.util.ArrayList;
@@ -91,6 +94,8 @@ public class DispatchPhase extends Phase {
         }
 
         validateTransport(msgContext);
+        
+        validateBindings(msgContext);
 
         loadContexts(service, msgContext);
 
@@ -116,15 +121,15 @@ public class DispatchPhase extends Phase {
         Boolean disableAck = (Boolean) msgContext.getProperty(Constants.Configuration.DISABLE_RESPONSE_ACK);
         if(disableAck == null || disableAck.booleanValue() == false) {
         	String mepString = msgContext.getAxisOperation().getMessageExchangePattern();
-        	if (mepString.equals(WSDL20_2006Constants.MEP_URI_IN_ONLY)
-	                || mepString.equals(WSDL20_2004_Constants.MEP_URI_IN_ONLY)) {
+        	if (isOneway(mepString)) {
 	            Object requestResponseTransport =
 	                    msgContext.getProperty(RequestResponseTransport.TRANSPORT_CONTROL);
 	            if (requestResponseTransport != null) {
 	                ((RequestResponseTransport) requestResponseTransport).acknowledgeMessage(msgContext);
 	            }
 	        } else if (mepString.equals(WSDL20_2006Constants.MEP_URI_IN_OUT)
-	                || mepString.equals(WSDL20_2004_Constants.MEP_URI_IN_OUT)) { // OR, if 2 way operation but the response is intended to not use the response channel of a 2-way transport
+	                || mepString.equals(WSDL20_2004_Constants.MEP_URI_IN_OUT)
+	                || mepString.equals(WSDL2Constants.MEP_URI_IN_OUT)) { // OR, if 2 way operation but the response is intended to not use the response channel of a 2-way transport
 	            // then we don't need to keep the transport waiting.
 	            Object requestResponseTransport =
 	                    msgContext.getProperty(RequestResponseTransport.TRANSPORT_CONTROL);
@@ -216,6 +221,31 @@ public class DispatchPhase extends Phase {
         throw new AxisFault(Messages.getMessage("servicenotfoundforepr",
                                                 ((toEPR != null) ? toEPR.getAddress() : "")));
     }
+    
+    /**
+     * To check whether the incoming request has come in valid binding , we check whether service
+     * author has disabled any binding using parameters
+     * <code>org.apache.axis2.Constants.Configuration.DISABLE_REST</code>
+     * @param service msgctx the current MessageContext
+     * @throws AxisFault in case of error
+     */
+    private void validateBindings(MessageContext msgctx) throws AxisFault {
+        
+        AxisService service = msgctx.getAxisService();
+        
+        boolean disableREST = false;
+        Parameter disableRESTParameter = service
+                        .getParameter(org.apache.axis2.Constants.Configuration.DISABLE_REST);
+        if (disableRESTParameter != null
+                        && JavaUtils.isTrueExplicitly(disableRESTParameter.getValue())) {
+                disableREST = true;
+        }
+        
+        if (msgctx.isDoingREST() && disableREST) {
+            throw new AxisFault(Messages.getMessage("bindingDisabled","Http"));     
+        } 
+        
+    }
 
     private void fillContextsFromSessionContext(MessageContext msgContext) throws AxisFault {
         AxisService service = msgContext.getAxisService();
@@ -279,6 +309,16 @@ public class DispatchPhase extends Phase {
                 msgContext.setServiceGroupContextId(serviceGroupId.getText());
             }
         }
+    }
+    
+    /**
+     * This method will determine if the MEP indicated by 'mepString' specifies
+     * a oneway MEP.
+     */
+    boolean isOneway(String mepString) {
+        return (mepString.equals(WSDL20_2006Constants.MEP_URI_IN_ONLY)
+                || mepString.equals(WSDL20_2004_Constants.MEP_URI_IN_ONLY)
+                || mepString.equals(WSDL2Constants.MEP_URI_IN_ONLY));
     }
 
 }

@@ -16,8 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxbri;
 
+import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
+import com.sun.xml.bind.v2.runtime.JaxBeanInfo;
 import org.apache.axis2.description.java2wsdl.DefaultSchemaGenerator;
 import org.apache.axis2.util.Loader;
 import org.apache.ws.commons.schema.XmlSchema;
@@ -42,9 +45,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import com.sun.xml.bind.v2.runtime.JaxBeanInfo;
-import com.sun.xml.bind.v2.runtime.JAXBContextImpl;
 
 public class JaxbSchemaGenerator extends DefaultSchemaGenerator {
     public JaxbSchemaGenerator(ClassLoader loader, String className,
@@ -126,6 +126,7 @@ public class JaxbSchemaGenerator extends DefaultSchemaGenerator {
         return itr.next();
     }
 
+
     protected List<Class<?>> processMethods(Method[] declaredMethods) throws Exception {
         List<Class<?>> list = new ArrayList<Class<?>>();
 
@@ -185,6 +186,7 @@ public class JaxbSchemaGenerator extends DefaultSchemaGenerator {
         if (schemaTypeName == null) {
             list.add(type);
         }
+        addImport(getXmlSchema(schemaTargetNameSpace), schemaTypeName);
     }
 
     protected List<DOMResult> generateJaxbSchemas(JAXBContext context) throws IOException {
@@ -212,7 +214,7 @@ public class JaxbSchemaGenerator extends DefaultSchemaGenerator {
             remoteExceptionObject = it.next();
             className = remoteExceptionObject.toString();
             if (!("".equals(className)) && className.contains("RemoteException")) {
-                classes.remove(remoteExceptionObject);
+                it.remove();
             }
         }
 

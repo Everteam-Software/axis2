@@ -19,13 +19,10 @@
 
 package org.apache.axis2.transport.nhttp;
 
-import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.Log;
-import org.apache.http.params.HttpConnectionParams;
+import org.apache.commons.logging.LogFactory;
 
 import java.util.Properties;
-import java.io.IOException;
-import java.net.URL;
 
 /**
  * Store and manage properties that tune the nhttp transport

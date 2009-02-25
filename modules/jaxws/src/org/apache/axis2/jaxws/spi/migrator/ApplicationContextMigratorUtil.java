@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.spi.migrator;
 
 import org.apache.axis2.context.ConfigurationContext;
@@ -23,12 +24,13 @@ import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.handler.MEPContext;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.xml.ws.handler.MessageContext.Scope;
-
 import java.util.AbstractSet;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,7 +39,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.Map.Entry;
 
 public class ApplicationContextMigratorUtil {
 
@@ -90,23 +91,35 @@ public class ApplicationContextMigratorUtil {
                                                         Map<String, Object> requestContext,
                                                         MessageContext messageContext) {
         if (messageContext == null) {
-            throw ExceptionFactory.makeWebServiceException("Null MessageContext");
+        	
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("nullMsgCtxErr"));
         }
 
         ServiceDescription sd = messageContext.getEndpointDescription().getServiceDescription();
         if (sd != null) {
             ConfigurationContext configCtx = sd.getAxisConfigContext();
-            List<ApplicationContextMigrator> migratorList = (List<ApplicationContextMigrator>)configCtx.getProperty(contextMigratorListID);
-            synchronized(migratorList){
-                if (migratorList != null) {
-                    ListIterator<ApplicationContextMigrator> itr = migratorList.listIterator();
-                    while (itr.hasNext()) {
-                        ApplicationContextMigrator cpm = itr.next();
-                        if (log.isDebugEnabled()) {
-                            log.debug("migrator: " + cpm.getClass().getName() + ".migratePropertiesToMessageContext");
-                        }
-                        cpm.migratePropertiesToMessageContext(new ApplicationPropertyMapReader(requestContext, messageContext.getMEPContext()), messageContext);
+            List<ApplicationContextMigrator> migratorList = (List<ApplicationContextMigrator>) configCtx.getProperty(contextMigratorListID);
+            if (migratorList != null) {
+                
+                // Create copy to avoid using shared list
+                List listCPM = null;
+                
+                // synchronize on non-null migratorList
+                synchronized(migratorList){
+                     listCPM = new ArrayList(migratorList);
+                }
+                
+                ListIterator<ApplicationContextMigrator> itr = listCPM.listIterator();   // Iterate over non-shared list
+                while (itr.hasNext()) {
+                    ApplicationContextMigrator cpm = itr.next();
+                    if (log.isDebugEnabled()) {
+                        log.debug("migrator: " + cpm.getClass().getName() + ".migratePropertiesToMessageContext");
                     }
+                    
+                    // TODO: Synchronizing here is expensive too.
+                    // If a cpm requires synchronization, it should provide it inside of its migratePropertiesFromMessageContext implementation.
+                    
+                    cpm.migratePropertiesToMessageContext(new ApplicationPropertyMapReader(requestContext, messageContext.getMEPContext()), messageContext);
                 }
             }
         }
@@ -121,7 +134,7 @@ public class ApplicationContextMigratorUtil {
                                                           Map<String, Object> responseContext,
                                                           MessageContext messageContext) {
         if (messageContext == null) {
-            throw ExceptionFactory.makeWebServiceException("Null MessageContext");
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("nullMsgCtxErr"));
         }
 
         ServiceDescription sd = messageContext.getEndpointDescription().getServiceDescription();
@@ -130,16 +143,27 @@ public class ApplicationContextMigratorUtil {
             List<ApplicationContextMigrator> migratorList =
                     (List<ApplicationContextMigrator>)configCtx.getProperty(contextMigratorListID);
 
-            synchronized(migratorList){
-                if (migratorList != null) {
-                    ListIterator<ApplicationContextMigrator> itr = migratorList.listIterator();
-                    while (itr.hasNext()) {
-                        ApplicationContextMigrator cpm = itr.next();
-                        if (log.isDebugEnabled()) {
-                            log.debug("migrator: " + cpm.getClass().getName() + ".migratePropertiesFromMessageContext");
-                        }
-                        cpm.migratePropertiesFromMessageContext(new ApplicationPropertyMapWriter(responseContext, messageContext.getMEPContext()), messageContext);
+            if (migratorList != null) {
+                
+                // Create copy to avoid using shared list
+                List listCPM = null;
+                
+                // synchronize on non-null migratorList
+                synchronized(migratorList){
+                     listCPM = new ArrayList(migratorList);
+                }
+            
+                ListIterator<ApplicationContextMigrator> itr = listCPM.listIterator();   // Iterate over non-shared list
+                while (itr.hasNext()) {
+                    ApplicationContextMigrator cpm = itr.next();
+                    if (log.isDebugEnabled()) {
+                        log.debug("migrator: " + cpm.getClass().getName() + ".migratePropertiesFromMessageContext");
                     }
+
+                    // TODO: Synchronizing here is expensive too.
+                    // If a cpm requires synchronization, it should provide it inside of its migratePropertiesFromMessageContext implementation.
+
+                    cpm.migratePropertiesFromMessageContext(new ApplicationPropertyMapWriter(responseContext, messageContext.getMEPContext()), messageContext);
                 }
             }
         }
@@ -174,9 +198,6 @@ public class ApplicationContextMigratorUtil {
      * ApplicationPropertyMapReader only sets the scope if a migrator calls "get" on this map or
      * iterates over the entrySet, which may occur explicitly in the migrator, or implicitly when
      * this map is the source for a call such as otherMap.putAll(Map source).
-     *
-     * @author rott
-     *
      */
     private static class ApplicationPropertyMapReader extends HashMap<String, Object> {
 
@@ -198,7 +219,7 @@ public class ApplicationContextMigratorUtil {
         public void putAll(Map<? extends String, ? extends Object> m) {
             // we need to take advantage of the smarter put(String, Object)
             for (Iterator it = m.entrySet().iterator(); it.hasNext();) {
-                Entry entry = (Entry)it.next();
+                Map.Entry entry = (Map.Entry)it.next();
                 put((String)entry.getKey(), entry.getValue());
             }
         }
@@ -302,7 +323,7 @@ public class ApplicationContextMigratorUtil {
                 // over the properties is due to this being the source object for a putAll(source)
                 // We would therefore be setting scope for a property that never actually makes
                 // its way into the messageContext
-                Entry entry = (Entry)containedIterator.next();
+                Map.Entry entry = (Map.Entry)containedIterator.next();
                 mepCtx.setScope((String)entry.getKey(), Scope.APPLICATION);
                 return entry;
             }
@@ -318,9 +339,6 @@ public class ApplicationContextMigratorUtil {
      * fully correct.  For example, if a migrator calls size, we cannot simply return
      * userMap.size().  Rather, we would have to count only the APPLICATION scoped properties
      * and return those.
-     * 
-     * @author rott
-     *
      */
     private static class ApplicationPropertyMapWriter extends HashMap<String, Object> {
 
@@ -345,7 +363,7 @@ public class ApplicationContextMigratorUtil {
         public void putAll(Map<? extends String, ? extends Object> m) {
             // we need to take advantage of the smarter put(String, Object)
             for (Iterator it = m.entrySet().iterator(); it.hasNext();) {
-                Entry entry = (Entry)it.next();
+                Map.Entry entry = (Map.Entry)it.next();
                 put((String)entry.getKey(), entry.getValue());
             }
         }

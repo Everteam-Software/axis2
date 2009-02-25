@@ -16,13 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.provider;
 
-import java.io.File;
+import junit.framework.TestCase;
 
 import javax.xml.namespace.QName;
-
-import junit.framework.TestCase;
+import java.io.File;
 
 public abstract class ProviderTestCase extends TestCase {
 

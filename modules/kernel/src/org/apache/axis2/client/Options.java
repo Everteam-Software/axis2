@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.client;
 
 import org.apache.axiom.om.OMElement;
@@ -27,13 +28,18 @@ import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.addressing.RelatesTo;
 import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.context.externalize.ExternalizeConstants;
+import org.apache.axis2.context.externalize.SafeObjectInputStream;
+import org.apache.axis2.context.externalize.SafeObjectOutputStream;
+import org.apache.axis2.context.externalize.SafeSerializable;
 import org.apache.axis2.description.TransportInDescription;
 import org.apache.axis2.description.TransportOutDescription;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.TransportListener;
+import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.MetaDataEntry;
-import org.apache.axis2.util.ObjectStateUtils;
+import org.apache.axis2.util.Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -43,10 +49,11 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 
 /**
@@ -59,12 +66,14 @@ import java.util.Map;
  * property inheritance, so that if a property is not set in one instance it
  * will check its parent for a setting.
  */
-public class Options implements Externalizable {
+public class Options implements Externalizable, SafeSerializable {
 
     /*
      * setup for logging
      */
     private static final Log log = LogFactory.getLog(Options.class);
+    private static boolean DEBUG_ENABLED = log.isDebugEnabled();
+    private static boolean DEBUG_CALLSTACK_ON_SET = log.isDebugEnabled();
 
     private static final String myClassName = "Options";
 
@@ -93,9 +102,14 @@ public class Options implements Externalizable {
      * Refer to the writeExternal() and readExternal() methods.
      */
     // supported revision levels, add a new level to manage compatible changes
-    private static final int REVISION_1 = 1;
+    private static final int REVISION_2 = 2;
     // current revision level of this object
-    private static final int revisionID = REVISION_1;
+    private static final int revisionID = REVISION_2;
+
+    //I am going to set a reply to as customer reply To address ,
+    // so that Axis2 does not need to wait for the reply
+    public static String  CUSTOM_REPLYTO_ADDRESS = "CUSTOM_REPLYTO_ADDRESS";
+    public static String  CUSTOM_REPLYTO_ADDRESS_TRUE = "true";
 
 
     /**
@@ -368,7 +382,7 @@ public class Options implements Externalizable {
         if (relationships == null) {
             return null;
         }
-        for (int i = 0; i < relationships.size(); i++) {
+        for (int i = 0, size = relationships.size(); i < size; i++) {
             RelatesTo relatesTo = (RelatesTo) relationships.get(i);
             String relationshipType = relatesTo.getRelationshipType();
             if (relationshipType.equals(type)) {
@@ -392,7 +406,7 @@ public class Options implements Externalizable {
         if (relationships == null) {
             return null;
         }
-        for (int i = 0; i < relationships.size(); i++) {
+        for (int i = 0, size = relationships.size(); i < size; i++) {
             RelatesTo relatesTo = (RelatesTo) relationships.get(i);
             String relationshipType = relatesTo.getRelationshipType();
             if (relationshipType.equals(AddressingConstants.Final.WSA_DEFAULT_RELATIONSHIP_TYPE)
@@ -425,7 +439,16 @@ public class Options implements Externalizable {
      * @param list
      */
     public void setRelationships(RelatesTo[] list) {
-        relationships = list == null ? null : Arrays.asList(list);
+        if(list == null){
+        relationships = null;
+    }
+        else{
+            ArrayList arraylist = new ArrayList(list.length);
+            for(int i = 0 ; i < list.length ; i++){
+                   arraylist.add(list[i]);
+            }
+            relationships = arraylist;
+        }
     }
 
     /**
@@ -636,6 +659,17 @@ public class Options implements Externalizable {
      * @param properties
      */
     public void setProperties(Map properties) {
+        
+        if (this.properties != properties) {
+            if (DEBUG_ENABLED) {
+                for (Iterator iterator = properties.entrySet().iterator();
+                iterator.hasNext();) {
+                    Entry entry = (Entry) iterator.next();
+                    debugPropertySet((String) entry.getKey(), entry.getValue());
+
+                }
+            }
+        }
         this.properties = properties;
     }
 
@@ -829,6 +863,9 @@ public class Options implements Externalizable {
             this.properties = new HashMap();
         }
         properties.put(propertyKey, property);
+        if (DEBUG_ENABLED) {
+            debugPropertySet(propertyKey, property);
+        }
     }
 
     /**
@@ -878,6 +915,8 @@ public class Options implements Externalizable {
                                                     senderTransport));
         }
     }
+
+
 
     /**
      * Set the SOAP version to be used.
@@ -1025,7 +1064,8 @@ public class Options implements Externalizable {
      * @param out The stream to write the object contents to
      * @throws IOException
      */
-    public void writeExternal(ObjectOutput out) throws IOException {
+    public void writeExternal(ObjectOutput o) throws IOException {
+        SafeObjectOutputStream out = SafeObjectOutputStream.install(o);
         String logCorrelationIDString = getLogCorrelationIDString();
 
         // write out contents of this object
@@ -1056,147 +1096,83 @@ public class Options implements Externalizable {
         out.writeBoolean(manageSession);
 
         // the following objects could be null
-        ObjectStateUtils.writeObject(out, isExceptionToBeThrownOnSOAPFault,
-                                     logCorrelationIDString + ".isExceptionToBeThrownOnSOAPFault");
-        ObjectStateUtils.writeObject(out, useSeparateListener,
-                                     logCorrelationIDString + ".useSeparateListener");
+        out.writeObject(isExceptionToBeThrownOnSOAPFault);
+        out.writeObject(useSeparateListener);
 
         //---------------------------------------------------------
         // various strings
         //---------------------------------------------------------
 
         // String soapVersionURI
-        ObjectStateUtils
-                .writeString(out, soapVersionURI, logCorrelationIDString + ".soapVersionURI");
+        out.writeObject(soapVersionURI);
 
         // String action
-        ObjectStateUtils.writeString(out, action, logCorrelationIDString + ".action");
+        out.writeObject(action);
 
         // String transportInProtocol
-        ObjectStateUtils.writeString(out, transportInProtocol,
-                                     logCorrelationIDString + ".transportInProtocol");
+        out.writeObject(transportInProtocol);
 
         // String messageId
-        ObjectStateUtils.writeString(out, messageId, logCorrelationIDString + ".messageId");
+        out.writeObject(messageId);
 
         // String object id
-        ObjectStateUtils.writeString(out, logCorrelationIDString,
-                                     logCorrelationIDString + ".logCorrelationIDString");
+        out.writeObject(logCorrelationIDString);
 
         //---------------------------------------------------------
         // various objects
         //---------------------------------------------------------
-
-        // put some try..catch blocks around the following objects
-        // so that the writing to the output stream continues
-        // even if one of the objects can't be serialized
-
-        try {
-            // EndpointReference faultTo
-            ObjectStateUtils.writeObject(out, faultTo, logCorrelationIDString + ".faultTo");
-        }
-        catch (Exception e1) {
-            // note that the utility class will provide the trace for the
-            // exception so we won't have to
-            // so just consume the exception for now
-        }
-
-        try {
-            // EndpointReference from
-            ObjectStateUtils.writeObject(out, from, logCorrelationIDString + ".from");
-        }
-        catch (Exception e2) {
-            // note that the utility class will provide the trace for the
-            // exception so we won't have to
-            // so just consume the exception for now
-        }
-
-        try {
-            // EndpointReference replyTo
-            ObjectStateUtils.writeObject(out, replyTo, logCorrelationIDString + ".replyTo");
-        }
-        catch (Exception e3) {
-            // note that the utility class will provide the trace for the
-            // exception so we won't have to
-            // so just consume the exception for now
-        }
-
-        try {
-            // EndpointReference to
-            ObjectStateUtils.writeObject(out, to, logCorrelationIDString + ".to");
-        }
-        catch (Exception e4) {
-            // note that the utility class will provide the trace for the
-            // exception so we won't have to
-            // so just consume the exception for now
-        }
+        
+        // Write out the EndpointReference values
+        out.writeObject(faultTo);
+        out.writeObject(from);
+        out.writeObject(replyTo);
+        out.writeObject(to);
+        
 
         // TransportListener listener
+        metaListener = null;
         if (listener != null) {
             metaListener = new MetaDataEntry(listener.getClass().getName(), null);
-        } else {
-            metaListener = null;
         }
-        ObjectStateUtils.writeObject(out, metaListener, logCorrelationIDString + ".listener");
+        out.writeObject(metaListener);
 
         // TransportInDescription transportIn
+        metaTransportIn = null;
         if (transportIn != null) {
             metaTransportIn = new MetaDataEntry(null, transportIn.getName().toString());
-        } else {
-            metaTransportIn = null;
-        }
-        ObjectStateUtils.writeObject(out, metaTransportIn, logCorrelationIDString + ".transportIn");
+        } 
+        out.writeObject(metaTransportIn);
 
         // TransportOutDescription transportOut
+        metaTransportOut = null;
         if (transportOut != null) {
             metaTransportOut = new MetaDataEntry(null, transportOut.getName().toString());
-        } else {
-            metaTransportOut = null;
         }
-        ObjectStateUtils
-                .writeObject(out, metaTransportOut, logCorrelationIDString + ".transportOut");
+        out.writeObject(metaTransportOut);
 
         //---------------------------------------------------------
         // collections and lists
         //---------------------------------------------------------
-
+        
         // List relationships, which is an array of RelatesTo objects
-        ArrayList tmp = null;
-
-        if (relationships != null) {
-            // make sure this is an array list
-            tmp = new ArrayList(relationships);
-        }
-
-        ObjectStateUtils.writeArrayList(out, tmp, logCorrelationIDString + ".relationships");
+        out.writeList(relationships);
+       
 
         // ArrayList referenceParameters
-        ObjectStateUtils.writeArrayList(out, referenceParameters,
-                                        logCorrelationIDString + ".referenceParameters");
+        out.writeList(referenceParameters);
 
         //---------------------------------------------------------
         // properties
         //---------------------------------------------------------
 
         // HashMap properties
-        HashMap tmpHM = new HashMap(getProperties());
-
-        ObjectStateUtils.writeHashMap(out, tmpHM, logCorrelationIDString + ".properties");
+        out.writeMap(properties);
 
         //---------------------------------------------------------
         // "nested"
         //---------------------------------------------------------
-
-        try {
-            // Options parent
-            ObjectStateUtils.writeObject(out, parent, logCorrelationIDString + ".parent");
-        }
-        catch (Exception e5) {
-            // note that the utility class will provide the trace for the
-            // exception so we won't have to
-            // so just consume the exception for now
-        }
-
+        out.writeUTF("parent");
+        out.writeObject(parent);
     }
 
 
@@ -1212,7 +1188,8 @@ public class Options implements Externalizable {
      * @throws IOException
      * @throws ClassNotFoundException
      */
-    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput inObject) throws IOException, ClassNotFoundException {
+        SafeObjectInputStream in = SafeObjectInputStream.install(inObject);
         // serialization version ID
         long suid = in.readLong();
 
@@ -1221,12 +1198,12 @@ public class Options implements Externalizable {
 
         // make sure the object data is in a version we can handle
         if (suid != serialVersionUID) {
-            throw new ClassNotFoundException(ObjectStateUtils.UNSUPPORTED_SUID);
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_SUID);
         }
 
         // make sure the object data is in a revision level we can handle
-        if (revID != REVISION_1) {
-            throw new ClassNotFoundException(ObjectStateUtils.UNSUPPORTED_REVID);
+        if (revID != REVISION_2) {
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_REVID);
         }
 
         //---------------------------------------------------------
@@ -1236,120 +1213,89 @@ public class Options implements Externalizable {
 
         manageSession = in.readBoolean();
 
-        // the following objects could be null
-        Object tmp1 = ObjectStateUtils.readObject(in, "Options.isExceptionToBeThrownOnSOAPFault");
-        if (tmp1 != null) {
-            isExceptionToBeThrownOnSOAPFault = (Boolean) tmp1;
-        }
-
-        Object tmp2 = ObjectStateUtils.readObject(in, "Options.useSeparateListener");
-        if (tmp2 != null) {
-            useSeparateListener = (Boolean) tmp2;
-        }
+        isExceptionToBeThrownOnSOAPFault = (Boolean) in.readObject();
+        useSeparateListener = (Boolean) in.readObject();
 
         //---------------------------------------------------------
         // various strings
         //---------------------------------------------------------
 
         // String soapVersionURI
-        soapVersionURI = ObjectStateUtils.readString(in, "Options.soapVersionURI");
+        soapVersionURI = (String) in.readObject();
 
         // String action
-        action = ObjectStateUtils.readString(in, "Options.action");
+        action = (String) in.readObject();
 
         // String transportInProtocol
-        transportInProtocol = ObjectStateUtils.readString(in, "Options.transportInProtocol");
+        transportInProtocol = (String) in.readObject();
 
         // String messageId
-        messageId = ObjectStateUtils.readString(in, "Options.messageId");
+        messageId = (String) in.readObject();
 
         // String object id
-        logCorrelationIDString = ObjectStateUtils.readString(in, "Options.logCorrelationIDString");
+        logCorrelationIDString = (String) in.readObject();
 
         // trace point
-        log.trace(myClassName + ":readExternal():  reading the input stream for  [" +
-                logCorrelationIDString + "]");
+        if (log.isTraceEnabled()) {
+            log.trace(myClassName + ":readExternal():  reading the input stream for  [" +
+                      logCorrelationIDString + "]");
+        }
 
         //---------------------------------------------------------
         // various objects
         //---------------------------------------------------------
 
         // EndpointReference faultTo
-        faultTo = (EndpointReference) ObjectStateUtils.readObject(in, "Options.faultTo");
+        faultTo = (EndpointReference) in.readObject();
 
         // EndpointReference from
-        from = (EndpointReference) ObjectStateUtils.readObject(in, "Options.from");
+        from = (EndpointReference) in.readObject();
 
         // EndpointReference replyTo
-        replyTo = (EndpointReference) ObjectStateUtils.readObject(in, "Options.replyTo");
+        replyTo = (EndpointReference) in.readObject();
 
         // EndpointReference to
-        to = (EndpointReference) ObjectStateUtils.readObject(in, "Options.to");
+        to = (EndpointReference) in.readObject();
 
         // TransportListener listener
         // is not usable until the meta data has been reconciled
         listener = null;
-        metaListener = (MetaDataEntry) ObjectStateUtils.readObject(in, "Options.metaListener");
+        metaListener = (MetaDataEntry) in.readObject();
 
         // TransportInDescription transportIn
         // is not usable until the meta data has been reconciled
         transportIn = null;
-        metaTransportIn =
-                (MetaDataEntry) ObjectStateUtils.readObject(in, "Options.metaTransportIn");
+        metaTransportIn = (MetaDataEntry) in.readObject();
 
         // TransportOutDescription transportOut
         // is not usable until the meta data has been reconciled
         transportOut = null;
-        metaTransportOut =
-                (MetaDataEntry) ObjectStateUtils.readObject(in, "Options.metaTransportOut");
+        metaTransportOut = (MetaDataEntry) in.readObject();
 
         //---------------------------------------------------------
         // collections and lists
         //---------------------------------------------------------
 
         // List relationships, which is an array of RelatesTo objects
-        ArrayList tmpAL1 = ObjectStateUtils.readArrayList(in, "Options.relationships");
-        if (tmpAL1 != null) {
-            relationships = new ArrayList(tmpAL1);
-        } else {
-            relationships = null;
-        }
+        relationships = in.readArrayList();
 
         // ArrayList referenceParameters
-        ArrayList tmpAL2 = ObjectStateUtils.readArrayList(in, "Options.referenceParameters");
-        if (tmpAL2 != null) {
-            referenceParameters = new ArrayList(tmpAL2);
-        } else {
-            referenceParameters = null;
-        }
+        referenceParameters = in.readArrayList();
 
         //---------------------------------------------------------
         // properties
         //---------------------------------------------------------
 
         // HashMap properties
-        HashMap tmpHM = ObjectStateUtils.readHashMap(in, "Options.properties");
-
-        if (tmpHM != null) {
-            properties = new HashMap(tmpHM);
-        } else {
-            properties = new HashMap();
-        }
+        properties = in.readHashMap();
 
         //---------------------------------------------------------
         // "nested"
         //---------------------------------------------------------
 
         // Options parent
-        Object tmpParent = ObjectStateUtils.readObject(in, "Options.parent");
-
-        if (tmpParent != null) {
-            parent = (Options) tmpParent;
-        } else {
-            parent = null;
-        }
-
-
+        in.readUTF(); // read marker
+        parent = (Options) in.readObject();
     }
 
     /**
@@ -1685,5 +1631,40 @@ public class Options implements Externalizable {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+    
+    /**
+     * Debug for for property key and value.
+     * @param key
+     * @param value
+     */
+    private void debugPropertySet(String key, Object value) {
+        if (DEBUG_ENABLED) {
+            String className = (value == null) ? "null" : value.getClass().getName();
+            String classloader = "null";
+            if(value != null) {
+                ClassLoader cl = Utils.getObjectClassLoader(value);
+                if(cl != null) {
+                    classloader = cl.toString();
+                }
+            }
+            String valueText = (value instanceof String) ? value.toString() : null;
+            
+            String identity = getClass().getName() + '@' + 
+                Integer.toHexString(System.identityHashCode(this));
+            
+            log.debug("==================");
+            log.debug(" Property set on object " + identity);
+            log.debug("  Key =" + key);
+            if (valueText != null) {
+                log.debug("  Value =" + valueText);
+            }
+            log.debug("  Value Class = " + className);
+            log.debug("  Value Classloader = " + classloader);
+            if (DEBUG_CALLSTACK_ON_SET) {
+                log.debug(  "Call Stack = " + JavaUtils.callStackToString());
+            }
+            log.debug("==================");
+        }
     }
 }

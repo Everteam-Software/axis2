@@ -24,8 +24,8 @@ import edu.emory.mathcs.backport.java.util.concurrent.CountDownLatch;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.impl.builder.StAXBuilder;
 import org.apache.axiom.soap.SOAP12Constants;
-import org.apache.axiom.soap.SOAPFaultCode;
 import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.axiom.soap.SOAPFaultCode;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingHelper;
@@ -33,7 +33,6 @@ import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.context.SessionContext;
 import org.apache.axis2.deployment.WarBasedAxisConfigurator;
 import org.apache.axis2.description.AxisBindingMessage;
@@ -57,8 +56,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.servlet.ServletConfig;
-import javax.servlet.ServletException;
 import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -84,15 +83,17 @@ public class AxisServlet extends HttpServlet implements TransportListener {
 
     protected transient ServletConfig servletConfig;
 
-    private transient ListingAgent agent;
-    private String contextRoot = null;
+    protected transient ListingAgent agent;
+    protected transient String contextRoot = null;
 
     protected boolean disableREST = false;
-    private static final String LIST_SERVICES_SUFIX = "/services/listServices";
-    private static final String LIST_FAUKT_SERVICES_SUFIX = "/services/ListFaultyServices";
+    private static final String LIST_SERVICES_SUFFIX = "/services/listServices";
+    private static final String LIST_FAULTY_SERVICES_SUFFIX = "/services/ListFaultyServices";
     private boolean closeReader = true;
 
     private static final int BUFFER_SIZE = 1024 * 8;
+    
+    private boolean initCalled = false;
 
     /**
      * Implementaion of POST interface
@@ -105,7 +106,11 @@ public class AxisServlet extends HttpServlet implements TransportListener {
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         //set the initial buffer for a larger value
+        try {
         response.setBufferSize(BUFFER_SIZE);
+        } catch (Throwable t){
+            log.info("Old Servlet API :" + t);
+        }
 
         initContextRoot(request);
 
@@ -117,13 +122,21 @@ public class AxisServlet extends HttpServlet implements TransportListener {
             msgContext.setProperty(Constants.Configuration.CONTENT_TYPE, contentType);
             try {
                 // adding ServletContext into msgContext;
+                String url;
+                try {
+                    url = request.getRequestURL().toString();
+                } catch (Throwable t){
+                    log.info("Old Servlet API (fallback to HttpServletRequest.getRequestURI) :" + t);    
+                    url = request.getRequestURI();
+                }
+                
                 InvocationResponse pi = HTTPTransportUtils.
                         processHTTPPostRequest(msgContext,
                                 new BufferedInputStream(request.getInputStream()),
                                 new BufferedOutputStream(out),
                                 contentType,
                                 request.getHeader(HTTPConstants.HEADER_SOAP_ACTION),
-                                request.getRequestURL().toString());
+                                url);
 
                 Boolean holdResponse =
                         (Boolean) msgContext.getProperty(RequestResponseTransport.HOLD_RESPONSE);
@@ -230,8 +243,8 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         } else if (requestURI.endsWith(".xsd") ||
                 requestURI.endsWith(".wsdl")) {
             agent.processExplicitSchemaAndWSDL(request, response);
-        } else if (requestURI.endsWith(LIST_SERVICES_SUFIX) ||
-                requestURI.endsWith(LIST_FAUKT_SERVICES_SUFIX)) {
+        } else if (requestURI.endsWith(LIST_SERVICES_SUFFIX) ||
+                requestURI.endsWith(LIST_FAULTY_SERVICES_SUFFIX)) {
             // handling list services request
             try {
                 agent.handle(request, response);
@@ -315,9 +328,9 @@ public class AxisServlet extends HttpServlet implements TransportListener {
                 SOAPEnvelope envelope = messageContext.getEnvelope();
                 if(envelope != null) {
                     StAXBuilder builder = (StAXBuilder) envelope.getBuilder();
-                if (builder != null) {
-                    builder.close();
-                }
+                    if (builder != null) {
+                        builder.close();
+                    }
                 }
             } catch (Exception e) {
                 log.debug(e.toString(), e);
@@ -410,6 +423,9 @@ public class AxisServlet extends HttpServlet implements TransportListener {
      * @throws ServletException
      */
     public void init(ServletConfig config) throws ServletException {
+        
+        // prevent this method from being called more than once per instance
+        initCalled = true;
         super.init(config);
         try {
             this.servletConfig = config;
@@ -483,7 +499,7 @@ public class AxisServlet extends HttpServlet implements TransportListener {
      * @throws ServletException
      */
     public void init() throws ServletException {
-        if (this.servletConfig != null) {
+        if (this.servletConfig != null  && !initCalled) {
             init(this.servletConfig);
         }
     }
@@ -503,6 +519,7 @@ public class AxisServlet extends HttpServlet implements TransportListener {
             configContext.setProperty(Constants.CONTAINER_MANAGED, Constants.VALUE_TRUE);
             return configContext;
         } catch (Exception e) {
+            log.info(e);
             throw new ServletException(e);
         }
     }
@@ -516,7 +533,14 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         if (contextRoot != null && contextRoot.trim().length() != 0) {
             return;
         }
-        String contextPath = req.getContextPath();
+        String contextPath = null;
+        // Support older servlet API's
+        try {
+            contextPath = req.getContextPath();
+        } catch (Throwable t) {
+            log.info("Old Servlet API (Fallback to HttpServletRequest.getServletPath) :" + t);    
+            contextPath = req.getServletPath();
+        }
         //handling ROOT scenario, for servlets in the default (root) context, this method returns ""
         if (contextPath != null && contextPath.length() == 0) {
             contextPath = "/";
@@ -566,7 +590,7 @@ public class AxisServlet extends HttpServlet implements TransportListener {
             endpointRefernce = endpointRefernce + '/' +
                     configContext.getServiceContextPath() + "/" + serviceName;
         }
-        EndpointReference endpoint = new EndpointReference(endpointRefernce);
+        EndpointReference endpoint = new EndpointReference(endpointRefernce + "/");
 
         return new EndpointReference[]{endpoint};
     }
@@ -602,8 +626,16 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         MessageContext msgContext = configContext.createMessageContext();
         String requestURI = request.getRequestURI();
 
-        String trsPrefix = request.getRequestURL().toString();
-        int sepindex = trsPrefix.indexOf(':');
+        String trsPrefix = null;
+        int sepindex = -1;
+        // Support older servlet API's
+        try { 
+            trsPrefix = request.getRequestURL().toString();
+        } catch (Throwable t){
+            log.info("Old Servlet API (Fallback to HttpServletRequest.getRequestURI) :" + t);    
+            trsPrefix = request.getRequestURI();
+        }
+        sepindex = trsPrefix.indexOf(':');
         if (sepindex > -1) {
             trsPrefix = trsPrefix.substring(0, sepindex);
             msgContext.setIncomingTransportName(trsPrefix);
@@ -642,6 +674,14 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         msgContext.setProperty(MessageContext.TRANSPORT_HEADERS, getTransportHeaders(request));
         msgContext.setProperty(HTTPConstants.MC_HTTP_SERVLETREQUEST, request);
         msgContext.setProperty(HTTPConstants.MC_HTTP_SERVLETRESPONSE, response);
+        try {
+            ServletContext context = getServletContext();
+            if(context != null) {
+                msgContext.setProperty(HTTPConstants.MC_HTTP_SERVLETCONTEXT, context);
+            }
+        } catch (Exception e){
+            log.debug(e.getMessage(), e);
+        }
 
         //setting the RequestResponseTransport object
         msgContext.setProperty(RequestResponseTransport.TRANSPORT_CONTROL,
@@ -692,7 +732,10 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         private HttpServletResponse response;
         private boolean responseWritten = false;
         private CountDownLatch responseReadySignal = new CountDownLatch(1);
-        RequestResponseTransportStatus status = RequestResponseTransportStatus.INITIAL;
+		// The initial status must be WAITING, as the main servlet will do some other
+		// work after setting this RequestResponseTransport up, and we don't want to miss
+		// signals that come in before this thread gets to the awaitResponse call.
+        private RequestResponseTransportStatus status = RequestResponseTransportStatus.WAITING;
         AxisFault faultToBeThrownOut = null;
 
         ServletRequestResponseTransport(HttpServletResponse response) {
@@ -700,26 +743,13 @@ public class AxisServlet extends HttpServlet implements TransportListener {
         }
 
         public void acknowledgeMessage(MessageContext msgContext) throws AxisFault {
-            log.debug("Acking one-way request");
-            response.setContentType("text/xml; charset="
-                    + msgContext
-                    .getProperty(Constants.Configuration.CHARACTER_SET_ENCODING));
-
-            response.setStatus(HttpServletResponse.SC_ACCEPTED);
-            try {
-                response.flushBuffer();
-            }
-            catch (IOException e) {
-                throw new AxisFault("Error sending acknowledgement", e);
-            }
-
-            signalResponseReady();
+            status = RequestResponseTransportStatus.ACKED;
+            responseReadySignal.countDown();
         }
 
         public void awaitResponse()
                 throws InterruptedException, AxisFault {
             log.debug("Blocking servlet thread -- awaiting response");
-            status = RequestResponseTransportStatus.WAITING;
             responseReadySignal.await();
 
             if (faultToBeThrownOut != null) {
@@ -769,7 +799,7 @@ public class AxisServlet extends HttpServlet implements TransportListener {
      * This is the helper Class use in processing of doGet, doPut , doDelete and doPost.
      */
     protected class RestRequestProcessor {
-        private MessageContext messageContext;
+        protected MessageContext messageContext;
         private HttpServletRequest request;
         private HttpServletResponse response;
 

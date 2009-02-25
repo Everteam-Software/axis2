@@ -16,21 +16,62 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.databinding.utils;
 
 import org.apache.axiom.attachments.ByteArrayDataSource;
 import org.apache.axiom.attachments.utils.IOUtils;
 import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMConstants;
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.impl.MTOMConstants;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
+import org.apache.axiom.om.impl.llom.OMStAXWrapper;
 import org.apache.axiom.om.util.Base64;
+import org.apache.axiom.om.util.ElementHelper;
 import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axiom.soap.impl.builder.MTOMStAXSOAPModelBuilder;
 import org.apache.axis2.databinding.ADBBean;
+import org.apache.axis2.databinding.ADBException;
 import org.apache.axis2.databinding.i18n.ADBMessages;
-import org.apache.axis2.databinding.types.*;
+import org.apache.axis2.databinding.types.Day;
+import org.apache.axis2.databinding.types.Duration;
+import org.apache.axis2.databinding.types.Entities;
+import org.apache.axis2.databinding.types.Entity;
+import org.apache.axis2.databinding.types.HexBinary;
+import org.apache.axis2.databinding.types.IDRef;
+import org.apache.axis2.databinding.types.IDRefs;
+import org.apache.axis2.databinding.types.Id;
+import org.apache.axis2.databinding.types.Language;
+import org.apache.axis2.databinding.types.Month;
+import org.apache.axis2.databinding.types.MonthDay;
+import org.apache.axis2.databinding.types.NCName;
+import org.apache.axis2.databinding.types.NMToken;
+import org.apache.axis2.databinding.types.NMTokens;
+import org.apache.axis2.databinding.types.Name;
+import org.apache.axis2.databinding.types.NegativeInteger;
+import org.apache.axis2.databinding.types.NonNegativeInteger;
+import org.apache.axis2.databinding.types.NonPositiveInteger;
+import org.apache.axis2.databinding.types.NormalizedString;
+import org.apache.axis2.databinding.types.Notation;
+import org.apache.axis2.databinding.types.PositiveInteger;
+import org.apache.axis2.databinding.types.Time;
+import org.apache.axis2.databinding.types.Token;
+import org.apache.axis2.databinding.types.URI;
+import org.apache.axis2.databinding.types.UnsignedByte;
+import org.apache.axis2.databinding.types.UnsignedInt;
+import org.apache.axis2.databinding.types.UnsignedLong;
+import org.apache.axis2.databinding.types.UnsignedShort;
+import org.apache.axis2.databinding.types.Year;
+import org.apache.axis2.databinding.types.YearMonth;
+import org.apache.axis2.databinding.utils.writer.MTOMAwareXMLStreamWriter;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import javax.activation.DataHandler;
+import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
@@ -38,11 +79,10 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -55,8 +95,16 @@ import java.util.TimeZone;
  * simpletype 4. Object list -> array
  */
 public class ConverterUtil {
+
+    private static Log log = LogFactory.getLog(ConverterUtil.class);
+
     private static final String POSITIVE_INFINITY = "INF";
     private static final String NEGATIVE_INFINITY = "-INF";
+
+    public static final String SYSTEM_PROPERTY_ADB_CONVERTERUTIL = "adb.converterutil";
+
+    private static boolean isCustomClassPresent;
+    private static Class customClass;
 
     /* String conversion methods */
     public static String convertToString(int i) {
@@ -92,19 +140,133 @@ public class ConverterUtil {
     }
 
     public static String convertToString(Date value) {
-        // lexical form of the date is '-'? yyyy '-' mm '-' dd zzzzzz?
-        // we have to serialize it with the GMT timezone
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'Z'");
-        simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-        return simpleDateFormat.format(value);
+
+        if (isCustomClassPresent) {
+            // this means user has define a seperate converter util class
+            return invokeToStringMethod(value,Date.class);
+        } else {
+            // lexical form of the date is '-'? yyyy '-' mm '-' dd zzzzzz?
+            Calendar calendar = Calendar.getInstance();
+            calendar.clear();
+            calendar.setTime(value);
+            if (!calendar.isSet(Calendar.ZONE_OFFSET)){
+                calendar.setTimeZone(TimeZone.getDefault());
+            }
+            StringBuffer dateString = new StringBuffer(16);
+            appendDate(dateString, calendar);
+            appendTimeZone(calendar, dateString);
+            return dateString.toString();
+        }
+    }
+
+    public static void appendTimeZone(Calendar calendar, StringBuffer dateString) {
+        int timezoneOffSet = calendar.get(Calendar.ZONE_OFFSET) + calendar.get(Calendar.DST_OFFSET);
+        int timezoneOffSetInMinits = timezoneOffSet / 60000;
+        if (timezoneOffSetInMinits < 0){
+            dateString.append("-");
+            timezoneOffSetInMinits = timezoneOffSetInMinits * -1;
+        } else {
+            dateString.append("+");
+        }
+        int hours = timezoneOffSetInMinits / 60;
+        int minits = timezoneOffSetInMinits % 60;
+
+        if (hours < 10) {
+            dateString.append("0");
+        }
+        dateString.append(hours).append(":");
+
+        if (minits < 10){
+            dateString.append("0");
+        }
+
+        dateString.append(minits);
+    }
+
+    public static void appendDate(StringBuffer dateString, Calendar calendar) {
+
+        int year = calendar.get(Calendar.YEAR);
+
+        if (year < 1000){
+            dateString.append("0");
+        }
+        if (year < 100){
+            dateString.append("0");
+        }
+        if (year < 10) {
+            dateString.append("0");
+        }
+        dateString.append(year).append("-");
+
+        // xml date month is started from 1 and calendar month is
+        // started from 0. so have to add one
+        int month = calendar.get(Calendar.MONTH) + 1;
+        if (month < 10){
+            dateString.append("0");
+        }
+        dateString.append(month).append("-");
+        if (calendar.get(Calendar.DAY_OF_MONTH) < 10){
+            dateString.append("0");
+        }
+        dateString.append(calendar.get(Calendar.DAY_OF_MONTH));
+    }
+
+    private static String invokeToStringMethod(Object value, Class type) {
+
+        try {
+            Method method = customClass.getMethod("convertToString", new Class[]{type});
+            String result = (String) method.invoke(null,new Object[]{value});
+            return result;
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException("can not find the method convertToString("
+                    + type.getName() + ") in converter util class " + customClass.getName(), e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("can not access the method convertToString("
+                    + type.getName() + ") in converter util class " + customClass.getName(), e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException("can not invocate the method convertToString("
+                    + type.getName() + ") in converter util class " + customClass.getName(), e);
+        }
     }
 
     public static String convertToString(Calendar value) {
-        // lexical form of the calendar is '-'? yyyy '-' mm '-' dd 'T' hh ':' mm ':' ss ('.' s+)? (zzzzzz)?
-        SimpleDateFormat zulu = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        zulu.setTimeZone(TimeZone.getTimeZone("GMT"));
-        // Sun JDK bug http://developer.java.sun.com/developer/bugParade/bugs/4229798.html
-        return zulu.format(value.getTime());
+        if (isCustomClassPresent) {
+            return invokeToStringMethod(value,Calendar.class);
+        } else {
+            // lexical form of the calendar is '-'? yyyy '-' mm '-' dd 'T' hh ':' mm ':' ss ('.' s+)? (zzzzzz)?
+            if (!value.isSet(Calendar.ZONE_OFFSET)){
+                value.setTimeZone(TimeZone.getDefault());
+            }
+            StringBuffer dateString = new StringBuffer(28);
+            appendDate(dateString, value);
+            dateString.append("T");
+            //adding hours
+            appendTime(value, dateString);
+            appendTimeZone(value, dateString);
+            return dateString.toString();
+        }
+    }
+
+    public static void appendTime(Calendar value, StringBuffer dateString) {
+        if (value.get(Calendar.HOUR_OF_DAY) < 10) {
+            dateString.append("0");
+        }
+        dateString.append(value.get(Calendar.HOUR_OF_DAY)).append(":");
+        if (value.get(Calendar.MINUTE) < 10) {
+            dateString.append("0");
+        }
+        dateString.append(value.get(Calendar.MINUTE)).append(":");
+        if (value.get(Calendar.SECOND) < 10) {
+            dateString.append("0");
+        }
+        dateString.append(value.get(Calendar.SECOND)).append(".");
+        if (value.get(Calendar.MILLISECOND) < 10) {
+            dateString.append("0");
+        }
+        if (value.get(Calendar.MILLISECOND) < 100) {
+            dateString.append("0");
+        }
+        dateString.append(value.get(Calendar.MILLISECOND));
     }
 
     public static String convertToString(Day o) {
@@ -211,6 +373,9 @@ public class ConverterUtil {
 
 
     public static int convertToInt(String s) {
+        if ((s == null) || s.equals("")){
+            return Integer.MIN_VALUE;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -218,6 +383,9 @@ public class ConverterUtil {
     }
 
     public static BigDecimal convertToBigDecimal(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -225,6 +393,9 @@ public class ConverterUtil {
     }
 
     public static double convertToDouble(String s) {
+        if ((s == null) || s.equals("")){
+            return Double.NaN;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -237,6 +408,9 @@ public class ConverterUtil {
     }
 
     public static BigDecimal convertToDecimal(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -244,6 +418,9 @@ public class ConverterUtil {
     }
 
     public static float convertToFloat(String s) {
+        if ((s == null) || s.equals("")){
+            return Float.NaN;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -260,6 +437,9 @@ public class ConverterUtil {
     }
 
     public static long convertToLong(String s) {
+        if ((s == null) || s.equals("")){
+            return Long.MIN_VALUE;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -267,6 +447,9 @@ public class ConverterUtil {
     }
 
     public static short convertToShort(String s) {
+        if ((s == null) || s.equals("")){
+            return Short.MIN_VALUE;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -302,36 +485,60 @@ public class ConverterUtil {
     }
 
     public static YearMonth convertToGYearMonth(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new YearMonth(s);
     }
 
     public static MonthDay convertToGMonthDay(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new MonthDay(s);
     }
 
     public static Year convertToGYear(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Year(s);
     }
 
     public static Month convertToGMonth(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Month(s);
     }
 
     public static Day convertToGDay(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Day(s);
     }
 
     public static Duration convertToDuration(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Duration(s);
     }
 
 
     public static HexBinary convertToHexBinary(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new HexBinary(s);
     }
 
     public static javax.activation.DataHandler convertToBase64Binary(String s) {
         // reusing the byteArrayDataSource from the Axiom classes
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         ByteArrayDataSource byteArrayDataSource = new ByteArrayDataSource(
                 Base64.decode(s)
         );
@@ -351,29 +558,47 @@ public class ConverterUtil {
     public static Date convertToDate(String source) {
 
         // the lexical form of the date is '-'? yyyy '-' mm '-' dd zzzzzz?
-        Calendar calendar = Calendar.getInstance();
-        SimpleDateFormat simpleDateFormat = null;
+        if ((source == null) || source.trim().equals("")) {
+            return null;
+        }
+        source = source.trim();
         boolean bc = false;
         if (source.startsWith("-")) {
             source = source.substring(1);
             bc = true;
         }
 
-        if ((source != null) && (source.length() >= 10)) {
-            if (source.length() == 10) {
-                //i.e this stirng has only the compulsory part
-                simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
-            } else {
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        int timeZoneOffSet = TimeZone.getDefault().getRawOffset();
+
+        if (source.length() >= 10) {
+            //first 10 numbers must give the year
+            if ((source.charAt(4) != '-') || (source.charAt(7) != '-')){
+                throw new RuntimeException("invalid date format (" + source + ") wiht out - s at correct place ");
+            }
+            year = Integer.parseInt(source.substring(0,4));
+            month = Integer.parseInt(source.substring(5,7));
+            day = Integer.parseInt(source.substring(8,10));
+
+            if (source.length() > 10) {
                 String restpart = source.substring(10);
                 if (restpart.startsWith("Z")) {
                     // this is a gmt time zone value
-                    simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'Z'");
-                    simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+                    timeZoneOffSet = 0;
                 } else if (restpart.startsWith("+") || restpart.startsWith("-")) {
                     // this is a specific time format string
-                    simpleDateFormat = new SimpleDateFormat("yyyy-MM-ddz");
-                    // have to add the GMT part to process the message
-                    source = source.substring(0, 10) + "GMT" + restpart;
+                    if (restpart.charAt(3) != ':'){
+                        throw new RuntimeException("invalid time zone format (" + source
+                                + ") without : at correct place");
+                    }
+                    int hours = Integer.parseInt(restpart.substring(1,3));
+                    int minits = Integer.parseInt(restpart.substring(4,6));
+                    timeZoneOffSet = ((hours * 60) + minits) * 60000;
+                    if (restpart.startsWith("-")){
+                        timeZoneOffSet = timeZoneOffSet * -1;
+                    }
                 } else {
                     throw new RuntimeException("In valid string sufix");
                 }
@@ -382,35 +607,49 @@ public class ConverterUtil {
             throw new RuntimeException("In valid string to parse");
         }
 
-        Date date;
-        try {
-            date = simpleDateFormat.parse(source);
-            if (bc) {
-                calendar.setTime(date);
-                calendar.set(Calendar.ERA, GregorianCalendar.BC);
-                date = calendar.getTime();
-            }
-        } catch (ParseException e) {
-            throw new RuntimeException("In valid string to parse");
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.set(Calendar.YEAR, year);
+        //xml month stars from the 1 and calendar month is starts with 0
+        calendar.set(Calendar.MONTH, month - 1);
+        calendar.set(Calendar.DAY_OF_MONTH, day);
+        calendar.set(Calendar.ZONE_OFFSET, timeZoneOffSet);
+        calendar.set(Calendar.DST_OFFSET, 0);
+        calendar.getTimeInMillis();
+        if (bc){
+            calendar.set(Calendar.ERA, GregorianCalendar.BC);
         }
 
-        return date;
+        return calendar.getTime();
+
     }
 
     public static Time convertToTime(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Time(s);
     }
 
     public static Token convertToToken(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Token(s);
     }
 
 
     public static NormalizedString convertToNormalizedString(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new NormalizedString(s);
     }
 
     public static UnsignedLong convertToUnsignedLong(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -418,6 +657,9 @@ public class ConverterUtil {
     }
 
     public static UnsignedInt convertToUnsignedInt(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -425,6 +667,9 @@ public class ConverterUtil {
     }
 
     public static UnsignedShort convertToUnsignedShort(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -432,6 +677,9 @@ public class ConverterUtil {
     }
 
     public static UnsignedByte convertToUnsignedByte(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -439,6 +687,9 @@ public class ConverterUtil {
     }
 
     public static NonNegativeInteger convertToNonNegativeInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -446,6 +697,9 @@ public class ConverterUtil {
     }
 
     public static NegativeInteger convertToNegativeInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -453,6 +707,9 @@ public class ConverterUtil {
     }
 
     public static PositiveInteger convertToPositiveInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -460,6 +717,9 @@ public class ConverterUtil {
     }
 
     public static NonPositiveInteger convertToNonPositiveInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -467,14 +727,23 @@ public class ConverterUtil {
     }
 
     public static Name convertToName(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Name(s);
     }
 
     public static NCName convertToNCName(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new NCName(s);
     }
 
     public static Id convertToID(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Id(s);
     }
 
@@ -483,14 +752,23 @@ public class ConverterUtil {
     }
 
     public static Language convertToLanguage(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Language(s);
     }
 
     public static NMToken convertToNMTOKEN(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new NMToken(s);
     }
 
     public static NMTokens convertToNMTOKENS(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new NMTokens(s);
     }
 
@@ -500,26 +778,44 @@ public class ConverterUtil {
     }
 
     public static Entity convertToENTITY(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Entity(s);
     }
 
     public static Entities convertToENTITIES(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new Entities(s);
     }
 
     public static IDRef convertToIDREF(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new IDRef(s);
     }
 
     public static IDRefs convertToIDREFS(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return new IDRefs(s);
     }
 
     public static URI convertToURI(String s){
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         return convertToAnyURI(s);
     }
 
     public static URI convertToAnyURI(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         try {
             return new URI(s);
         } catch (URI.MalformedURIException e) {
@@ -529,6 +825,9 @@ public class ConverterUtil {
     }
 
     public static BigInteger convertToInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -536,6 +835,9 @@ public class ConverterUtil {
     }
 
     public static BigInteger convertToBigInteger(String s) {
+        if ((s == null) || s.equals("")){
+            return null;
+        }
         if (s.startsWith("+")) {
             s = s.substring(1);
         }
@@ -543,6 +845,9 @@ public class ConverterUtil {
     }
 
     public static byte convertToByte(String s) {
+        if ((s == null) || s.equals("")){
+            return Byte.MIN_VALUE;
+        }
         return Byte.parseByte(s);
     }
 
@@ -554,71 +859,135 @@ public class ConverterUtil {
      */
     public static Calendar convertToDateTime(String source) {
 
+        if ((source == null) || source.trim().equals("")) {
+            return null;
+        }
+        source = source.trim();
         // the lexical representation of the date time as follows
         // '-'? yyyy '-' mm '-' dd 'T' hh ':' mm ':' ss ('.' s+)? (zzzzzz)?
-        SimpleDateFormat simpleDateFormat = null;
         Date date = null;
         Calendar calendar = Calendar.getInstance();
+        calendar.clear();
 
         if (source.startsWith("-")) {
             source = source.substring(1);
             calendar.set(Calendar.ERA, GregorianCalendar.BC);
         }
 
-        try {
-            if ((source != null) && (source.length() >= 19)) {
-                if (source.length() == 19) {
-                    // i.e. this does not have any additional assume this time in current local
-                    simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        int hour = 0;
+        int minite = 0;
+        int second = 0;
+        int miliSecond = 0;
+        int timeZoneOffSet = TimeZone.getDefault().getRawOffset();
 
-                } else {
-                    String rest = source.substring(19);
-                    if (rest.startsWith(".")) {
-                        // i.e this have the ('.'s+) part
-                        if (rest.endsWith("Z")) {
-                            // this is in gmt time zone
-                            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS'Z'");
-                            simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
 
-                        } else if ((rest.lastIndexOf("+") > 0) || (rest.lastIndexOf("-") > 0)) {
-                            // this is given in a general time zione
-                            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSSz");
-                            if (rest.lastIndexOf("+") > 0) {
-                                source = source.substring(0, source.lastIndexOf("+")) + "GMT" +
-                                        rest.substring(rest.lastIndexOf("+"));
-                            } else if (rest.lastIndexOf("-") > 0) {
-                                source = source.substring(0, source.lastIndexOf("-")) + "GMT" +
-                                        rest.substring(rest.lastIndexOf("-"));
-                            }
+        if ((source != null) && (source.length() >= 19)) {
+            if ((source.charAt(4) != '-') ||
+                    (source.charAt(7) != '-') ||
+                    (source.charAt(10) != 'T') ||
+                    (source.charAt(13) != ':') ||
+                    (source.charAt(16) != ':')) {
+                throw new RuntimeException("invalid date format (" + source + ") wiht out - s at correct place ");
+            }
+            year = Integer.parseInt(source.substring(0, 4));
+            month = Integer.parseInt(source.substring(5, 7));
+            day = Integer.parseInt(source.substring(8, 10));
+            hour = Integer.parseInt(source.substring(11, 13));
+            minite = Integer.parseInt(source.substring(14, 16));
+            second = Integer.parseInt(source.substring(17, 19));
 
-                        } else {
-                            // i.e it does not have time zone
-                            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS");
+            int milliSecondPartLength = 0;
+
+            if (source.length() > 19)  {
+                String rest = source.substring(19);
+                if (rest.startsWith(".")) {
+                    // i.e this have the ('.'s+) part
+                    if (rest.endsWith("Z")) {
+                        // this is in gmt time zone
+                        timeZoneOffSet = 0;
+                        calendar.setTimeZone(TimeZone.getTimeZone("GMT"));
+                        miliSecond = Integer.parseInt(rest.substring(1, rest.lastIndexOf("Z")));
+                        milliSecondPartLength = rest.substring(1,rest.lastIndexOf("Z")).trim().length();
+                    } else if ((rest.lastIndexOf("+") > 0) || (rest.lastIndexOf("-") > 0)) {
+                        // this is given in a general time zione
+                        String timeOffSet = null;
+                        if (rest.lastIndexOf("+") > 0) {
+                            timeOffSet = rest.substring(rest.lastIndexOf("+") + 1);
+                            miliSecond = Integer.parseInt(rest.substring(1, rest.lastIndexOf("+")));
+                            milliSecondPartLength = rest.substring(1, rest.lastIndexOf("+")).trim().length();
+                            // we keep +1 or -1 to finally calculate the value
+                            timeZoneOffSet = 1;
+
+                        } else if (rest.lastIndexOf("-") > 0) {
+                            timeOffSet = rest.substring(rest.lastIndexOf("-") + 1);
+                            miliSecond = Integer.parseInt(rest.substring(1, rest.lastIndexOf("-")));
+                            milliSecondPartLength = rest.substring(1, rest.lastIndexOf("-")).trim().length();
+                            // we keep +1 or -1 to finally calculate the value
+                            timeZoneOffSet = -1;
                         }
+                        if (timeOffSet.charAt(2) != ':') {
+                            throw new RuntimeException("invalid time zone format (" + source
+                                    + ") without : at correct place");
+                        }
+                        int hours = Integer.parseInt(timeOffSet.substring(0, 2));
+                        int minits = Integer.parseInt(timeOffSet.substring(3, 5));
+                        timeZoneOffSet = ((hours * 60) + minits) * 60000 * timeZoneOffSet;
 
                     } else {
-                        if (rest.startsWith("Z")) {
-                            // this is in gmt time zone
-                            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-                            simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-                        } else if (rest.startsWith("+") || rest.startsWith("-")) {
-                            // this is given in a general time zione
-                            simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
-                            source = source.substring(0, 19) + "GMT" + rest;
-                        } else {
-                            throw new NumberFormatException("in valid time zone attribute");
+                        // i.e it does not have time zone
+                        miliSecond = Integer.parseInt(rest.substring(1));
+                        milliSecondPartLength = rest.substring(1).trim().length();
+                    }
+
+                } else {
+                    if (rest.startsWith("Z")) {
+                        calendar.setTimeZone(TimeZone.getTimeZone("GMT"));
+                        // this is in gmt time zone
+                        timeZoneOffSet = 0;
+                    } else if (rest.startsWith("+") || rest.startsWith("-")) {
+                        // this is given in a general time zione
+                        if (rest.charAt(3) != ':') {
+                            throw new RuntimeException("invalid time zone format (" + source
+                                    + ") without : at correct place");
                         }
+                        int hours = Integer.parseInt(rest.substring(1, 3));
+                        int minits = Integer.parseInt(rest.substring(4, 6));
+                        timeZoneOffSet = ((hours * 60) + minits) * 60000;
+                        if (rest.startsWith("-")) {
+                            timeZoneOffSet = timeZoneOffSet * -1;
+                        }
+                    } else {
+                        throw new NumberFormatException("in valid time zone attribute");
                     }
                 }
-                date = simpleDateFormat.parse(source);
-                calendar.setTime(date);
-
-            } else {
-                throw new NumberFormatException("date string can not be less than 19 charactors");
             }
-        } catch (ParseException e) {
-            throw new NumberFormatException(e.getMessage());
+            calendar.set(Calendar.YEAR, year);
+            // xml month is started from 1 and calendar month is started from 0
+            calendar.set(Calendar.MONTH, month - 1);
+            calendar.set(Calendar.DAY_OF_MONTH, day);
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minite);
+            calendar.set(Calendar.SECOND, second);
+            if (milliSecondPartLength != 3){
+                // milisecond part represenst the fraction of the second so we have to
+                // find the fraction and multiply it by 1000. So if milisecond part
+                // has three digits nothing required
+                miliSecond = miliSecond * 1000;
+                for (int i = 0; i < milliSecondPartLength; i++) {
+                    miliSecond = miliSecond / 10;
+                }
+            }
+            calendar.set(Calendar.MILLISECOND, miliSecond);
+            calendar.set(Calendar.ZONE_OFFSET, timeZoneOffSet);
+            calendar.set(Calendar.DST_OFFSET, 0);
+
+        } else {
+            throw new NumberFormatException("date string can not be less than 19 charactors");
         }
+
         return calendar;
     }
 
@@ -747,7 +1116,7 @@ public class ConverterUtil {
             for (int i = 0; i < listSize; i++) {
                 Object o = objectList.get(i);
                 if (o != null) {
-                    array[i] = Boolean.getBoolean(o.toString());
+                    array[i] = o.toString().equalsIgnoreCase("true");
                 }
             }
             returnArray = array;
@@ -971,25 +1340,16 @@ public class ConverterUtil {
     public static Object getObjectForClass(Class clazz, String value) {
         //first see whether this class has a constructor that can
         //take the string as an argument.
-        boolean continueFlag = false;
         try {
             Constructor stringConstructor = clazz.getConstructor(new Class[] { String.class });
             return stringConstructor.newInstance(new Object[] { value });
         } catch (NoSuchMethodException e) {
             //oops - no such constructors - continue with the
             //parse method
-            continueFlag = true;
         } catch (Exception e) {
             throw new ObjectConversionException(
                     ADBMessages.getMessage("converter.cannotGenerate",
-                                           clazz.getName()),
-                    e);
-        }
-
-        if (!continueFlag) {
-            throw new ObjectConversionException(
-                    ADBMessages.getMessage("converter.cannotConvert",
-                                           clazz.getName()));
+                                           clazz.getName()), e);
         }
 
         try {
@@ -1027,18 +1387,266 @@ public class ConverterUtil {
     }
 
     // serialization methods for xsd any type
+    public static void serializeAnyType(Object value, XMLStreamWriter xmlStreamWriter) throws XMLStreamException {
+        if (value instanceof String) {
+            serializeAnyType("string", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Integer) {
+            serializeAnyType("int", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Boolean) {
+            serializeAnyType("boolean", value.toString(), xmlStreamWriter);
+        } else if (value instanceof URI) {
+            serializeAnyType("anyURI", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Byte) {
+            serializeAnyType("byte", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Date) {
+            serializeAnyType("date", convertToString((Date) value), xmlStreamWriter);
+        } else if (value instanceof Calendar) {
+            serializeAnyType("dateTime", convertToString((Calendar) value), xmlStreamWriter);
+        } else if (value instanceof Time) {
+            serializeAnyType("time", convertToString((Time) value), xmlStreamWriter);
+        } else if (value instanceof Float) {
+            serializeAnyType("float", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Long) {
+            serializeAnyType("long", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Double) {
+            serializeAnyType("double", value.toString(), xmlStreamWriter);
+        } else if (value instanceof Short) {
+            serializeAnyType("short", value.toString(), xmlStreamWriter);
+        } else if (value instanceof BigDecimal) {
+            serializeAnyType("decimal", value.toString(), xmlStreamWriter);
+        } else if (value instanceof DataHandler) {
+            addTypeAttribute(xmlStreamWriter,"base64Binary");
+            MTOMAwareXMLStreamWriter mtomAwareXMLStreamWriter = (MTOMAwareXMLStreamWriter) xmlStreamWriter;
+            mtomAwareXMLStreamWriter.writeDataHandler((DataHandler)value);
+        } else if (value instanceof QName) {
+            QName qNameValue = (QName) value;
+            String prefix = xmlStreamWriter.getPrefix(qNameValue.getNamespaceURI());
+            if (prefix == null) {
+                prefix = BeanUtil.getUniquePrefix();
+                xmlStreamWriter.writeNamespace(prefix, qNameValue.getNamespaceURI());
+                xmlStreamWriter.setPrefix(prefix, qNameValue.getNamespaceURI());
+            }
+            String attributeValue = qNameValue.getLocalPart();
+            if (!prefix.equals("")) {
+                attributeValue = prefix + ":" + attributeValue;
+            }
+            serializeAnyType("QName", attributeValue, xmlStreamWriter);
+        } else if (value instanceof UnsignedByte) {
+            serializeAnyType("unsignedByte", convertToString((UnsignedByte) value), xmlStreamWriter);
+        } else if (value instanceof UnsignedLong) {
+            serializeAnyType("unsignedLong", convertToString((UnsignedLong) value), xmlStreamWriter);
+        } else if (value instanceof UnsignedShort) {
+            serializeAnyType("unsignedShort", convertToString((UnsignedShort) value), xmlStreamWriter);
+        } else if (value instanceof UnsignedInt) {
+            serializeAnyType("unsignedInt", convertToString((UnsignedInt) value), xmlStreamWriter);
+        } else if (value instanceof PositiveInteger) {
+            serializeAnyType("positiveInteger", convertToString((PositiveInteger) value), xmlStreamWriter);
+        } else if (value instanceof NegativeInteger) {
+            serializeAnyType("negativeInteger", convertToString((NegativeInteger) value), xmlStreamWriter);
+        } else if (value instanceof NonNegativeInteger) {
+            serializeAnyType("nonNegativeInteger", convertToString((NonNegativeInteger) value), xmlStreamWriter);
+        } else if (value instanceof NonPositiveInteger) {
+            serializeAnyType("nonPositiveInteger", convertToString((NonPositiveInteger) value), xmlStreamWriter);
+        } else {
+            throw new XMLStreamException("Unknow type can not serialize");
+        }
+    }
+
 
     /**
-     * serialize the any type string object
-     * @param string
+     * this method writes the xsi:type attrubte and the value to the xmlstreamwriter
+     * to serialize the anytype object
+     * @param type  - xsd type of the attribute
+     * @param value - string value of the object
      * @param xmlStreamWriter
+     * @throws XMLStreamException
      */
-    public static void serializeAnyType(String string, XMLStreamWriter xmlStreamWriter) throws XMLStreamException {
-         if (xmlStreamWriter.getPrefix(Constants.XSI_NAMESPACE) == null){
-             String prefix = BeanUtil.getUniquePrefix();
-             xmlStreamWriter.writeNamespace(prefix,Constants.XSI_NAMESPACE);
-             xmlStreamWriter.setPrefix(prefix,Constants.XSI_NAMESPACE);
-         }
-         
+    private static void serializeAnyType(String type,
+                                         String value,
+                                         XMLStreamWriter xmlStreamWriter)
+            throws XMLStreamException {
+
+        addTypeAttribute(xmlStreamWriter, type);
+        xmlStreamWriter.writeCharacters(value);
     }
+
+    private static void addTypeAttribute(XMLStreamWriter xmlStreamWriter, String type) throws XMLStreamException {
+        String prefix = xmlStreamWriter.getPrefix(Constants.XSI_NAMESPACE);
+        if (prefix == null) {
+            prefix = BeanUtil.getUniquePrefix();
+            xmlStreamWriter.writeNamespace(prefix, Constants.XSI_NAMESPACE);
+            xmlStreamWriter.setPrefix(prefix, Constants.XSI_NAMESPACE);
+        }
+
+        prefix = xmlStreamWriter.getPrefix(Constants.XSD_NAMESPACE);
+        if (prefix == null) {
+            prefix = BeanUtil.getUniquePrefix();
+            xmlStreamWriter.writeNamespace(prefix, Constants.XSD_NAMESPACE);
+            xmlStreamWriter.setPrefix(prefix, Constants.XSD_NAMESPACE);
+        }
+
+        String attributeValue = null;
+        if (prefix.equals("")) {
+            attributeValue = type;
+        } else {
+            attributeValue = prefix + ":" + type;
+        }
+
+        xmlStreamWriter.writeAttribute(Constants.XSI_NAMESPACE, "type", attributeValue);
+    }
+
+    public static Object getAnyTypeObject(XMLStreamReader xmlStreamReader,
+                                          Class extensionMapperClass) throws XMLStreamException {
+        Object returnObject = null;
+
+        // make sure reader is at the first element.
+        while(!xmlStreamReader.isStartElement()){
+            xmlStreamReader.next();
+        }
+        // first check whether this element is null or not
+        String nillableValue = xmlStreamReader.getAttributeValue(Constants.XSI_NAMESPACE, "nil");
+        if ("true".equals(nillableValue) || "1".equals(nillableValue)){
+            returnObject = null;
+        } else {
+            String attributeType = xmlStreamReader.getAttributeValue(Constants.XSI_NAMESPACE, "type");
+            if (attributeType != null) {
+                String attributeTypePrefix = "";
+                if (attributeType.indexOf(":") > -1) {
+                    attributeTypePrefix = attributeType.substring(0,attributeType.indexOf(":"));
+                    attributeType = attributeType.substring(attributeType.indexOf(":") + 1);
+                }
+                NamespaceContext namespaceContext = xmlStreamReader.getNamespaceContext();
+                String attributeNameSpace = namespaceContext.getNamespaceURI(attributeTypePrefix);
+
+                if (attributeNameSpace.equals(Constants.XSD_NAMESPACE)) {
+                    if ("base64Binary".equals(attributeType)) {
+                        xmlStreamReader.next();
+                        returnObject = getDataHandlerObject(xmlStreamReader);
+                    } else {
+                        // we have to do this other wise xmlstream event type is not set.
+                        xmlStreamReader.next();
+                        String attribValue = xmlStreamReader.getText();
+                        xmlStreamReader.next();
+                        if (attribValue != null) {
+                            if (attributeType.equals("string")) {
+                                returnObject = attribValue;
+                            } else if (attributeType.equals("int")) {
+                                returnObject = new Integer(attribValue);
+                            } else if (attributeType.equals("QName")) {
+                                String namespacePrefix = null;
+                                String localPart = null;
+                                if (attribValue.indexOf(":") > -1) {
+                                    namespacePrefix = attribValue.substring(0, attribValue.indexOf(":"));
+                                    localPart = attribValue.substring(attribValue.indexOf(":") + 1);
+                                    returnObject = new QName(namespaceContext.getNamespaceURI(namespacePrefix), localPart);
+                                }
+                            } else if ("boolean".equals(attributeType)) {
+                                returnObject = new Boolean(attribValue);
+                            } else if ("anyURI".equals(attributeType)) {
+                                try {
+                                    returnObject = new URI(attribValue);
+                                } catch (URI.MalformedURIException e) {
+                                    throw new XMLStreamException("Invalid URI");
+                                }
+                            } else if ("date".equals(attributeType)) {
+                                returnObject = ConverterUtil.convertToDate(attribValue);
+                            } else if ("dateTime".equals(attributeType)) {
+                                returnObject = ConverterUtil.convertToDateTime(attribValue);
+                            } else if ("time".equals(attributeType)) {
+                                returnObject = ConverterUtil.convertToTime(attribValue);
+                            } else if ("byte".equals(attributeType)) {
+                                returnObject = new Byte(attribValue);
+                            } else if ("short".equals(attributeType)) {
+                                returnObject = new Short(attribValue);
+                            } else if ("float".equals(attributeType)) {
+                                returnObject = new Float(attribValue);
+                            } else if ("long".equals(attributeType)) {
+                                returnObject = new Long(attribValue);
+                            } else if ("double".equals(attributeType)) {
+                                returnObject = new Double(attribValue);
+                            } else if ("decimal".equals(attributeType)) {
+                                returnObject = new BigDecimal(attribValue);
+                            } else if ("unsignedLong".equals(attributeType)) {
+                                returnObject = new UnsignedLong(attribValue);
+                            } else if ("unsignedInt".equals(attributeType)) {
+                                returnObject = new UnsignedInt(attribValue);
+                            } else if ("unsignedShort".equals(attributeType)) {
+                                returnObject = new UnsignedShort(attribValue);
+                            } else if ("unsignedByte".equals(attributeType)) {
+                                returnObject = new UnsignedByte(attribValue);
+                            } else if ("positiveInteger".equals(attributeType)) {
+                                returnObject = new PositiveInteger(attribValue);
+                            } else if ("negativeInteger".equals(attributeType)) {
+                                returnObject = new NegativeInteger(attribValue);
+                            } else if ("nonNegativeInteger".equals(attributeType)) {
+                                returnObject = new NonNegativeInteger(attribValue);
+                            } else if ("nonPositiveInteger".equals(attributeType)) {
+                                returnObject = new NonPositiveInteger(attribValue);
+                            } else {
+                                throw new ADBException("Unknown type ==> " + attributeType);
+                            }
+                        } else {
+                            throw new ADBException("Attribute value is null");
+                        }
+                    }
+                } else {
+                    try {
+                        Method getObjectMethod = extensionMapperClass.getMethod("getTypeObject",
+                                new Class[]{String.class, String.class, XMLStreamReader.class});
+                        returnObject = getObjectMethod.invoke(null,
+                                new Object[]{attributeNameSpace, attributeType, xmlStreamReader});
+                    } catch (NoSuchMethodException e) {
+                        throw new ADBException("Can not find the getTypeObject method in the " +
+                                "extension mapper class ", e);
+                    } catch (IllegalAccessException e) {
+                        throw new ADBException("Can not access the getTypeObject method in the " +
+                                "extension mapper class ", e);
+                    } catch (InvocationTargetException e) {
+                        throw new ADBException("Can not invoke the getTypeObject method in the " +
+                                "extension mapper class ", e);
+                    }
+
+                }
+
+            } else {
+                throw new ADBException("Any type element type has not been given");
+            }
+        }
+        return returnObject;
+    }
+
+    private static Object getDataHandlerObject(XMLStreamReader reader) throws XMLStreamException {
+        Object dataHandler = null;
+        if (Boolean.TRUE.equals(reader.getProperty(OMConstants.IS_DATA_HANDLERS_AWARE))
+                && Boolean.TRUE.equals(reader.getProperty(OMConstants.IS_BINARY))) {
+            dataHandler = reader.getProperty(org.apache.axiom.om.OMConstants.DATA_HANDLER);
+        } else {
+            if (reader.getEventType() == XMLStreamConstants.START_ELEMENT &&
+                    reader.getName().equals(new QName(MTOMConstants.XOP_NAMESPACE_URI, MTOMConstants.XOP_INCLUDE))) {
+                String id = ElementHelper.getContentID(reader, "UTF-8");
+                dataHandler = ((MTOMStAXSOAPModelBuilder) ((OMStAXWrapper) reader).getBuilder()).getDataHandler(id);
+                reader.next();
+            } else if (reader.hasText()) {
+                String content = reader.getText();
+                dataHandler = ConverterUtil.convertToBase64Binary(content);
+
+            }
+        }
+        return dataHandler;
+    }
+
+    static {
+        isCustomClassPresent = (System.getProperty(SYSTEM_PROPERTY_ADB_CONVERTERUTIL) != null);
+        if (isCustomClassPresent){
+            String className = System.getProperty(SYSTEM_PROPERTY_ADB_CONVERTERUTIL);
+            try {
+                customClass = Class.forName(className);
+            } catch (ClassNotFoundException e) {
+                log.error("Can not load the converter util class "
+                        + className + " using default org.apache.axis2.databinding.utils.ConverterUtil class");
+                isCustomClassPresent = false;
+            }
+        }
+    }
+
 }

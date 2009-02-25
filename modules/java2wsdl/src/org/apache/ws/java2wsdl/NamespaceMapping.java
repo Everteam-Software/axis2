@@ -16,20 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.ws.java2wsdl;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamConstants;
 
+package org.apache.ws.java2wsdl;
+
+import org.apache.axiom.om.util.StAXUtils;
+import org.apache.tools.ant.BuildException;
+
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
-
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamReader;
-
-import org.apache.axiom.om.util.StAXUtils;
-import org.apache.tools.ant.BuildException;
 
 /**
  * Used for nested package definitions.

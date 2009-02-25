@@ -437,7 +437,12 @@ public class HTTPConstants {
      */
     public static final String CACHED_HTTP_CLIENT = "CACHED_HTTP_CLIENT";
 
+    /**
+     * @deprecated please use MULTITHREAD_HTTP_CONNECTION_MANAGER
+     */
     public static final String MUTTITHREAD_HTTP_CONNECTION_MANAGER = "MUTTITHREAD_HTTP_CONNECTION_MANAGER";
+
+    public static final String MULTITHREAD_HTTP_CONNECTION_MANAGER = "MULTITHREAD_HTTP_CONNECTION_MANAGER";
 
     /**
      * Field CACHED_HTTP_CLIENT
@@ -456,6 +461,12 @@ public class HTTPConstants {
 
 
     public static final String COMPRESSION_GZIP = "gzip";
+
+    /**
+     * Field to set the coockie policy of commons http client
+     * http://jakarta.apache.org/httpcomponents/httpclient-3.x/cookies.html
+      */
+    public static final String COOKIE_POLICY = "COOKIE_POLICY";
 
     /**
      * If you want the HTTP sender to indicate that it can accept a gziped

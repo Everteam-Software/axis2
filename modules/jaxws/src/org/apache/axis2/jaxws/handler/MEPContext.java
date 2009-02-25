@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -157,13 +158,13 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             return getApplicationScopedProperties().containsKey(key);
         }
         if (responseMC != null) {
-            boolean containsKey = responseMC.getProperties().containsKey(key) || requestMC.getProperties().containsKey(key);
+            boolean containsKey = responseMC.containsKey(key) || requestMC.containsKey(key);
             if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
                 return containsKey;
             }
         }
         if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
-            return requestMC.getProperties().containsKey(key);
+            return requestMC.containsKey(key);
         }
         return false;
     }
@@ -236,7 +237,7 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         if (scopes.get(key) == null) {  // check the scopes object directly, not through getScope()!!
             setScope(key, Scope.HANDLER);
         }
-        if (requestMC.getProperties().containsKey(key)) {
+        if (requestMC.containsKey(key)) {
             return requestMC.setProperty(key, value);
         }
         if (responseMC != null) {
@@ -270,6 +271,7 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         }
         
         // yes, remove from both and return the right object
+        // TODO This won't work because getProperties returns a temporary map
         Object retVal = null;
         if (responseMC != null) {
             retVal = responseMC.getProperties().remove(key);
@@ -352,21 +354,20 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
      */
     public Map<String, Object> getApplicationScopedProperties() {
         Map<String, Object> tempMap = new HashMap<String, Object>();
-        // better performance:
         if (!scopes.containsValue(Scope.APPLICATION)) {
             return tempMap;
         }
-        for(Iterator it = requestMC.getProperties().keySet().iterator(); it.hasNext();) {
-            String key = (String)it.next();
-            if ((getScope(key).equals(Scope.APPLICATION) && (requestMC.getProperties().containsKey(key)))) {
-                tempMap.put(key, get(key));
+        for(Iterator it = requestMC.getProperties().entrySet().iterator(); it.hasNext();) {
+            Entry entry = (Entry)it.next();
+            if (getScope((String)entry.getKey()).equals(Scope.APPLICATION)) {
+                tempMap.put((String)entry.getKey(), entry.getValue());
             }
         }
         if (responseMC != null) {
-            for(Iterator it = responseMC.getProperties().keySet().iterator(); it.hasNext();) {
-                String key = (String)it.next();
-                if ((getScope(key).equals(Scope.APPLICATION) && (responseMC.getProperties().containsKey(key)))) {
-                    tempMap.put(key, get(key));
+            for(Iterator it = responseMC.getProperties().entrySet().iterator(); it.hasNext();) {
+                Entry entry = (Entry)it.next();
+                if (getScope((String)entry.getKey()).equals(Scope.APPLICATION)) {
+                    tempMap.put((String)entry.getKey(), entry.getValue());
                 }
             }
         }

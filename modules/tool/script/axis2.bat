@@ -1,18 +1,21 @@
 @echo off
 
-REM  Copyright 2001,2004-2006 The Apache Software Foundation
-REM
-REM  Licensed under the Apache License, Version 2.0 (the "License");
-REM  you may not use this file except in compliance with the License.
-REM  You may obtain a copy of the License at
-REM
-REM      http://www.apache.org/licenses/LICENSE-2.0
-REM
-REM  Unless required by applicable law or agreed to in writing, software
-REM  distributed under the License is distributed on an "AS IS" BASIS,
-REM  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-REM  See the License for the specific language governing permissions and
-REM  limitations under the License.
+REM  Licensed to the Apache Software Foundation (ASF) under one
+REM  or more contributor license agreements. See the NOTICE file
+REM  distributed with this work for additional information
+REM  regarding copyright ownership. The ASF licenses this file
+REM  to you under the Apache License, Version 2.0 (the
+REM  "License"); you may not use this file except in compliance
+REM  with the License. You may obtain a copy of the License at
+REM  
+REM  http://www.apache.org/licenses/LICENSE-2.0
+REM  
+REM  Unless required by applicable law or agreed to in writing,
+REM  software distributed under the License is distributed on an
+REM  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+REM  KIND, either express or implied. See the License for the
+REM  specific language governing permissions and limitations
+REM  under the License.
 
 rem ---------------------------------------------------------------------------
 rem Axis2 Script
@@ -61,16 +64,12 @@ goto end
 :okHome
 rem set the classes
 setlocal EnableDelayedExpansion
-rem loop through the libs and add them to the class path
-set AXIS2_CLASS_PATH=%AXIS2_HOME%
-FOR %%c in ("%AXIS2_HOME%\lib\*.jar") DO set AXIS2_CLASS_PATH=!AXIS2_CLASS_PATH!;%%c
 
 rem ----- Execute The Requested Command ---------------------------------------
 echo Using AXIS2_HOME:   %AXIS2_HOME%
 echo Using JAVA_HOME:    %JAVA_HOME%
-REM echo %AXIS2_CLASS_PATH%
 set _RUNJAVA="%JAVA_HOME%\bin\java"
 
-%_RUNJAVA% %JAVA_OPTS% -cp "!AXIS2_CLASS_PATH!" -Daxis2.repo="%AXIS2_HOME%\repository" -Daxis2.xml="%AXIS2_HOME%\conf\axis2.xml" %*
+%_RUNJAVA% %JAVA_OPTS% -Djava.ext.dirs="%AXIS2_HOME%\lib\" -Daxis2.repo="%AXIS2_HOME%\repository" -Daxis2.xml="%AXIS2_HOME%\conf\axis2.xml" %*
 endlocal
 :end

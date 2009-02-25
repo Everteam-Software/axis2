@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.runtime.description.marshal;
 
 /** Annotation information cached for a particular class */
@@ -30,4 +31,8 @@ public interface AnnotationDesc {
     /** @return @XmlRootElement namespace or default namespace (null if !hasXmlRootElement) */
     public String getXmlRootElementNamespace();
 
+    /**
+     * @return @XmlSeeAlso classes or null
+     */
+    public Class[] getXmlSeeAlsoClasses();
 }

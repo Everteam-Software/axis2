@@ -23,16 +23,23 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.writer.FileCodeWriter;
 import com.sun.tools.xjc.api.ErrorListener;
 import com.sun.tools.xjc.api.Mapping;
+import com.sun.tools.xjc.api.Property;
 import com.sun.tools.xjc.api.S2JJAXBModel;
 import com.sun.tools.xjc.api.SchemaCompiler;
 import com.sun.tools.xjc.api.XJC;
+import org.apache.axis2.description.AxisMessage;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
 import org.apache.axis2.util.SchemaUtil;
 import org.apache.axis2.util.URLProcessor;
 import org.apache.axis2.util.XMLUtils;
+import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.axis2.wsdl.WSDLUtil;
 import org.apache.axis2.wsdl.codegen.CodeGenConfiguration;
 import org.apache.axis2.wsdl.databinding.DefaultTypeMapper;
 import org.apache.axis2.wsdl.databinding.JavaTypeMapper;
 import org.apache.axis2.wsdl.databinding.TypeMapper;
+import org.apache.axis2.wsdl.util.Constants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.ws.commons.schema.XmlSchema;
@@ -54,8 +61,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -81,19 +88,28 @@ public class CodeGenerationUtility {
                 return new DefaultTypeMapper();
             }
 
-            final ArrayList xmlObjectsVector = new ArrayList();
+            final Map schemaToInputSourceMap = new HashMap();
 
             //create the type mapper
             JavaTypeMapper mapper = new JavaTypeMapper();
 
-            final String baseURI = cgconfig.getBaseURI();
+            String baseURI = cgconfig.getBaseURI();
+            if (!baseURI.endsWith("/")){
+               baseURI = baseURI + "/";
+            }
+
 
             for (int i = 0; i < schemas.size(); i++) {
                 XmlSchema schema = (XmlSchema)schemas.get(i);
                 InputSource inputSource =
                         new InputSource(new StringReader(getSchemaAsString(schema)));
-                inputSource.setSystemId(baseURI);
-                xmlObjectsVector.add(inputSource);
+                //here we have to set a proper system ID. otherwise when processing the
+                // included schaemas for this schema we have a problem
+                // it creates the system ID using this target namespace value
+                
+                inputSource.setSystemId(baseURI + "xsd" + i + ".xsd");
+                inputSource.setPublicId(schema.getTargetNamespace());
+                schemaToInputSourceMap.put(schema,inputSource);
             }
 
             File outputDir = new File(cgconfig.getOutputLocation(), "src");
@@ -102,23 +118,40 @@ public class CodeGenerationUtility {
             Map nsMap = cgconfig.getUri2PackageNameMap();
             EntityResolver resolver = new EntityResolver() {
                 public InputSource resolveEntity(String publicId, String systemId) throws SAXException, IOException {
-                    for (int i = 0; i < schemas.size(); i++) {
-                        XmlSchema schema = (XmlSchema) schemas.get(i);
-                        if(schema.getTargetNamespace().equals(publicId)){
-                            InputSource inputSource =
-                                    new InputSource(new StringReader(getSchemaAsString(schema)));
-                            inputSource.setSystemId(baseURI);
-                            return inputSource;
+                    InputSource returnInputSource = null;
+                    XmlSchema key = null;
+                    for (Iterator iter = schemaToInputSourceMap.keySet().iterator();iter.hasNext();) {
+                        key = (XmlSchema) iter.next();
+                        String nsp = key.getTargetNamespace();
+                        if (nsp != null && nsp.equals(publicId)) {
+
+                            // when returning the input stream we have to always return a new
+                            // input stream.
+                            // sinc jaxbri internally consumes the input stream it gives an
+                            // exception.
+                            returnInputSource = new InputSource(new StringReader(getSchemaAsString(key)));
+                            InputSource existingInputSource = (InputSource) schemaToInputSourceMap.get(key);
+                            returnInputSource.setSystemId(existingInputSource.getSystemId());
+                            returnInputSource.setPublicId(existingInputSource.getPublicId());
+                            break;
                         }
                     }
-                    return null;
+                    if (returnInputSource == null){
+                        // then we have to find this using the file system
+                        if (systemId != null){
+                            returnInputSource = new InputSource(systemId);
+                        }
+                    }
+                    return returnInputSource;
                 }
             };
 
-            for (int i = 0; i < xmlObjectsVector.size(); i++) {
+            XmlSchema key = null;
+            for (Iterator schemaIter = schemaToInputSourceMap.keySet().iterator();
+                 schemaIter.hasNext();) {
 
                 SchemaCompiler sc = XJC.createSchemaCompiler();
-                XmlSchema schema = (XmlSchema)schemas.get(i);
+                key = (XmlSchema) schemaIter.next();
 
                 if (nsMap != null) {
                     Iterator iterator = nsMap.entrySet().iterator();
@@ -128,11 +161,7 @@ public class CodeGenerationUtility {
                         String pkg = (String)nsMap.get(namespace);
                         registerNamespace(sc, namespace, pkg);
                     }
-                } else {
-                    String namespace = schema.getTargetNamespace();
-                    String pkg = extractNamespace(schema);
-                    registerNamespace(sc, namespace, pkg);
-                }
+                } 
 
                 sc.setEntityResolver(resolver);
 
@@ -158,7 +187,7 @@ public class CodeGenerationUtility {
                     }
                 });
 
-                sc.parseSchema((InputSource) xmlObjectsVector.get(i));
+                sc.parseSchema((InputSource) schemaToInputSourceMap.get(key));
 
                 // Bind the XML
                 S2JJAXBModel jaxbModel = sc.bind();
@@ -182,6 +211,89 @@ public class CodeGenerationUtility {
                     String typeName = mapping.getType().getTypeClass().fullName();
 
                     mapper.addTypeMappingName(qn, typeName);
+                }
+
+                //process the unwrapped parameters
+                if (!cgconfig.isParametersWrapped()) {
+                    //figure out the unwrapped operations
+                    List axisServices = cgconfig.getAxisServices();
+                    for (Iterator servicesIter = axisServices.iterator(); servicesIter.hasNext();) {
+                        AxisService axisService = (AxisService)servicesIter.next();
+                        for (Iterator operations = axisService.getOperations();
+                             operations.hasNext();) {
+                            AxisOperation op = (AxisOperation)operations.next();
+
+                            if (WSDLUtil.isInputPresentForMEP(op.getMessageExchangePattern())) {
+                                AxisMessage message = op.getMessage(
+                                        WSDLConstants.MESSAGE_LABEL_IN_VALUE);
+                                if (message != null &&
+                                        message.getParameter(Constants.UNWRAPPED_KEY) != null) {
+
+                                    Mapping mapping = jaxbModel.get(message.getElementQName());
+                                    List elementProperties = mapping.getWrapperStyleDrilldown();
+                                    for(int j = 0; j < elementProperties.size(); j++){
+                                        Property elementProperty = (Property) elementProperties.get(j);
+
+                                        QName partQName =
+                                                    WSDLUtil.getPartQName(op.getName().getLocalPart(),
+                                                                          WSDLConstants.INPUT_PART_QNAME_SUFFIX,
+                                                                          elementProperty.elementName().getLocalPart());
+                                        //this type is based on a primitive type- use the
+                                        //primitive type name in this case
+                                        String fullJaveName =
+                                                elementProperty.type().fullName();
+                                        if (elementProperty.type().isArray()) {
+                                            fullJaveName = fullJaveName.concat("[]");
+                                        }
+                                        mapper.addTypeMappingName(partQName, fullJaveName);
+
+                                        if (elementProperty.type().isPrimitive()) {
+                                            mapper.addTypeMappingStatus(partQName, Boolean.TRUE);
+                                        }
+                                        if (elementProperty.type().isArray()) {
+                                            mapper.addTypeMappingStatus(partQName,
+                                                                        Constants.ARRAY_TYPE);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (WSDLUtil.isOutputPresentForMEP(op.getMessageExchangePattern())) {
+                                AxisMessage message = op.getMessage(
+                                        WSDLConstants.MESSAGE_LABEL_OUT_VALUE);
+                                if (message != null &&
+                                        message.getParameter(Constants.UNWRAPPED_KEY) != null) {
+
+                                    Mapping mapping = jaxbModel.get(message.getElementQName());
+                                    List elementProperties = mapping.getWrapperStyleDrilldown();
+                                    for(int j = 0; j < elementProperties.size(); j++){
+                                        Property elementProperty = (Property) elementProperties.get(j);
+
+                                        QName partQName =
+                                                    WSDLUtil.getPartQName(op.getName().getLocalPart(),
+                                                                          WSDLConstants.OUTPUT_PART_QNAME_SUFFIX,
+                                                                          elementProperty.elementName().getLocalPart());
+                                        //this type is based on a primitive type- use the
+                                        //primitive type name in this case
+                                        String fullJaveName =
+                                                elementProperty.type().fullName();
+                                        if (elementProperty.type().isArray()) {
+                                            fullJaveName = fullJaveName.concat("[]");
+                                        }
+                                        mapper.addTypeMappingName(partQName, fullJaveName);
+
+                                        if (elementProperty.type().isPrimitive()) {
+                                            mapper.addTypeMappingStatus(partQName, Boolean.TRUE);
+                                        }
+                                        if (elementProperty.type().isArray()) {
+                                            mapper.addTypeMappingStatus(partQName,
+                                                                        Constants.ARRAY_TYPE);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

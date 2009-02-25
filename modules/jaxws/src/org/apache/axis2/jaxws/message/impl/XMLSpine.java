@@ -16,9 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.jaxws.message.Block;
 import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
@@ -31,6 +33,8 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.ws.WebServiceException;
+import java.util.List;
+import java.util.Set;
 
 /**
  * XMLSpine
@@ -196,7 +200,8 @@ interface XMLSpine {
     public int getNumHeaderBlocks() throws WebServiceException;
 
     /**
-     * getHeaderBlock Get the header block with the specified name The BlockFactory and object
+     * getHeaderBlock Get the first header block with the specified name.
+     * The BlockFactory and object
      * context are passed in to help create the proper kind of block.
      *
      * @param namespace
@@ -210,10 +215,32 @@ interface XMLSpine {
                                 Object context,
                                 BlockFactory blockFactory)
             throws WebServiceException;
+    
+    /**
+     * getHeaderBlock 
+     * Get the header blocks with the specified name.
+     * The BlockFactory and object
+     * context are passed in to help create the proper kind of block.
+     *
+     * @param namespace
+     * @param localPart
+     * @param context
+     * @param blockFactory
+     * @param rolePlayer(if set) indicates the Roles that should be considered
+     * @return Block
+     * @throws WebServiceException
+     */
+    public List<Block> getHeaderBlocks(String namespace, 
+                                       String localPart,
+                                       Object context,
+                                       BlockFactory blockFactory, 
+                                       RolePlayer rolePlayer)
+            throws WebServiceException;
 
     /**
-     * appendHeaderBlock Append the block to the list of header blocks. The Message owns the block.
-     * You must use the getHeaderBlock method to access it.
+     * setHeaderBlock 
+     * replaces the first existing header block with this new block.  If there is no
+     * existing header block, one is added to the end of the headers
      *
      * @param namespace
      * @param localPart
@@ -224,7 +251,25 @@ interface XMLSpine {
             throws WebServiceException;
 
     /**
-     * removePayload Removes the indicated block
+     * appendHeaderBlock 
+     * Append the block to the list of header blocks. The Message owns the block.
+     * You must use the getHeaderBlock method to access it.
+     *
+     * @param namespace
+     * @param localPart
+     * @param block
+     * @throws WebServiceException
+     */
+    public void appendHeaderBlock(String namespace, String localPart, Block block)
+        throws WebServiceException;
+    /**
+     * @return Set of QNames
+     */
+    public Set<QName> getHeaderQNames();
+    
+    /**
+     * removePayload 
+     * Removes all header blocks with this namespace/localpart
      *
      * @param namespace
      * @param localPart

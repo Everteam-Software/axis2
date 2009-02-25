@@ -31,7 +31,6 @@ import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.AxisError;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.i18n.Messages;
-import org.apache.axis2.modules.Module;
 import org.apache.axis2.phaseresolver.PhaseResolver;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
@@ -42,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.LinkedHashMap;
 
 public abstract class AxisOperation extends AxisDescription
         implements WSDLConstants {
@@ -76,7 +76,7 @@ public abstract class AxisOperation extends AxisDescription
 
     private ArrayList wsamappingList;
     private String outputAction;
-    private HashMap faultActions = new HashMap();
+    private LinkedHashMap faultActions = new LinkedHashMap();
 
     private String soapAction;
 
@@ -497,6 +497,7 @@ public abstract class AxisOperation extends AxisDescription
     }
 
     public void setFaultMessages(AxisMessage faultMessage) {
+        faultMessage.setParent(this);
         faultMessages.add(faultMessage);
         if(getFaultAction(faultMessage.getName())==null){
             addFaultAction(faultMessage.getName(),"urn:" + name.getLocalPart()

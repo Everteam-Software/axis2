@@ -16,18 +16,24 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment.resolver;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.woden.WSDLException;
+import org.apache.woden.resolver.URIResolver;
 import org.apache.ws.commons.schema.resolver.DefaultURIResolver;
 import org.xml.sax.InputSource;
 
 import javax.wsdl.xml.WSDLLocator;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 
-public class WarBasedWSDLLocator extends DefaultURIResolver implements WSDLLocator {
+public class WarBasedWSDLLocator extends DefaultURIResolver implements WSDLLocator, URIResolver {
     protected static final Log log = LogFactory
             .getLog(WarBasedWSDLLocator.class);
 
@@ -82,5 +88,25 @@ public class WarBasedWSDLLocator extends DefaultURIResolver implements WSDLLocat
 
     public void close() {
         //TODO: FIXME:
+    }
+
+    public URI resolveURI(URI uri) throws WSDLException, IOException {
+
+        if (isAbsolute(uri.toString())) {
+            return uri;
+        } else {
+            lastImportLocation = URI.create(baseURI).resolve(uri.toString());
+            String searchingStr = lastImportLocation.toString();
+            URL resource = classLoader.getResource(searchingStr);
+            if (resource != null) {
+                try {
+                    return new URI(resource.toString());
+                } catch (URISyntaxException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            log.info("AARBasedWSDLLocator: Unable to resolve " + lastImportLocation);
+            return null;
+        }
     }
 }

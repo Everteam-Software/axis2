@@ -45,9 +45,9 @@ import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.OutInAxisOperation;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.engine.Echo;
+import org.apache.axis2.integration.TestingUtils;
 import org.apache.axis2.integration.UtilServer;
 import org.apache.axis2.integration.UtilsJMSServer;
-import org.apache.axis2.integration.TestingUtils;
 import org.apache.axis2.transport.jms.JMSConstants;
 import org.apache.axis2.util.Utils;
 import org.apache.axis2.wsdl.WSDLConstants;
@@ -61,7 +61,7 @@ public class JMSEchoRawXMLTest extends TestCase {
     private EndpointReference targetEPR =
             new EndpointReference("jms:/dynamicQueues/EchoXMLService?" + JMSConstants
                     .CONFAC_JNDI_NAME_PARAM +
-                    "=ConnectionFactory&java.naming.factory.initial=org.apache.activemq.jndi.ActiveMQInitialContextFactory&java.naming.provider.url=tcp://localhost:61616");
+                    "=ConnectionFactory&java.naming.factory.initial=org.apache.activemq.jndi.ActiveMQInitialContextFactory&java.naming.provider.url=tcp://localhost:61654");
     private QName serviceName = new QName("EchoXMLService");
     private QName operationName = new QName("echoOMElement");
 
@@ -87,7 +87,7 @@ public class JMSEchoRawXMLTest extends TestCase {
         // Start ActiveMQ embedded broker
         broker.setUseJmx(false);
         broker.setPersistent(false);
-        broker.addConnector("tcp://localhost:61616");
+        broker.addConnector("tcp://localhost:61654");
         broker.start();
 
         UtilsJMSServer.start();

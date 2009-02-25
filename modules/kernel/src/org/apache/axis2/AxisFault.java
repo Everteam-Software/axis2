@@ -27,12 +27,11 @@ import org.apache.axiom.soap.SOAPFaultDetail;
 import org.apache.axiom.soap.SOAPFaultNode;
 import org.apache.axiom.soap.SOAPFaultReason;
 import org.apache.axiom.soap.SOAPFaultRole;
-import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axiom.soap.SOAPFaultSubCode;
+import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axis2.context.MessageContext;
 
 import javax.xml.namespace.QName;
-
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
@@ -138,6 +137,20 @@ public class AxisFault extends RemoteException {
     public AxisFault(QName faultCode, String faultReason, Throwable cause) {
         this(faultReason, cause);
         setFaultCode(faultCode);
+    }
+    
+    /**
+     * Constructor
+     *
+     * @param faultCode       - fault code of the message as a QName
+     * @param faultSubCodes   - list sub fault codes as a list if QNames
+     * @param faultReason - the reason for the fault. The language will be defaulted to 'en'
+     * @param cause embedded fault which caused this one
+     */
+    public AxisFault(QName faultCode,List faultSubCodes, String faultReason, Throwable cause) {
+        this(faultReason, cause);
+        setFaultCode(faultCode);
+        setFaultSubCodes(faultSubCodes);
     }
 
     /**
@@ -496,7 +509,11 @@ public class AxisFault extends RemoteException {
     public void setFaultCode(QName soapFaultCode) {
         this.faultCode = soapFaultCode;
     }
-
+    
+    public void setFaultSubCodes(List faultSubCodes) {
+        this.faultSubCodes = faultSubCodes;
+    }
+    
     public void setFaultCode(String soapFaultCode) {
         // TODO: is it really safe to assume that the passed string is always the localpart?
         // What if someone passes soapenv:Sender?
@@ -601,5 +618,18 @@ public class AxisFault extends RemoteException {
      */
     public String getMessage() {
         return message;
+    }
+
+    /**
+     * this field is used to identify the axis2 fault type
+     */
+    private int faultType;
+
+    public int getFaultType() {
+        return faultType;
+    }
+
+    public void setFaultType(int faultType) {
+        this.faultType = faultType;
     }
 }

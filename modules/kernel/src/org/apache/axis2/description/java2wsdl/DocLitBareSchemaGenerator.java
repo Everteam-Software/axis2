@@ -16,9 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description.java2wsdl;
 
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.deployment.util.BeanExcludeInfo;
 import org.apache.axis2.deployment.util.Utils;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisOperation;
@@ -27,12 +29,26 @@ import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.ws.commons.schema.*;
+import org.apache.ws.commons.schema.XmlSchema;
+import org.apache.ws.commons.schema.XmlSchemaComplexContent;
+import org.apache.ws.commons.schema.XmlSchemaComplexContentExtension;
+import org.apache.ws.commons.schema.XmlSchemaComplexType;
+import org.apache.ws.commons.schema.XmlSchemaElement;
+import org.apache.ws.commons.schema.XmlSchemaSequence;
 import org.apache.ws.commons.schema.utils.NamespaceMap;
-import org.codehaus.jam.*;
+import org.codehaus.jam.JAnnotation;
+import org.codehaus.jam.JClass;
+import org.codehaus.jam.JField;
+import org.codehaus.jam.JMethod;
+import org.codehaus.jam.JParameter;
+import org.codehaus.jam.JProperty;
 
 import javax.xml.namespace.QName;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
 
@@ -288,7 +304,7 @@ public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
                         isArrayType);
             }
         }
-
+        addImport(getXmlSchema(schemaTargetNameSpace), schemaTypeName);
         return schemaTypeName;
     }
 
@@ -343,7 +359,8 @@ public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
             JClass sup = javaType.getSuperclass();
 
             if ((sup != null) && !("java.lang.Object".compareTo(sup.getQualifiedName()) == 0) &&
-                    !("org.apache.axis2".compareTo(sup.getContainingPackage().getQualifiedName()) == 0)) {
+                    !("org.apache.axis2".compareTo(sup.getContainingPackage().getQualifiedName()) == 0)
+                    &&!("java.util".compareTo(sup.getContainingPackage().getQualifiedName()) == 0)) {
                 String superClassName = sup.getQualifiedName();
                 String superclassname = getSimpleName(sup);
                 String tgtNamespace;
@@ -403,9 +420,18 @@ public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
             Set propertiesSet = new HashSet();
             Set propertiesNames = new HashSet();
 
+            BeanExcludeInfo beanExcludeInfo = null;
+            if (service.getExcludeInfo() !=null) {
+                beanExcludeInfo = service.getExcludeInfo().getBeanExcludeInfoForClass(
+                        javaType.getQualifiedName());
+            }
             JProperty[] tempProperties = javaType.getDeclaredProperties();
             for (int i = 0; i < tempProperties.length; i++) {
-                propertiesSet.add(tempProperties[i]);
+                JProperty tempProperty = tempProperties[i];
+                String propertyName = getCorrectName(tempProperty.getSimpleName());
+                if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)){
+                    propertiesSet.add(tempProperty);
+                }
             }
 
             JProperty[] properties = (JProperty[]) propertiesSet.toArray(new JProperty[0]);
@@ -430,13 +456,19 @@ public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
             for (int i = 0; i < tempFields.length; i++) {
                 // create a element for the field only if it is public
                 // and there is no property with the same name
-
                 if (tempFields[i].isPublic()) {
 
-                    // skip field with same name as a property
-                    if (!propertiesNames.contains(tempFields[i].getSimpleName())) {
+                    if (tempFields[i].isStatic()) {
+//                        We do not need to expose static fields
+                        continue;
+                    }
+                    String propertyName = getCorrectName(tempFields[i].getSimpleName());
+                    if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)) {
+                        // skip field with same name as a property
+                        if (!propertiesNames.contains(tempFields[i].getSimpleName())) {
 
-                        FieldMap.put(tempFields[i].getSimpleName(), tempFields[i]);
+                            FieldMap.put(tempFields[i].getSimpleName(), tempFields[i]);
+                        }
                     }
                 }
 
@@ -493,7 +525,7 @@ public class DocLitBareSchemaGenerator extends DefaultSchemaGenerator {
         return complexType;
     }
 
-    private XmlSchema getXmlSchema(String targetNamespace) {
+    protected XmlSchema getXmlSchema(String targetNamespace) {
         XmlSchema xmlSchema;
 
         if ((xmlSchema = (XmlSchema) schemaMap.get(targetNamespace)) == null) {

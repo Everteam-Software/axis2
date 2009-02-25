@@ -16,9 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.description.AttachmentDescription;
+import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.axis2.jaxws.description.OperationDescription;
@@ -30,6 +33,7 @@ import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
 import org.apache.axis2.jaxws.runtime.description.marshal.MarshalServiceRuntimeDescription;
+import org.apache.axis2.jaxws.utility.ConvertUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -90,16 +94,14 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
             //to a method then an implementation MUST throw WebServiceException.
             if (pds.length > 0) {
                 if (signatureArguments == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                            "rpc/lit"));
+                    throw ExceptionFactory.makeWebServiceException(
+                    		Messages.getMessage("NullParamErr2",operationDesc.getJavaMethodName()));
                 }
                 if (signatureArguments != null) {
                     for (Object argument : signatureArguments) {
                         if (argument == null) {
-                            throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                                    "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                                    "rpc/lit"));
+                        	throw ExceptionFactory.makeWebServiceException(
+                            		Messages.getMessage("NullParamErr2",operationDesc.getJavaMethodName()));
                         }
                     }
                 }
@@ -138,6 +140,11 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -212,9 +219,8 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
             if (sigArguments != null) {
                 for (Object argument : sigArguments) {
                     if (argument == null) {
-                        throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                                "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                                "rpc/lit"));
+                    	throw ExceptionFactory.makeWebServiceException(
+                        		Messages.getMessage("NullParamErr2",operationDesc.getJavaMethodName()));
 
                     }
                 }
@@ -296,37 +302,54 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
 
             if (returnType != void.class) {
 
-                // TODO should we allow null if the return is a header?
-                //Validate input parameters for operation and make sure no input parameters are null.
-                //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
-                //to a method then an implementation MUST throw WebServiceException.
-                if (returnObject == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Return", operationDesc.getJavaMethodName(),
-                            "rpc/lit"));
-
-                }
-                Element returnElement = null;
-                QName returnQName = new QName(returnNS, returnLocalPart);
-                if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
-                    returnElement = new Element(returnObject, returnQName);
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                        // Create an Attachment object with the signature value
+                        Attachment attachment = new Attachment(returnObject, 
+                                                               returnType, 
+                                                               attachmentDesc,
+                                                               operationDesc.getResultPartName());
+                        m.addDataHandler(attachment.getDataHandler(), 
+                                         attachment.getContentID());
+                        m.setDoingSWA(true);
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
+                    }
                 } else {
-                    returnElement = new Element(returnObject, returnQName, returnType);
-                }
+                    // TODO should we allow null if the return is a header?
+                    //Validate input parameters for operation and make sure no input parameters are null.
+                    //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
+                    //to a method then an implementation MUST throw WebServiceException.
+                    if (returnObject == null) {
+                        throw ExceptionFactory.makeWebServiceException(
+                                                                       Messages.getMessage("NullParamErr3",operationDesc.getJavaMethodName()));
 
-                // Use marshalling by java type if necessary
-                Class byJavaType = null;
-                if (!operationDesc.isResultHeader() ||
-                        MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
-                    byJavaType = returnType;
+                    }
+                    Element returnElement = null;
+                    QName returnQName = new QName(returnNS, returnLocalPart);
+                    if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
+                        returnElement = new Element(returnObject, returnQName);
+                    } else {
+                        returnElement = new Element(returnObject, returnQName, returnType);
+                    }
+
+                    // Use marshalling by java type if necessary
+                    Class byJavaType = null;
+                    if (!operationDesc.isResultHeader() ||
+                            MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
+                        byJavaType = returnType;
+                    }
+                    MethodMarshallerUtils.toMessage(returnElement,
+                                                    returnType,
+                                                    operationDesc.isListType(),
+                                                    marshalDesc,
+                                                    m,
+                                                    byJavaType,
+                                                    operationDesc.isResultHeader());
                 }
-                MethodMarshallerUtils.toMessage(returnElement,
-                                                returnType,
-                                                operationDesc.isListType(),
-                                                marshalDesc,
-                                                m,
-                                                byJavaType,
-                                                operationDesc.isResultHeader());
             }
 
             // Convert the holder objects into a list of JAXB objects for marshalling
@@ -351,6 +374,11 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
             // TODO Should we check for null output body values?  Should we check for null output header values ?
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -401,37 +429,51 @@ public class RPCLitMethodMarshaller implements MethodMarshaller {
             Object returnValue = null;
             boolean hasReturnInBody = false;
             if (returnType != void.class) {
-                // If the webresult is in the header, we need the name of the header so that we can find it.
-                Element returnElement = null;
-                // Use "byJavaType" unmarshalling if necessary
-                Class byJavaType = null;
-                if (!operationDesc.isResultHeader() ||
-                        MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
-                    byJavaType = returnType;
-                }
-                if (operationDesc.isResultHeader()) {
-                    returnElement = MethodMarshallerUtils
-                            .getReturnElement(packages, message, byJavaType,  operationDesc.isListType(), true,
-                                              operationDesc.getResultTargetNamespace(),
-                                              operationDesc.getResultPartName(),
-                                              MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
-
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                       String cid = message.getAttachmentID(0);
+                       returnValue = message.getDataHandler(cid);
+                       if (ConvertUtils.isConvertable(returnValue, returnType)) {
+                           returnValue = ConvertUtils.convert(returnValue, returnType);
+                       } 
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
+                    }
                 } else {
-                    returnElement = MethodMarshallerUtils
-                            .getReturnElement(packages, message, byJavaType,  operationDesc.isListType(), false, null, null,
-                                    MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
-                    hasReturnInBody = true;
-                }
-                returnValue = returnElement.getTypeValue();
-                // TODO should we allow null if the return is a header?
-                //Validate input parameters for operation and make sure no input parameters are null.
-                //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
-                //to a method then an implementation MUST throw WebServiceException.
-                if (returnValue == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Return", operationDesc.getJavaMethodName(),
-                            "rpc/lit"));
-                }
+                    // If the webresult is in the header, we need the name of the header so that we can find it.
+                    Element returnElement = null;
+                    // Use "byJavaType" unmarshalling if necessary
+                    Class byJavaType = null;
+                    if (!operationDesc.isResultHeader() ||
+                            MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
+                        byJavaType = returnType;
+                    }
+                    if (operationDesc.isResultHeader()) {
+                        returnElement = MethodMarshallerUtils
+                        .getReturnElement(packages, message, byJavaType,  operationDesc.isListType(), true,
+                                          operationDesc.getResultTargetNamespace(),
+                                          operationDesc.getResultPartName(),
+                                          MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
+
+                    } else {
+                        returnElement = MethodMarshallerUtils
+                        .getReturnElement(packages, message, byJavaType,  operationDesc.isListType(), false, null, null,
+                                          MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
+                        hasReturnInBody = true;
+                    }
+                    returnValue = returnElement.getTypeValue();
+                    // TODO should we allow null if the return is a header?
+                    //Validate input parameters for operation and make sure no input parameters are null.
+                    //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
+                    //to a method then an implementation MUST throw WebServiceException.
+                    if (returnValue == null) {
+                        throw ExceptionFactory.makeWebServiceException(
+                                                                       Messages.getMessage("NullParamErr3",operationDesc.getJavaMethodName()));
+                    }
+                }  
             }
 
             // We want to use "by Java Type" unmarshalling for 

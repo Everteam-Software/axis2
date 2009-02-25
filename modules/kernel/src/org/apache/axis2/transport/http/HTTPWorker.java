@@ -19,17 +19,9 @@
 
 package org.apache.axis2.transport.http;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Iterator;
-
 import org.apache.axis2.Constants;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.engine.Handler.InvocationResponse;
@@ -48,6 +40,15 @@ import org.apache.http.message.BasicHeader;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EncodingUtils;
 import org.apache.ws.commons.schema.XmlSchema;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 public class HTTPWorker implements Worker {
 
@@ -98,7 +99,8 @@ public class HTTPWorker implements Worker {
                             Iterator i = services.values().iterator();
                             while (i.hasNext()) {
                                 AxisService service = (AxisService) i.next();
-                                InputStream stream = service.getClassLoader().getResourceAsStream("META-INF/" + file);
+                                InputStream stream = service.getClassLoader().
+                                getResourceAsStream("META-INF/" + file);
                                 if (stream != null) {
                                     OutputStream out = response.getOutputStream();
                                     response.setContentType("text/xml");
@@ -203,6 +205,26 @@ public class HTTPWorker implements Worker {
                             outstream.flush();
                             return;
                         } else {
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            int ret = service.printXSD(baos, schemaName);
+                            if(ret>0) {
+                                baos.flush();
+                                instream = new ByteArrayInputStream(baos.toByteArray());
+                                response.setStatus(HttpStatus.SC_OK);
+                                response.setContentType("text/xml");
+                                OutputStream outstream = response.getOutputStream();
+                                boolean checkLength = true;
+                                int length = Integer.MAX_VALUE;
+                                int nextValue = instream.read();
+                                if (checkLength) length--;
+                                while (-1 != nextValue && length >= 0) {
+                                    outstream.write(nextValue);
+                                    nextValue = instream.read();
+                                    if (checkLength) length--;
+                                }
+                                outstream.flush();
+                                return;
+                            }
                             // no schema available by that name  - send 404
                             response.sendError(HttpStatus.SC_NOT_FOUND, "Schema Not Found!");
                             return;
@@ -299,22 +321,24 @@ public class HTTPWorker implements Worker {
         }
         
         // Finalize response
-        OperationContext operationContext = msgContext.getOperationContext();
-        Object isTwoChannel = null;
-        if (operationContext != null) {
-            isTwoChannel = operationContext.getProperty(Constants.DIFFERENT_EPR);
-        }
+        RequestResponseTransport requestResponseTransportControl =
+            (RequestResponseTransport) msgContext.
+            getProperty(RequestResponseTransport.TRANSPORT_CONTROL);
 
-        if (TransportUtils.isResponseWritten(msgContext)) {
-            if ((isTwoChannel != null) && Constants.VALUE_TRUE.equals(isTwoChannel)) {
-                response.setStatus(HttpStatus.SC_ACCEPTED);
-            }
+        if (TransportUtils.isResponseWritten(msgContext) ||
+            ((requestResponseTransportControl != null) &&
+             requestResponseTransportControl.getStatus().equals(
+                RequestResponseTransport.RequestResponseTransportStatus.SIGNALLED))) {
+            // The response is written or signalled.  The current status is used (probably SC_OK).
         } else {
+            // The response may be ack'd, mark the status as accepted.
             response.setStatus(HttpStatus.SC_ACCEPTED);
         }
     }
 
-    private boolean processInternalWSDL(String uri, ConfigurationContext configurationContext, String serviceName, AxisHttpResponse response) throws IOException {
+    private boolean processInternalWSDL(String uri, ConfigurationContext configurationContext, 
+                                        String serviceName, AxisHttpResponse response) 
+    throws IOException {
         String wsdlName = uri.substring(uri.lastIndexOf("=") + 1);
 
         HashMap services = configurationContext.getAxisConfiguration().getServices();

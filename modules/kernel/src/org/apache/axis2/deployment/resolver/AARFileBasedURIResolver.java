@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment.resolver;
 
 import org.apache.commons.logging.Log;
@@ -80,7 +81,10 @@ public class AARFileBasedURIResolver extends DefaultURIResolver {
                             out.write(buf, 0, read);
                         }
                         ByteArrayInputStream in = new ByteArrayInputStream(out.toByteArray());
-                        return new InputSource(in);
+                        InputSource inputSoruce = new InputSource(in);
+                        inputSoruce.setSystemId(lastImportLocation.getPath());
+                        inputSoruce.setPublicId(targetNamespace);
+                        return inputSoruce;
                     }
                 }
 

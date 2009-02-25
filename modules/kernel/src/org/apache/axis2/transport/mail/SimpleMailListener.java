@@ -26,9 +26,16 @@ import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.builder.BuilderUtil;
-import org.apache.axis2.context.*;
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.description.*;
+import org.apache.axis2.context.OperationContext;
+import org.apache.axis2.context.SessionContext;
+import org.apache.axis2.description.AxisMessage;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.TransportInDescription;
+import org.apache.axis2.description.TransportOutDescription;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.TransportListener;
 import org.apache.axis2.transport.TransportUtils;
@@ -37,7 +44,13 @@ import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.mail.*;
+import javax.mail.Address;
+import javax.mail.Flags;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Multipart;
+import javax.mail.Part;
+import javax.mail.URLName;
 import javax.mail.internet.MimeMessage;
 import javax.xml.stream.XMLStreamException;
 import java.io.File;
@@ -343,6 +356,15 @@ public class SimpleMailListener implements Runnable, TransportListener {
                         org.apache.axis2.transport.mail.Constants.MAILTO + ":" +
                         msg.getFrom()[0].toString());
                 transportInfo.setFrom(fromEPR);
+            } else {
+                String returnPath =
+                        getMailHeader(msg, org.apache.axis2.transport.mail.Constants.RETURN_PATH);
+                returnPath = parseHeaderForLessThan(returnPath);
+                if (returnPath != null) {
+                    EndpointReference fromEPR = new EndpointReference(
+                            org.apache.axis2.transport.mail.Constants.MAILTO + ":" + returnPath);
+                    transportInfo.setFrom(fromEPR);
+                }
             }
 
             // Save Message-Id to set as In-Reply-To on reply
@@ -369,30 +391,34 @@ public class SimpleMailListener implements Runnable, TransportListener {
                                                     String messageID) throws AxisFault{
         Hashtable mappingTable = (Hashtable) configurationContext.
                 getProperty(org.apache.axis2.transport.mail.Constants.MAPPING_TABLE);
-
-        if(mappingTable!=null&&messageID!=null){
-            String messageConetextId= (String) mappingTable.get(messageID);
-            if(messageConetextId!=null){
-                OperationContext opContext = configurationContext.getOperationContext(messageConetextId);
-                if(opContext!=null && !opContext.isComplete()){
-                    AxisOperation axisOp = opContext.getAxisOperation();
-                    //TODO need to handle fault case as well ,
-                    //TODO  need to check whether the message contains fault , if so we need to get the fault message
-                    AxisMessage inMessage = axisOp.getMessage(WSDLConstants.MESSAGE_LABEL_IN_VALUE);
-                    msgContext.setOperationContext(opContext);
-                    msgContext.setAxisMessage(inMessage);
-                    opContext.addMessageContext(msgContext);
-                    msgContext.setServiceContext(opContext.getServiceContext());
+        synchronized (mappingTable) {
+            if (mappingTable != null && messageID != null) {
+                String messageConetextId = (String) mappingTable.get(messageID);
+                if (messageConetextId != null) {
+                    OperationContext opContext = configurationContext.getOperationContext(messageConetextId);
+                    if (opContext != null && !opContext.isComplete()) {
+                        AxisOperation axisOp = opContext.getAxisOperation();
+                        //TODO need to handle fault case as well ,
+                        //TODO  need to check whether the message contains fault , if so we need to get the fault message
+                        AxisMessage inMessage = axisOp.getMessage(WSDLConstants.MESSAGE_LABEL_IN_VALUE);
+                        msgContext.setOperationContext(opContext);
+                        msgContext.setAxisMessage(inMessage);
+                        opContext.addMessageContext(msgContext);
+                        msgContext.setServiceContext(opContext.getServiceContext());
+                    }
                 }
             }
         }
-        Hashtable callBackTable = (Hashtable) configurationContext.getProperty(
-                org.apache.axis2.transport.mail.Constants.CALLBACK_TABLE);
-        if(messageID!=null&&callBackTable!=null){
-            SynchronousMailListener listener = (SynchronousMailListener) callBackTable.get(messageID);
-            if(listener!=null){
-                listener.setInMessageContext(msgContext);
-                return false;
+
+        Hashtable callBackTable =
+                (Hashtable) configurationContext.getProperty(org.apache.axis2.transport.mail.Constants.CALLBACK_TABLE);
+        synchronized (callBackTable) {
+            if (messageID != null && callBackTable != null) {
+                SynchronousMailListener listener = (SynchronousMailListener) callBackTable.get(messageID);
+                if (listener != null) {
+                    listener.setInMessageContext(msgContext);
+                    return false;
+                }
             }
         }
         return true;
@@ -488,6 +514,15 @@ public class SimpleMailListener implements Runnable, TransportListener {
         } catch (MessagingException e) {
             throw new AxisFault(e.getMessage(),e);
         }
+    }
+
+    private String parseHeaderForLessThan(String value) {
+        if (value != null) {
+            if (value.length() > 1 && value.startsWith("<") && value.endsWith(">")) {
+                value = value.substring(1, value.length()-1);
+            }
+        }
+        return value;
     }
 
     private String parseHeaderForQuotes(String value) {

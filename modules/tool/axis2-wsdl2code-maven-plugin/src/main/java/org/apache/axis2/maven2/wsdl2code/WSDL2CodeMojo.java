@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.maven2.wsdl2code;
 
 import org.apache.axis2.util.CommandLineOption;
@@ -24,7 +25,6 @@ import org.apache.axis2.util.CommandLineOptionParser;
 import org.apache.axis2.wsdl.codegen.CodeGenerationEngine;
 import org.apache.axis2.wsdl.codegen.CodeGenerationException;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -32,15 +32,9 @@ import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Properties;
 
 
@@ -61,29 +55,11 @@ public class WSDL2CodeMojo extends AbstractMojo {
     private MavenProject project;
 
     /**
-     * The artifact factory.
-     *
-     * @parameter expression="${component.org.apache.maven.artifact.factory.ArtifactFactory}"
-     * @read-only
-     * @required
-     */
-    private ArtifactFactory artifactFactory;
-
-    /**
-     * The plugins artifact list.
-     *
-     * @parameter expression="${plugin.artifacts}"
-     * @read-only
-     * @required
-     */
-    private List pluginArtifacts;
-
-    /**
      * The WSDL file, which is being read.
      *
-     * @parameter expression="${axis2.wsdl2code.wsdl}" default-value="src/main/axis2/service.wsdl"
+     * @parameter expression="${axis2.wsdl2code.wsdlFile}" default-value="src/main/axis2/service.wsdl"
      */
-    private File wsdlFile;
+    private String wsdlFile;
 
     /**
      * The output directory, where the generated sources are being created.
@@ -264,55 +240,6 @@ public class WSDL2CodeMojo extends AbstractMojo {
     /** @parameter */
     private NamespaceURIMapping[] namespaceURIs = null;
 
-    private static class InheritedArtifact {
-        private final String groupId, artifactId;
-        private boolean added;
-
-        InheritedArtifact(String pGroupId, String pArtifactId) {
-            groupId = pGroupId;
-            artifactId = pArtifactId;
-        }
-
-        String getGroupId() {
-            return groupId;
-        }
-
-        String getArtifactId() {
-            return artifactId;
-        }
-
-        boolean isAdded() {
-            return added;
-        }
-
-        void setAdded() {
-            if (added) {
-                throw new IllegalStateException("This artifact was already added: " +
-                        groupId + ":" + artifactId);
-            }
-        }
-    }
-
-    private static final InheritedArtifact[] inheritedArtifacts =
-            {
-                    new InheritedArtifact("org.apache.ws.commons.axiom", "axiom-api"),
-                    new InheritedArtifact("org.apache.ws.commons.axiom", "axiom-impl"),
-                    new InheritedArtifact("org.apache.ws.commons", "neethi"),
-                    new InheritedArtifact("wsdl4j", "wsdl4j"),
-                    new InheritedArtifact("commons-httpclient", "commons-httpclient")
-            };
-
-    private static final InheritedArtifact[] adbArtifacts =
-            {
-                    new InheritedArtifact("org.apache.axis2", "axis2-adb")
-            };
-
-    private static final InheritedArtifact[] xbeanArtifacts =
-            {
-                    new InheritedArtifact("org.apache.axis2", "axis2-xmlbeans"),
-                    new InheritedArtifact("xmlbeans", "xbean")
-            };
-
     /** Fills the option map. This map is passed onto the code generation API to generate the code. */
     private Map fillOptionMap() throws MojoFailureException {
         Map optionMap = new HashMap();
@@ -323,7 +250,7 @@ public class WSDL2CodeMojo extends AbstractMojo {
                 CommandLineOptionConstants.WSDL2JavaConstants.WSDL_LOCATION_URI_OPTION,
                 new CommandLineOption(
                         CommandLineOptionConstants.WSDL2JavaConstants.WSDL_LOCATION_URI_OPTION,
-                        getStringArray(wsdlFile.getPath())));
+                        getStringArray(wsdlFile)));
         //output location
         optionMap.put(
                 CommandLineOptionConstants.WSDL2JavaConstants.OUTPUT_LOCATION_OPTION,
@@ -542,16 +469,18 @@ public class WSDL2CodeMojo extends AbstractMojo {
                             new String[]{targetResourcesFolderLocation}));
         }
 
-        Iterator iterator = options.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry entry = (Map.Entry) iterator.next();
-            String key = CommandLineOptionConstants.WSDL2JavaConstants.EXTRA_OPTIONTYPE_PREFIX + entry.getKey();
-            String value = (String) entry.getValue();
-            optionMap.put(
-                    key,
-                    new CommandLineOption(
-                            key,
-                            new String[]{value}));
+        if(options != null) {
+            Iterator iterator = options.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry entry = (Map.Entry) iterator.next();
+                String key = CommandLineOptionConstants.WSDL2JavaConstants.EXTRA_OPTIONTYPE_PREFIX + entry.getKey();
+                String value = (String) entry.getValue();
+                optionMap.put(
+                        key,
+                        new CommandLineOption(
+                                key,
+                                new String[]{value}));
+            }
         }
 
         optionMap.put(
@@ -620,7 +549,6 @@ public class WSDL2CodeMojo extends AbstractMojo {
     public void execute() throws MojoFailureException, MojoExecutionException {
 
         fixCompileSourceRoots();
-        fixDependencies();
         showDependencies();
 
         Map commandLineOptions = this.fillOptionMap();
@@ -657,71 +585,6 @@ public class WSDL2CodeMojo extends AbstractMojo {
                     ":" + artifact.getVersion() + ":" + artifact.getClassifier() +
                     ":" + artifact.getScope() + ":" + artifact.getType());
         }
-    }
-
-    private Artifact findArtifact(Collection pCollection, String pGroupId, String pArtifactId) {
-        for (Iterator iter = pCollection.iterator(); iter.hasNext();) {
-            Artifact artifact = (Artifact)iter.next();
-            if (pGroupId.equals(artifact.getGroupId()) &&
-                    pArtifactId.equals(artifact.getArtifactId())) {
-                return artifact;
-            }
-        }
-        return null;
-    }
-
-    private InheritedArtifact[] getInheritedArtifacts() {
-        final List list = new ArrayList();
-        list.addAll(Arrays.asList(inheritedArtifacts));
-        if ("adb".equals(databindingName)) {
-            list.addAll(Arrays.asList(adbArtifacts));
-        } else if ("xmlbeans".equals(databindingName)) {
-            list.addAll(Arrays.asList(xbeanArtifacts));
-        }
-
-        return (InheritedArtifact[])list.toArray(new InheritedArtifact[ list.size() ]);
-    }
-
-    private InheritedArtifact getInheritedArtifact(InheritedArtifact[] pInheritedArtifacts,
-                                                   Artifact pArtifact) {
-        for (int i = 0; i < pInheritedArtifacts.length; i++) {
-            InheritedArtifact iArtifact = pInheritedArtifacts[i];
-            if (iArtifact.getGroupId().equals(pArtifact.getGroupId()) &&
-                    iArtifact.getArtifactId().equals(pArtifact.getArtifactId())) {
-                return iArtifact;
-            }
-        }
-        return null;
-    }
-
-    private void fixDependencies() {
-        final Set set = new HashSet(project.getDependencyArtifacts());
-        final InheritedArtifact[] inhArtifacts = getInheritedArtifacts();
-        for (Iterator iter = pluginArtifacts.iterator(); iter.hasNext();) {
-            final Artifact artifact = (Artifact)iter.next();
-            final InheritedArtifact iArtifact = getInheritedArtifact(inhArtifacts, artifact);
-            if (iArtifact != null) {
-                iArtifact.setAdded();
-                final String groupId = artifact.getGroupId();
-                final String artifactId = artifact.getArtifactId();
-                if (findArtifact(project.getArtifacts(), groupId, artifactId)
-                        == null) {
-                    getLog().debug("Adding artifact " + groupId + ":" + artifactId);
-                    Artifact artfct =
-                            artifactFactory.createArtifactWithClassifier(groupId, artifactId,
-                                                                         artifact.getVersion(),
-                                                                         artifact.getType(),
-                                                                         artifact.getClassifier());
-                    artfct.setScope(Artifact.SCOPE_COMPILE);
-                    set.add(artfct);
-                } else {
-                    getLog().debug("The artifact " + artifact.getGroupId() + ":" +
-                            artifact.getArtifactId() + " is already present " +
-                            " in the project and will not be added.");
-                }
-            }
-        }
-        project.setDependencyArtifacts(set);
     }
 
     private void fixCompileSourceRoots() {

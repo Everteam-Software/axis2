@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message;
 
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -24,7 +25,6 @@ import org.apache.axis2.jaxws.message.factory.BlockFactory;
 import javax.activation.DataHandler;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.ws.WebServiceException;
-
 import java.util.List;
 import java.util.Map;
 
@@ -75,6 +75,14 @@ public interface Message extends XMLPart {
      * @return CID or null if not present
      */
     public String getAttachmentID(int index);
+    
+    /**
+     * Get the indicated (non-soap part) attachment id
+     * @param partName (WS-I indicates that SWA attachments have a partName prefix)
+     * @return CID or null if not present
+     */
+    public String getAttachmentID(String partName);
+    
     
     /**
      * Get the attachment identified by the contentID 

@@ -16,16 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.nhttp;
 
-import org.apache.http.nio.NHttpClientConnection;
-import org.apache.http.protocol.HttpExecutionContext;
-import org.apache.http.HttpHost;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.http.HttpHost;
+import org.apache.http.nio.NHttpClientConnection;
+import org.apache.http.protocol.ExecutionContext;
 
-import java.util.*;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 public class ConnectionPool {
 
@@ -78,7 +83,7 @@ public class ConnectionPool {
     public static void release(NHttpClientConnection conn) {
 
         HttpHost host = (HttpHost) conn.getContext().getAttribute(
-            HttpExecutionContext.HTTP_TARGET_HOST);
+            ExecutionContext.HTTP_TARGET_HOST);
         String key = host.getHostName() + ":" + Integer.toString(host.getPort());
 
         List connections = (List) connMap.get(key);

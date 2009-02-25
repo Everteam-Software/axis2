@@ -22,6 +22,7 @@ package org.apache.axis2.transport;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.attachments.CachedFileDataSource;
+import org.apache.axiom.attachments.lifecycle.LifecycleManager;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMOutputFormat;
@@ -36,6 +37,7 @@ import org.apache.axis2.Constants;
 import org.apache.axis2.builder.Builder;
 import org.apache.axis2.builder.BuilderUtil;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.http.ApplicationXMLFormatter;
@@ -50,7 +52,6 @@ import org.apache.commons.logging.LogFactory;
 import javax.activation.DataSource;
 import javax.xml.parsers.FactoryConfigurationError;
 import javax.xml.stream.XMLStreamException;
-
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -141,22 +142,25 @@ public class TransportUtils {
             }
             // Some services send REST responces as text/xml. We should convert it to
             // application/xml if its a REST response, if not it will try to use the SOAPMessageBuilder.
-            if (HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
+            // isDoingREST should already be properly set by HTTPTransportUtils.initializeMessageContext
+            if (msgContext.isDoingREST() && HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
+//            if (HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
                 if (msgContext.isServerSide()) {
                     if (msgContext.getSoapAction() == null) {
                         type = HTTPConstants.MEDIA_TYPE_APPLICATION_XML;
                     }
-                } else if (msgContext.isDoingREST() &&
-                        !msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
+//                } else if (msgContext.isDoingREST() &&
+//                        !msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
+                } else if (!msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
                     type = HTTPConstants.MEDIA_TYPE_APPLICATION_XML;
                 }
             }
             Builder builder = BuilderUtil.getBuilderFromSelector(type, msgContext);
-            if (log.isDebugEnabled()) {
-                log.debug("createSOAPEnvelope using Builder (" + 
-                          builder.getClass() + ") selected from type (" + type +")");
-            }
             if (builder != null) {
+	            if (log.isDebugEnabled()) {
+	                log.debug("createSOAPEnvelope using Builder (" + 
+	                          builder.getClass() + ") selected from type (" + type +")");
+	            }
                 documentElement = builder.processDocument(inStream, contentType, msgContext);
             }
         }
@@ -477,6 +481,7 @@ public class TransportUtils {
            }
            
        	Attachments attachments = msgContext.getAttachmentMap();
+       	LifecycleManager lcm = (LifecycleManager)msgContext.getRootContext().getAxisConfiguration().getParameterValue(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER);
            if (attachments != null) {
                String [] keys = attachments.getAllContentIDs(); 
                if (keys != null) {
@@ -491,13 +496,33 @@ public class TransportUtils {
                            	file = ((CachedFileDataSource)dataSource).getFile();
                            	if (log.isDebugEnabled()) {
                                    log.debug("Delete cache attachment file: "+file.getName());
-                               }
-                           	file.delete();
+                            }
+                           	if(lcm!=null){
+                                if(log.isDebugEnabled()){
+                                    log.debug("deleting file using lifecyclemanager");
+                                }
+                                lcm.delete(file);
+                            }else{
+                                file.delete();
+                            }
                            }
                        }
                        catch (Exception e) {
+                    	   if (log.isDebugEnabled()) {
+                               log.debug("Delete cache attachment file failed"+ e.getMessage());
+                           }
+
                            if (file != null) {
-                               file.deleteOnExit();                            
+                               if(lcm!=null){
+                                   try{                        			   
+                                       lcm.deleteOnExit(file);
+                                   }catch(Exception ex){
+                                       file.deleteOnExit();
+                                   }
+                               }
+                               else{
+                                   file.deleteOnExit();
+                               }
                            }
                        }
                    }

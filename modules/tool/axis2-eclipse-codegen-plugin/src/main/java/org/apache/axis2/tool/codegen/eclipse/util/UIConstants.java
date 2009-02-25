@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tool.codegen.eclipse.util;
 
 public interface UIConstants {
@@ -27,7 +28,6 @@ public interface UIConstants {
     public static final String DATA_BINDING_ADB = "adb" ;
     public static final String DATA_BINDING_XMLBEANS = "xmlbeans" ;
     public static final String DATA_BINDING_JIBX = "jibx" ;
-    public static final String DATA_BINDING_JAXME = "jaxme" ;
     
 	// Selected Option by the user at the previous page (default/false Custom/true)
 	public static boolean selectedOption = false;

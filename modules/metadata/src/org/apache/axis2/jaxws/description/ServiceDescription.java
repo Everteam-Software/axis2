@@ -16,12 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
 
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.jaxws.catalog.JAXWSCatalogManager;
 import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
+
 import javax.xml.namespace.QName;
+import javax.xml.ws.handler.PortInfo;
 import java.util.Collection;
 import java.util.List;
 
@@ -63,11 +67,15 @@ import java.util.List;
  */
 
 public interface ServiceDescription {
-    public abstract EndpointDescription[] getEndpointDescriptions();
+    
+	public abstract EndpointDescription[] getEndpointDescriptions();
 
     public abstract Collection<EndpointDescription> getEndpointDescriptions_AsCollection();
 
     public abstract EndpointDescription getEndpointDescription(QName portQName);
+
+    // Called the client-side to retrieve defined and dynamic ports
+    public abstract EndpointDescription getEndpointDescription(QName portQName, Object serviceDelegateKey);
 
     /**
      * Return the EndpointDescriptions corresponding to the SEI class.  Note that Dispatch endpoints
@@ -80,24 +88,67 @@ public interface ServiceDescription {
 
     public abstract ConfigurationContext getAxisConfigContext();
 
-    public abstract ServiceClient getServiceClient(QName portQName);
+    public abstract ServiceClient getServiceClient(QName portQName, Object serviceDelegateKey);
 
     public abstract QName getServiceQName();
 
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.  If the
+     * key is non-null then it is used to look for handler chain configuration information in the
+     * sparse metadata.  The order in which the configuration information is resolved is:
+     * 1) Look in sparse composite if the key is not null
+     * 2) Look in the composite
+     * 3) Look for a HandlerChain annotation and read in the file it specifies  
+     * 
+     * @param serviceDelegateKey May be null.  If non-null, used to look for service-delegate
+     *     specific sparse composite information.
+     * @return A HandlerChainsType object or null
+     */
+    public abstract HandlerChainsType getHandlerChain(Object serviceDelegateKey);
+    
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.
+     * This is the same as calling getHandlerChain(null).
+     * @see #getHandlerChain(Object)
+     */
     public abstract HandlerChainsType getHandlerChain();
+    
     /**
      * Returns a list of the ports for this serivce.  The ports returned are the - Ports declared
      * ports for this Service.  They can be delcared in the WSDL or via annotations. - Dynamic ports
      * added to the service
      *
+     * @param serviceDelegateKey This should always be non-null when called via ServiceDelegate and is
+     *                            used to help retrieve dynamic ports per client
+
      * @return
      */
-    public List<QName> getPorts();
+    public List<QName> getPorts(Object serviceDelegateKey);
 
     public ServiceRuntimeDescription getServiceRuntimeDesc(String name);
 
     public void setServiceRuntimeDesc(ServiceRuntimeDescription ord);
     
     public boolean isServerSide();
+    
+    /**
+     * Answer if MTOM is enabled for the service represented by this Service Description.  This
+     * is currently only supported on the service-requester side; it is not supported on the 
+     * service-provider side.  If the key is non-null, it is used to look up an sparse metadata
+     * that may have been specified when the Service Description was created.
+     *  
+     * @param key If non-null, used to look up any sparse metadata that may have been specified
+     *     when the service was created.
+     * @return TRUE if mtom was enabled either in the sparse metadata or in the composite; FALSE
+     *     othewise.
+     */
+    public boolean isMTOMEnabled(Object key);
+    
+    public QName getPreferredPort(Object key);
+    
+    public JAXWSCatalogManager getCatalogManager();
 
+    public List<Class> getHandlerChainClasses(PortInfo portinfo);
+
+    public void setHandlerChainClasses(PortInfo portinfo, List<Class> handlerClasses);
 }

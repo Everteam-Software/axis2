@@ -27,13 +27,17 @@ import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPConstants;
 import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axiom.soap.SOAPFault;
 import org.apache.axiom.soap.SOAPFaultCode;
 import org.apache.axiom.soap.SOAPFaultDetail;
 import org.apache.axiom.soap.SOAPFaultReason;
+import org.apache.axiom.soap.SOAPFaultSubCode;
+import org.apache.axiom.soap.SOAPFaultValue;
 import org.apache.axiom.soap.SOAPHeader;
 import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axiom.soap.SOAPProcessingException;
+import org.apache.axiom.soap.SOAPFaultNode;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingConstants;
@@ -44,7 +48,8 @@ import org.apache.axis2.addressing.RelatesTo;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
-import org.apache.axis2.context.ServiceContext;
+import org.apache.axis2.description.AxisBindingMessage;
+import org.apache.axis2.description.AxisBindingOperation;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.Parameter;
@@ -181,8 +186,18 @@ public class MessageContextBuilder {
             newmsgCtx.setWSAAction(inMessageContext.getWSAAction());
         }
 
-        if (ao != null)
+        if (ao != null) {
             newmsgCtx.setAxisMessage(ao.getMessage(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        }
+        
+        // setting the out bound binding message
+        AxisBindingMessage inboundAxisBindingMessage
+                = (AxisBindingMessage)inMessageContext.getProperty(Constants.AXIS_BINDING_MESSAGE);
+        if (inboundAxisBindingMessage != null){
+                AxisBindingOperation axisBindingOperation = inboundAxisBindingMessage.getAxisBindingOperation();
+                newmsgCtx.setProperty(Constants.AXIS_BINDING_MESSAGE,
+                        axisBindingOperation.getChild(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        }
 
         newmsgCtx.setDoingMTOM(inMessageContext.isDoingMTOM());
         newmsgCtx.setDoingSwA(inMessageContext.isDoingSwA());
@@ -284,7 +299,7 @@ public class MessageContextBuilder {
         // there are some information  that the fault thrower wants to pass to the fault path.
         // Means that the fault is a ws-addressing one hence use the ws-addressing fault action.
         Object faultInfoForHeaders =
-                processingContext.getProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
+                processingContext.getLocalProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
         if (faultInfoForHeaders != null) {
             faultContext.setProperty(Constants.FAULT_INFORMATION_FOR_HEADERS, faultInfoForHeaders);
 
@@ -472,12 +487,14 @@ public class MessageContextBuilder {
                     if (faultCodeQName.getLocalPart().indexOf(":") == -1) {
                         String prefix = faultCodeQName.getPrefix();
                         String uri = faultCodeQName.getNamespaceURI();
-                        prefix = prefix == null || "".equals(prefix) ?
-                                fault.getNamespace().getPrefix() : prefix;
+                        // Get the specified prefix and uri
+                        prefix = prefix == null ? "" : prefix;
                         uri = uri == null || "" .equals(uri) ?
                                 fault.getNamespace().getNamespaceURI() : uri;
+                        // Make sure the prefix and uri are declared on the fault, and 
+                        // get the resulting prefix.
+                        prefix = fault.declareNamespace(uri, prefix).getPrefix();
                         soapFaultCode = prefix + ":" + faultCodeQName.getLocalPart();
-                        fault.declareNamespace(uri, prefix);
                     } else {
                         soapFaultCode = faultCodeQName.getLocalPart();
                     }
@@ -499,6 +516,28 @@ public class MessageContextBuilder {
             } else {
                 fault.getCode().getValue().setText(soapFaultCode);
             }
+        }
+        
+        if (axisFault != null && !context.isSOAP11()) {
+            if (axisFault.getFaultSubCodes() != null) {
+                
+                List faultSubCodes = axisFault.getFaultSubCodes();
+                
+                QName faultSubCodeQName;
+                
+                for (Iterator subCodeiter = faultSubCodes.iterator(); subCodeiter.hasNext(); ) {
+                    
+                    faultSubCodeQName = (QName) subCodeiter.next();
+                                        
+                    SOAPFactory sf = (SOAPFactory)envelope.getOMFactory();
+                    SOAPFaultSubCode soapFaultSubCode = sf.createSOAPFaultSubCode(fault.getCode());
+                    SOAPFaultValue saopFaultValue = sf.createSOAPFaultValue(fault.getCode());
+                    saopFaultValue.setText(faultSubCodeQName);
+                    soapFaultSubCode.setValue(saopFaultValue);
+                    fault.getCode().setSubCode(soapFaultSubCode);
+                }
+                
+            } 
         }
 
         SOAPFaultReason faultReason = (SOAPFaultReason)context.getProperty(
@@ -543,7 +582,10 @@ public class MessageContextBuilder {
 
         Object faultNode = context.getProperty(SOAP12Constants.SOAP_FAULT_NODE_LOCAL_NAME);
         if (faultNode != null) {
-            fault.getNode().setText((String) faultNode);
+            SOAPFaultNode soapFaultNode = fault.getNode();
+            if(soapFaultNode != null) {
+                soapFaultNode.setText((String) faultNode);
+            }
         } else if (axisFault != null) {
             if (axisFault.getFaultNodeElement() != null) {
                 fault.setNode(axisFault.getFaultNodeElement());

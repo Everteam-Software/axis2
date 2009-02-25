@@ -16,10 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.impl;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.i18n.Messages;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.ws.commons.schema.resolver.URIResolver;
@@ -27,21 +29,27 @@ import org.xml.sax.InputSource;
 
 import java.io.File;
 import java.io.InputStream;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
+import java.security.PrivilegedActionException;
 
 /** This class is used to locate xml schemas that are imported by wsdl documents. */
 public class URIResolverImpl implements URIResolver {
 
-    private final String HTTP_PROTOCOL = "http";
+    private static final String HTTP_PROTOCOL = "http";
 
-    private final String HTTPS_PROTOCOL = "https";
+    private static final String HTTPS_PROTOCOL = "https";
 
-    private final String FILE_PROTOCOL = "file";
+    private static final String FILE_PROTOCOL = "file";
 
-    private final String JAR_PROTOCOL = "jar";
+    private static final String JAR_PROTOCOL = "jar";
+    
+    private static final String BUNDLE_RESOURCE_PROTOCOL = "bundleresource";
 
     private ClassLoader classLoader;
     
@@ -56,8 +64,9 @@ public class URIResolverImpl implements URIResolver {
 
     public InputSource resolveEntity(String namespace, String schemaLocation,
                                      String baseUri) {
-        //TODO: Temporary, please change the following log.info to log.debug
-        log.info("resolveEntity: ["+ namespace + "]["+ schemaLocation + "][ " + baseUri+ "]");
+        if (log.isDebugEnabled()) {
+            log.debug("resolveEntity: ["+ namespace + "]["+ schemaLocation + "][ " + baseUri+ "]");
+        }
         
         InputStream is = null;
         URI pathURI = null;
@@ -150,7 +159,7 @@ public class URIResolverImpl implements URIResolver {
                     // the baseURI, then use the loadStrategy to gain an input
                     // stream
                     // because the URI will still be relative to the module
-                    else {
+                    if(is == null) {
                         is = classLoader
                                 .getResourceAsStream(pathURI.toString());
                     }
@@ -180,8 +189,11 @@ public class URIResolverImpl implements URIResolver {
         // imported XSDs that have been read.  If this value is null, then circular XSDs will 
         // cause infinite recursive reads.
         returnInputSource.setSystemId(pathURIStr != null ? pathURIStr : schemaLocation);
-        //TODO: Temporary, please change the following log.info to log.debug
-        log.info("returnInputSource :" + returnInputSource.getSystemId());
+        
+        if (log.isDebugEnabled()) {
+            log.debug("returnInputSource :" + returnInputSource.getSystemId());    
+        }
+        
         return returnInputSource;
     }
 
@@ -217,7 +229,7 @@ public class URIResolverImpl implements URIResolver {
 
         try {
             streamURL = new URL(uri);
-            is = streamURL.openStream();
+            is = openStream_doPriv(streamURL);
         } catch (Throwable t) {
             //Exception handling not needed
         }
@@ -226,7 +238,7 @@ public class URIResolverImpl implements URIResolver {
             try {
                 pathURI = new URI(uri);
                 streamURL = pathURI.toURL();
-                is = streamURL.openStream();
+                is = openStream_doPriv(streamURL);
             } catch (Throwable t) {
                 //Exception handling not needed
             }
@@ -234,9 +246,15 @@ public class URIResolverImpl implements URIResolver {
 
         if (is == null) {
             try {
-                File file = new File(uri);
-                streamURL = file.toURL();
-                is = streamURL.openStream();
+                final File file = new File(uri);
+                streamURL = (URL) AccessController.doPrivileged(
+                        new PrivilegedExceptionAction() {
+                            public Object run() throws MalformedURLException {
+                                return file.toURL();
+                            }
+                        }
+                );
+                is = openStream_doPriv(streamURL);
             } catch (Throwable t) {
                 //Exception handling not needed
             }
@@ -244,13 +262,29 @@ public class URIResolverImpl implements URIResolver {
         return is;
     }
 
+    private InputStream openStream_doPriv(final URL streamURL) throws IOException {
+        try {
+            return (InputStream) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws IOException {
+                            return streamURL.openStream();
+                        }
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            throw (IOException) e.getException();
+        }
+    }
+
     private String constructPath(URL baseURL, URI resolvedURI) {
         String importLocation = null;
         URL url = null;
         try {
             // Allow for http or https
-            if (baseURL.getProtocol() != null && (baseURL.getProtocol().equals(
-                    HTTP_PROTOCOL) || baseURL.getProtocol().equals(HTTPS_PROTOCOL))) {
+            if (baseURL.getProtocol() != null && 
+                    (baseURL.getProtocol().equals(HTTP_PROTOCOL) || 
+                     baseURL.getProtocol().equals(HTTPS_PROTOCOL) || 
+                     baseURL.getProtocol().equals(BUNDLE_RESOURCE_PROTOCOL))) {
             	if(log.isDebugEnabled()){
             		log.debug("Constructing path with http/https protocol");
             	}
@@ -276,13 +310,19 @@ public class URIResolverImpl implements URIResolver {
             	url = new URL(baseURL.getProtocol(), baseURL.getHost(), resolvedURI.toString());
             }
             else{
-            	if(log.isDebugEnabled()){
-            		if(baseURL !=null){
-            			log.debug("unknown protocol in url "+ baseURL.getProtocol());
-            		}else{
-            			log.debug("baseURL is NULL");
-            		}
-            	}
+                if(baseURL != null) {
+                    
+                    // try constructing it with unknown protocol
+                    if(log.isDebugEnabled()){
+                        log.debug("Constructing path with unknown protocol: " + baseURL.getProtocol());
+                    }
+                    url = new URL(baseURL.getProtocol(), baseURL.getHost(), resolvedURI.toString());
+                }
+                else {
+                    if(log.isDebugEnabled()) {
+                        log.debug("baseURL is NULL");
+                    }
+                }
             }
                         
         }

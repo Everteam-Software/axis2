@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context.commands;
 
 import org.apache.axis2.AxisFault;
@@ -53,7 +54,9 @@ public class UpdateServiceContextCommand extends UpdateContextCommand {
     }
 
     public void execute(ConfigurationContext configurationContext) throws ClusteringFault {
-        log.debug("Updating service context properties...");
+        if (log.isDebugEnabled()) {
+            log.debug("Updating service context properties...");
+        }
         ServiceGroupContext sgCtx =
                 configurationContext.getServiceGroupContext(serviceGroupContextId);
         if (sgCtx != null) {
@@ -100,6 +103,6 @@ public class UpdateServiceContextCommand extends UpdateContextCommand {
     }
 
     public String toString() {
-        return "UpdateServiceContextCommand(" + uniqueId + ")";
+        return "UpdateServiceContextCommand";
     }
 }

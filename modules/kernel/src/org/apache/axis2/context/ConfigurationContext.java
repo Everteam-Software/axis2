@@ -20,9 +20,11 @@
 
 package org.apache.axis2.context;
 
+import edu.emory.mathcs.backport.java.util.concurrent.ConcurrentHashMap;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.clustering.ClusterManager;
 import org.apache.axis2.clustering.ClusteringConstants;
 import org.apache.axis2.clustering.configuration.ConfigurationManager;
@@ -37,6 +39,8 @@ import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.threadpool.ThreadFactory;
 import org.apache.axis2.util.threadpool.ThreadPool;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.io.File;
 import java.net.URL;
@@ -46,7 +50,7 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.security.PrivilegedAction;
 
 /**
  * <p>Axis2 states are held in two information models, called description hierarchy
@@ -63,11 +67,12 @@ import java.util.Map;
  */
 public class ConfigurationContext extends AbstractContext {
 
+    private static final Log log = LogFactory.getLog(ConfigurationContext.class);
     /**
      * Map containing <code>MessageID</code> to
      * <code>OperationContext</code> mapping.
      */
-    private final Map operationContextMap = new HashMap();
+    private final ConcurrentHashMap operationContextMap = new ConcurrentHashMap();
     private Hashtable serviceGroupContextMap = new Hashtable();
     private Hashtable applicationSessionServiceGroupContexts = new Hashtable();
     private AxisConfiguration axisConfiguration;
@@ -85,6 +90,10 @@ public class ConfigurationContext extends AbstractContext {
     private String cachedServicePath = null;
     protected List contextListeners;
 
+    /**
+     * Constructor
+     * @param axisConfiguration - AxisConfiguration for which to create a context
+     */
     public ConfigurationContext(AxisConfiguration axisConfiguration) {
         super(null);
         this.axisConfiguration = axisConfiguration;
@@ -102,6 +111,11 @@ public class ConfigurationContext extends AbstractContext {
         }
     }
 
+    /**
+     * Initializes the ClusterManager for this ConfigurationContext
+     * 
+     * @throws AxisFault
+     */
     public void initCluster() throws AxisFault {
         ClusterManager clusterManager = axisConfiguration.getClusterManager();
         if (clusterManager != null) {
@@ -178,10 +192,6 @@ public class ConfigurationContext extends AbstractContext {
         if (contextListeners != null) {
             contextListeners.remove(contextListener);
         }
-    }
-
-    protected void finalize() throws Throwable {
-        super.finalize();
     }
 
     /**
@@ -275,38 +285,84 @@ public class ConfigurationContext extends AbstractContext {
     /**
      * Registers a OperationContext with a given message ID.
      * If the given message id already has a registered operation context,
-     * no change is made and the methid resturns false.
+     * no change is made and the method returns false.
      *
-     * @param messageID  the message-id to register
-     * @param mepContext the OperationContext for the specified message-id
-     * @return true if we added a new context, false if the messageID was already there and we did
-     *         nothing
+     * @param messageID
+     * @param mepContext
      */
-    public boolean registerOperationContext(String messageID,
+    public boolean registerOperationContext(String messageID, 
                                             OperationContext mepContext) {
-        mepContext.setKey(messageID);  // TODO: Doing this here seems dangerous....
-        synchronized (operationContextMap) {
-            if (!operationContextMap.containsKey(messageID)) {
-                this.operationContextMap.put(messageID, mepContext);
-                return true;
-            }
-        }
-        return false;
+        return registerOperationContext(messageID, mepContext, false);
     }
+    
+    /**
+     * Registers a OperationContext with a given message ID.
+     * If the given message id already has a registered operation context,
+     * no change is made unless the override flag is set. 
+     *
+     * @param messageID
+     * @param mepContext
+     * @param override
+     */
+    public boolean registerOperationContext(String messageID, 
+                                            OperationContext mepContext, 
+                                            boolean override) {
+    	
+    	if(messageID == null){
+    		if(log.isDebugEnabled()){
+    			log.debug("messageID is null. Returning false");
+    		}
+    		return false;
+    	}
+    	
+        boolean alreadyInMap = false;
+        mepContext.setKey(messageID);
 
+        if(override){
+        	operationContextMap.put(messageID, mepContext);
+        }else{
+        	Object previous = operationContextMap.putIfAbsent(messageID, mepContext);
+        	alreadyInMap = (previous!=null);
+        }
+        if (log.isDebugEnabled())
+        {
+        	log.debug("registerOperationContext ("+override+"): "+
+        			mepContext+" with key: "+messageID);
+        	HashMap msgContextMap = mepContext.getMessageContexts();
+        	Iterator msgContextIterator = msgContextMap.values().iterator();
+        	while (msgContextIterator.hasNext())
+        	{
+        		MessageContext msgContext = (MessageContext)msgContextIterator.next();
+        		log.debug("msgContext: "+msgContext+" action: "+msgContext.getWSAAction());
+        	}
+        }
+        return (!alreadyInMap || override);
+    }
     /**
      * Unregisters the operation context associated with the given messageID
      *
      * @param key
      */
     public void unregisterOperationContext(String key) {
-        synchronized (operationContextMap) {
-            OperationContext opCtx = (OperationContext) operationContextMap.get(key);
-            operationContextMap.remove(key);
-            contextRemoved(opCtx);
-        }
+    	if(key == null){
+    		if(log.isDebugEnabled()){
+    			log.debug("key is null.");
+    		}
+    	}else{
+    		OperationContext opCtx = (OperationContext) operationContextMap.remove(key);
+    		contextRemoved(opCtx);
+    	}
     }
 
+    public boolean isAnyOperationContextRegistered(){
+    	return !operationContextMap.isEmpty();
+    }
+    
+    /**
+     * Adds the given ServiceGroupContext into the SOAP session table
+     * 
+     * @param serviceGroupContext ServiceGroup Context to add
+     */
     public void addServiceGroupContextIntoSoapSessionTable(
             ServiceGroupContext serviceGroupContext) {
         String id = serviceGroupContext.getId();
@@ -317,6 +373,10 @@ public class ConfigurationContext extends AbstractContext {
         cleanupServiceGroupContexts();
     }
 
+    /**
+     * Adds the given ServiceGroupContext into the Application Scope table
+     * @param serviceGroupContext The Service Group Context to add
+     */
     public void addServiceGroupContextIntoApplicationScopeTable
             (ServiceGroupContext serviceGroupContext) {
         if (applicationSessionServiceGroupContexts == null) {
@@ -340,6 +400,10 @@ public class ConfigurationContext extends AbstractContext {
         }
     }
 
+    /**
+     * Returns the AxisConfiguration
+     * @return Returns AxisConfiguration
+     */
     public AxisConfiguration getAxisConfiguration() {
         return axisConfiguration;
     }
@@ -351,17 +415,18 @@ public class ConfigurationContext extends AbstractContext {
      * @param id
      */
     public OperationContext getOperationContext(String id) {
-        OperationContext opCtx;
-        synchronized (operationContextMap) {
-            if (operationContextMap == null) {
-                return null;
-            }
-            opCtx = (OperationContext) this.operationContextMap.get(id);
-        }
-
+        OperationContext opCtx = (OperationContext) this.operationContextMap.get(id);
         return opCtx;
     }
 
+    /**
+     * Finds the OperationContext given the Operation name, Service Name, and ServiceGroupName
+     * 
+     * @param operationName - OperationName to find
+     * @param serviceName - ServiceName to find
+     * @param serviceGroupName - ServiceGroupName to find
+     * @return Returns OperationContext <code>OperationContext<code>
+     */
     public OperationContext findOperationContext(String operationName, String serviceName,
                                                  String serviceGroupName) {
         if (operationName == null) {
@@ -375,39 +440,36 @@ public class ConfigurationContext extends AbstractContext {
         // group name is not necessarily a prereq
         // but if the group name is non-null, then it has to match
 
-        synchronized (operationContextMap) {
-            Iterator it = operationContextMap.keySet().iterator();
+        Iterator it = operationContextMap.values().iterator();
 
-            while (it.hasNext()) {
-                Object key = it.next();
-                OperationContext value = (OperationContext) operationContextMap.get(key);
+        while (it.hasNext()) {
+        	OperationContext value = (OperationContext) it.next();
 
-                String valueOperationName;
-                String valueServiceName;
-                String valueServiceGroupName;
+        	String valueOperationName;
+        	String valueServiceName;
+        	String valueServiceGroupName;
 
-                if (value != null) {
-                    valueOperationName = value.getOperationName();
-                    valueServiceName = value.getServiceName();
-                    valueServiceGroupName = value.getServiceGroupName();
+        	if (value != null) {
+        		valueOperationName = value.getOperationName();
+        		valueServiceName = value.getServiceName();
+        		valueServiceGroupName = value.getServiceGroupName();
 
-                    if ((valueOperationName != null) && (valueOperationName.equals(operationName))) {
-                        if ((valueServiceName != null) && (valueServiceName.equals(serviceName))) {
-                            if ((valueServiceGroupName != null) && (serviceGroupName != null)
-                                && (valueServiceGroupName.equals(serviceGroupName))) {
-                                // match
-                                return value;
-                            }
+        		if ((valueOperationName != null) && (valueOperationName.equals(operationName))) {
+        			if ((valueServiceName != null) && (valueServiceName.equals(serviceName))) {
+        				if ((valueServiceGroupName != null) && (serviceGroupName != null)
+        						&& (valueServiceGroupName.equals(serviceGroupName))) {
+        					// match
+        					return value;
+        				}
 
-                            // or, both need to be null
-                            if ((valueServiceGroupName == null) && (serviceGroupName == null)) {
-                                // match
-                                return value;
-                            }
-                        }
-                    }
-                }
-            }
+        				// or, both need to be null
+        				if ((valueServiceGroupName == null) && (serviceGroupName == null)) {
+        					// match
+        					return value;
+        				}
+        			}
+        		}
+        	}
         }
 
         // if we got here, we did not find an operation context
@@ -440,7 +502,7 @@ public class ConfigurationContext extends AbstractContext {
     }
 
     /**
-     * Allows users to resolve the path relative to the root diretory.
+     * Allows users to resolve the path relative to the root directory.
      *
      * @param path
      * @return
@@ -454,6 +516,14 @@ public class ConfigurationContext extends AbstractContext {
         return null;
     }
 
+    /**
+     * Retrieve the ServiceGroupContext from the SOAP session table
+     * 
+     * @param serviceGroupContextId Service Group Context ID to search on
+     * @param msgContext Message Context to search on
+     * @return Returns a ServiceGroupContext
+     * @throws AxisFault if ServiceGroupContext cannot be found
+     */
     public ServiceGroupContext getServiceGroupContextFromSoapSessionTable(
             String serviceGroupContextId,
             MessageContext msgContext) throws AxisFault {
@@ -546,6 +616,8 @@ public class ConfigurationContext extends AbstractContext {
     }
 
     /**
+     * Set the AxisConfiguration to the specified configuration
+     * 
      * @param configuration
      */
     public void setAxisConfiguration(AxisConfiguration configuration) {
@@ -586,24 +658,37 @@ public class ConfigurationContext extends AbstractContext {
             return;
         }
         long currentTime = new Date().getTime();
-        for (Iterator sgCtxtMapKeyIter = serviceGroupContextMap.keySet().iterator();
-             sgCtxtMapKeyIter.hasNext();) {
-            String sgCtxtId = (String) sgCtxtMapKeyIter.next();
-            ServiceGroupContext serviceGroupContext =
-                    (ServiceGroupContext) serviceGroupContextMap.get(sgCtxtId);
-            if ((currentTime - serviceGroupContext.getLastTouchedTime()) >
-                getServiceGroupContextTimoutInterval()) {
-                sgCtxtMapKeyIter.remove();
-                cleanupServiceContexts(serviceGroupContext);
-                contextRemoved(serviceGroupContext);
+        
+        synchronized (serviceGroupContextMap) { 
+            for (Iterator sgCtxtMapKeyIter = serviceGroupContextMap.keySet().iterator();
+                 sgCtxtMapKeyIter.hasNext();) {
+                String sgCtxtId = (String) sgCtxtMapKeyIter.next();
+                ServiceGroupContext serviceGroupContext =
+                        (ServiceGroupContext) serviceGroupContextMap.get(sgCtxtId);
+                if ((currentTime - serviceGroupContext.getLastTouchedTime()) >
+                    getServiceGroupContextTimoutInterval()) {
+                    sgCtxtMapKeyIter.remove();
+                    cleanupServiceContexts(serviceGroupContext);
+                    contextRemoved(serviceGroupContext);
+                }
             }
         }
     }
 
+    /**
+     * Retrieve the ListenerManager
+     * 
+     * @return Returns the ListenerManager
+     */
     public ListenerManager getListenerManager() {
         return listenerManager;
     }
 
+    /**
+     * Set the TransportManager to the given ListenerManager
+     * 
+     * @param listenerManager The ListenerManager for which to set the TransportManager
+     */
     public void setTransportManager(ListenerManager listenerManager) {
         this.listenerManager = listenerManager;
     }
@@ -622,6 +707,9 @@ public class ConfigurationContext extends AbstractContext {
         }
     }
 
+    /**
+     * Called during shutdown to clean up all Contexts
+     */
     public void cleanupContexts() {
         if ((applicationSessionServiceGroupContexts != null) &&
             (applicationSessionServiceGroupContexts.size() > 0)) {
@@ -645,6 +733,12 @@ public class ConfigurationContext extends AbstractContext {
         }
     }
 
+    /**
+     * Invoked during shutdown to stop the ListenerManager and 
+     * perform configuration cleanup
+     * 
+     * @throws AxisFault
+     */
     public void terminate() throws AxisFault {
         if (listenerManager != null) {
             listenerManager.stop();
@@ -662,21 +756,53 @@ public class ConfigurationContext extends AbstractContext {
         File tempFile = (File) axisConfiguration.getParameterValue(
                 Constants.Configuration.ARTIFACTS_TEMP_DIR);
         if (tempFile == null) {
-            tempFile = new File(System.getProperty("java.io.tmpdir"), "_axis2");
+            String property = (String) AccessController.doPrivileged(
+                    new PrivilegedAction() {
+                        public Object run() {
+                            return System.getProperty("java.io.tmpdir");
+                        }
+                    }
+            );
+            tempFile = new File(property, "_axis2");
         }
         deleteTempFiles(tempFile);
     }
 
-    private void deleteTempFiles(File dir) {
-        if (dir.isDirectory()) {
-            String[] children = dir.list();
-            for (int i = 0; i < children.length; i++) {
+    private void deleteTempFiles(final File dir) {
+        Boolean isDir = (Boolean) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        return new Boolean(dir.isDirectory());
+                    }
+                }
+        );
+        if (isDir.booleanValue()) {
+            String[] children = (String[]) AccessController.doPrivileged(
+                    new PrivilegedAction() {
+                        public Object run() {
+                            return dir.list();
+                        }
+                    }
+            );
+            for (int i = 0; children != null && i < children.length; i++) {
                 deleteTempFiles(new File(dir, children[i]));
             }
         }
-        dir.delete();
+        AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        dir.delete();
+                        return null;
+                    }
+                }
+        );
     }
 
+    /**
+     * Retrieves the ServiceContext path
+     * 
+     * @return path to the ServiceContext
+     */
     public String getServiceContextPath() {
         if (cachedServicePath == null) {
             cachedServicePath = internalGetServiceContextPath();
@@ -700,6 +826,10 @@ public class ConfigurationContext extends AbstractContext {
         return path;
     }
 
+    /**
+     * Retrieves the ServicePath
+     * @return The path to the Service
+     */
     public String getServicePath() {
         if (servicePath == null || servicePath.trim().length() == 0) {
             throw new IllegalArgumentException("service path cannot be null or empty");
@@ -707,14 +837,26 @@ public class ConfigurationContext extends AbstractContext {
         return servicePath.trim();
     }
 
+    /**
+     * Sets the ServicePath to the given string
+     * @param servicePath The service path for which to set
+     */
     public void setServicePath(String servicePath) {
         this.servicePath = servicePath;
     }
 
+    /**
+     * Retrieves the ContextRoot
+     * @return The ContextRoot
+     */
     public String getContextRoot() {
         return contextRoot;
     }
 
+    /**
+     * Sets the context root to the given string
+     * @param contextRoot The context root for which to set
+     */
     public void setContextRoot(String contextRoot) {
         if (contextRoot != null) {
             this.contextRoot = contextRoot.trim();  // Trim before storing away for good hygiene
@@ -736,6 +878,10 @@ public class ConfigurationContext extends AbstractContext {
         return serviceGroupContextTimoutInterval;
     }
 
+    /**
+     * Removes the given ServiceGroup from the ServiceGroup context
+     * @param serviceGroup
+     */
     public void removeServiceGroupContext(AxisServiceGroup serviceGroup) {
         if (serviceGroup != null) {
             Object obj = applicationSessionServiceGroupContexts.get(
@@ -754,10 +900,15 @@ public class ConfigurationContext extends AbstractContext {
                     String s = (String) toBeRemovedList.get(i);
                     serviceGroupContextMap.remove(s);
                 }
+            }  else {
+                 applicationSessionServiceGroupContexts.remove(serviceGroup.getServiceGroupName());
             }
         }
     }
 
+    /* (non-Javadoc)
+     * @see org.apache.axis2.context.AbstractContext#getRootContext()
+     */
     public ConfigurationContext getRootContext() {
         return this;
     }

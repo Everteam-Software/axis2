@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -90,16 +91,14 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
             //to a method then an implementation MUST throw WebServiceException.
             if (pds.length > 0) {
                 if (signatureArguments == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                            "doc/lit"));
+                	throw ExceptionFactory.makeWebServiceException(
+                			Messages.getMessage("NullParamErr1",operationDesc.getJavaMethodName()));
                 }
                 if (signatureArguments != null) {
                     for (Object argument : signatureArguments) {
                         if (argument == null) {
-                            throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                                    "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                                    "doc/lit"));
+                        	throw ExceptionFactory.makeWebServiceException(
+                        			Messages.getMessage("NullParamErr1",operationDesc.getJavaMethodName()));
                         }
                     }
                 }
@@ -136,6 +135,11 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -207,10 +211,8 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
             if (sigArguments != null) {
                 for (Object argument : sigArguments) {
                     if (argument == null) {
-                        throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                                "NullParamErr1", "Input", operationDesc.getJavaMethodName(),
-                                "rpc/lit"));
-
+                        throw ExceptionFactory.makeWebServiceException(
+                    			Messages.getMessage("NullParamErr2",operationDesc.getJavaMethodName()));
                     }
                 }
             }
@@ -292,9 +294,8 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
                 //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
                 //to a method then an implementation MUST throw WebServiceException.
                 if (returnObject == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Return", operationDesc.getJavaMethodName(),
-                            "rpc/lit"));
+                    throw ExceptionFactory.makeWebServiceException(
+                			Messages.getMessage("NullParamErr3",operationDesc.getJavaMethodName()));
 
                 }
                 Element returnElement = null;
@@ -333,6 +334,11 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
             // TODO Should we check for null output body values?  Should we check for null output header values ?
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -414,9 +420,8 @@ public class DocLitWrappedMinimalMethodMarshaller implements MethodMarshaller {
                 //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
                 //to a method then an implementation MUST throw WebServiceException.
                 if (returnValue == null) {
-                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage(
-                            "NullParamErr1", "Return", operationDesc.getJavaMethodName(),
-                            "rpc/lit"));
+                	throw ExceptionFactory.makeWebServiceException(
+                			Messages.getMessage("NullParamErr3",operationDesc.getJavaMethodName()));
                 }
             }
 

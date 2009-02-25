@@ -20,13 +20,10 @@
 
 package org.apache.axis2.receivers;
 
-import org.apache.axis2.AxisFault;
-import org.apache.axis2.context.MessageContext;
-
 /**
  * This is takes care of the IN-OUT sync MEP in the server side
  *
  * @deprecated not needed, since in-only MessageReceivers can throw faults
  */
-public abstract class AbstractRobustInMessageReceiver extends AbstractMessageReceiver {
+public abstract class AbstractRobustInMessageReceiver extends  AbstractMessageReceiver{
 }

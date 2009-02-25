@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.jms;
 
 import edu.emory.mathcs.backport.java.util.concurrent.ExecutorService;
@@ -28,7 +29,12 @@ import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.SessionContext;
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisModule;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.ParameterIncludeImpl;
+import org.apache.axis2.description.TransportInDescription;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.AxisEvent;
 import org.apache.axis2.engine.AxisObserver;
@@ -39,7 +45,11 @@ import org.apache.commons.logging.LogFactory;
 import javax.jms.JMSException;
 import javax.naming.Context;
 import javax.naming.NamingException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.StringTokenizer;
 
 /**
  * The JMS Transport listener implementation. A JMS Listner will hold one or
@@ -92,6 +102,8 @@ public class JMSListener implements TransportListener {
      * The Axis2 Configuration context
      */
     private ConfigurationContext configCtx = null;
+    
+    private ExecutorService workerPool;
 
     /**
      * This is the TransportListener initialization method invoked by Axis2
@@ -289,7 +301,7 @@ public class JMSListener implements TransportListener {
      */
     public void start() throws AxisFault {
         // create thread pool of workers
-        ExecutorService workerPool = new ThreadPoolExecutor(
+        workerPool = new ThreadPoolExecutor(
                 1,
                 WORKERS_MAX_THREADS, WORKER_KEEP_ALIVE, TIME_UNIT,
                 new LinkedBlockingQueue(),
@@ -320,6 +332,9 @@ public class JMSListener implements TransportListener {
         while (iter.hasNext()) {
             ((JMSConnectionFactory) iter.next()).stop();
         }
+        if (workerPool != null) {
+            workerPool.shutdown();
+        }
     }
 
     /**
@@ -335,8 +350,15 @@ public class JMSListener implements TransportListener {
         if (serviceName.indexOf('/') != -1) {
             serviceName = serviceName.substring(0, serviceName.indexOf('/'));
         }
-        return new EndpointReference[]{
-                new EndpointReference((String) serviceNameToEprMap.get(serviceName))};
+
+        String endpointName = (String) serviceNameToEprMap.get(serviceName);
+        if (endpointName == null){
+            if (serviceName.indexOf(".") != -1){
+                serviceName = serviceName.substring(0, serviceName.indexOf("."));
+                endpointName = (String) serviceNameToEprMap.get(serviceName);
+            }
+        }
+        return new EndpointReference[]{new EndpointReference(endpointName)};
     }
 
     /**

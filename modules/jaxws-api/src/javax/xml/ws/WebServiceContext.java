@@ -16,12 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package javax.xml.ws;
 
 import javax.xml.ws.handler.MessageContext;
 import java.security.Principal;
 
 public interface WebServiceContext {
+
+    public abstract EndpointReference getEndpointReference(org.w3c.dom.Element... referenceParameters);
+
+    public abstract <T extends EndpointReference> T getEndpointReference(Class<T> clazz, org.w3c.dom.Element... referenceParameters);
 
     public abstract MessageContext getMessageContext();
 

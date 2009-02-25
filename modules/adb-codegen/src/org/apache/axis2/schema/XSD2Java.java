@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema;
 
 import org.apache.axis2.schema.i18n.SchemaCompilerMessages;
@@ -77,11 +78,19 @@ public class XSD2Java {
             compilerOptions.setOutputLocation(outputFolder);
             compilerOptions.setGenerateAll(true);
 
+//            Map namespace2PackageMap = new HashMap();
+//            namespace2PackageMap.put("http://www.w3.org/2001/XMLSchema/schema",
+//                    "org.apache.axis2.databinding.types.xsd");
+//            compilerOptions.setNs2PackageMap(namespace2PackageMap);
+//            compilerOptions.setMapperClassPackage("org.apache.axis2.databinding.types.xsd");
+
             //todo - this should come from the users preferences
              compilerOptions.setWrapClasses(false);
 
             //there's no point in not writing the classes here.
              compilerOptions.setWriteOutput(true);
+
+//             compilerOptions.setUseWrapperClasses(true);
 
             SchemaCompiler compiler = new SchemaCompiler(compilerOptions);
             compiler.compile(currentSchema);

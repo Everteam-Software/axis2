@@ -16,18 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.nhttp;
-
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.Iterator;
-import java.util.Map;
-
-import javax.net.ssl.SSLContext;
 
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axis2.AxisFault;
@@ -44,7 +34,6 @@ import org.apache.axis2.transport.OutTransportInfo;
 import org.apache.axis2.transport.TransportSender;
 import org.apache.axis2.transport.TransportUtils;
 import org.apache.axis2.util.MessageContextBuilder;
-import org.apache.axis2.util.Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpHost;
@@ -62,6 +51,16 @@ import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.params.HttpProtocolParams;
 import org.apache.http.protocol.HTTP;
+
+import javax.net.ssl.SSLContext;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * NIO transport sender for Axis2 based on HttpCore and NIO extensions
@@ -238,8 +237,8 @@ public class HttpCoreNIOSender extends AbstractHandler implements TransportSende
         if (headers != null && !headers.isEmpty()) {
             headers.remove(HTTP.CONN_DIRECTIVE);
             headers.remove(HTTP.TRANSFER_ENCODING);
-            headers.remove(HTTP.DATE_DIRECTIVE);
-            headers.remove(HTTP.SERVER_DIRECTIVE);
+            headers.remove(HTTP.DATE_HEADER);
+            headers.remove(HTTP.SERVER_HEADER);
             headers.remove(HTTP.CONTENT_TYPE);
             headers.remove(HTTP.CONTENT_LEN);
             headers.remove(HTTP.USER_AGENT);
@@ -308,13 +307,13 @@ public class HttpCoreNIOSender extends AbstractHandler implements TransportSende
             messageFormatter.getContentType(msgContext, format, msgContext.getSoapAction()));
 
         // return http 500 when a SOAP fault is returned
-        if (msgContext.getEnvelope().getBody().hasFault()) {
+        if (msgContext.getEnvelope().hasFault()) {
             response.setStatusCode(HttpStatus.SC_INTERNAL_SERVER_ERROR);
         }
 
         // if this is a dummy message to handle http 202 case with non-blocking IO
         // set the status code to 202 and the message body to an empty byte array (see below)
-        if (Utils.isExplicitlyTrue(msgContext, NhttpConstants.SC_ACCEPTED) &&
+        if (msgContext.isPropertyTrue(NhttpConstants.SC_ACCEPTED) &&
                 msgContext.getProperty(
                     //org.apache.sandesha2.Sandesha2Constants.MessageContextProperties.SEQUENCE_ID
                     "WSRMSequenceId") == null) {
@@ -337,7 +336,7 @@ public class HttpCoreNIOSender extends AbstractHandler implements TransportSende
 
         OutputStream out = worker.getOutputStream();
         try {
-            if (Utils.isExplicitlyTrue(msgContext, NhttpConstants.SC_ACCEPTED) &&
+            if (msgContext.isPropertyTrue(NhttpConstants.SC_ACCEPTED) &&
                 msgContext.getProperty(
                     //Sandesha2Constants.MessageContextProperties.SEQUENCE_ID
                     "WSRMSequenceId") == null) {
@@ -409,18 +408,23 @@ public class HttpCoreNIOSender extends AbstractHandler implements TransportSende
             }
 
             public void failed(SessionRequest request) {
-                handleError(request);
+                handleError(request, false);
             }
 
             public void timeout(SessionRequest request) {
-                handleError(request);
+                // In a timeout occurs the exception field is not updated
+            	// This means that it will be null (see SessionRequestImpl.timeout())
+            	handleError(request, true);
+            	request.cancel();
             }
+            
+           
 
             public void cancelled(SessionRequest sessionRequest) {
 
             }
 
-            private void handleError(SessionRequest request) {
+            private final void handleError(SessionRequest request, boolean isTimeout) {
                 if (request.getAttachment() != null &&
                     request.getAttachment() instanceof Axis2HttpRequest) {
 
@@ -432,15 +436,24 @@ public class HttpCoreNIOSender extends AbstractHandler implements TransportSende
                         // this fault is NOT caused by the endpoint while processing. so we have to
                         // inform that this is a sending error (e.g. endpoint failure) and handle it
                         // differently at the message receiver.
-
-                        Exception exception = request.getException();
-                        MessageContext nioFaultMessageContext =
-                            MessageContextBuilder.createFaultMessageContext(
-                                /** this is not a mistake I do NOT want getMessage()*/
-                                mc, new AxisFault(exception.toString(), exception));
-                        nioFaultMessageContext.setProperty(NhttpConstants.SENDING_FAULT, Boolean.TRUE);
-                        mr.receive(nioFaultMessageContext);
-                        
+                    	AxisFault axisFault;
+                    	if (isTimeout) {
+                    		// In case of a timeout there is no exception
+                    		axisFault = new AxisFault("The connection timed out");
+                    	} else {
+                    		Exception exception = request.getException();
+                    		axisFault = new AxisFault(exception.toString(), exception);
+                    	}
+                    	
+                    	if (mr == null) {
+                    		// FIXME: the message receiver is null if the MEP is out-only
+                    		log.error(axisFault.getMessage());
+                    	} else {
+                    		MessageContext nioFaultMessageContext =
+                    			MessageContextBuilder.createFaultMessageContext(mc, axisFault);
+                        	nioFaultMessageContext.setProperty(NhttpConstants.SENDING_FAULT, Boolean.TRUE);
+                        	mr.receive(nioFaultMessageContext);
+                    	}
                     } catch (AxisFault af) {
                         log.error("Unable to report back failure to the message receiver", af);
                     }

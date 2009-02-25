@@ -71,6 +71,9 @@ public class Constants extends org.apache.axis2.namespace.Constants {
     public static final String MESSAGE_SCOPE = "message";
 
     public static final String AXIS_BINDING_OPERATION = "AxisBindingOperation";
+    
+    public static final String AXIS_BINDING_MESSAGE = "AxisBindingMessage";
+
 
     /**
      * To chenge the conetext path from axis2/service to something else
@@ -238,6 +241,17 @@ public class Constants extends org.apache.axis2.namespace.Constants {
     public static final String DEFAULT_REST_PATH = "rest";
     public static final String DEFAULT_SERVICES_PATH = "services";
 
+    public static final int APPLICATION_FAULT = 1;
+    public static final int TRANSPORT_FAULT = 2;
+    public static final int SOAP_PROCESSING_FAULT = 3;
+
+    public static final String APPLICATION_FAULT_STRING = "applicationFault";
+    public static final String TRANSPORT_FAULT_STRING = "transportFault";
+    public static final String SOAP_PROCESSING_FAULT_STRING = "soapProcessingFault";
+
+    // used to handle piggy back messages with mail transport
+    public static final String PIGGYBACK_MESSAGE = "piggybackMessage";
+
     /**
      * Field Builder Selector
      */
@@ -250,14 +264,30 @@ public class Constants extends org.apache.axis2.namespace.Constants {
      */
     public static final String INBOUND_FAULT_OVERRIDE = "inboundFaultOverride";
 
+    /** SOAP Role Configuration */
+    public static final String SOAP_ROLE_CONFIGURATION_ELEMENT = "SOAPRoleConfiguration";
+    public static final String SOAP_ROLE_IS_ULTIMATE_RECEIVER_ATTRIBUTE = "isUltimateReceiver";
+    public static final String SOAP_ROLE_ELEMENT = "role";
+    public static final String SOAP_ROLE_PLAYER_PARAMETER = "rolePlayer";
+    /**
+     * This is used to store Header QNames that failed mustUnderstand check in AxisEngine.
+     */
+    public static final String UNPROCESSED_HEADER_QNAMES = "unprocessedHeaderQNames";
+
+    // Keys to access JAXWS Request and Response SOAP Headers
+    public static final String JAXWS_OUTBOUND_SOAP_HEADERS  = "jaxws.binding.soap.headers.outbound";
+    public static final String JAXWS_INBOUND_SOAP_HEADERS = "jaxws.binding.soap.headers.inbound";
+    
     public static interface Configuration {
         public static final String ENABLE_REST = "enableREST";
+        public static final String ENABLE_HTTP_CONTENT_NEGOTIATION = "httpContentNegotiation";
         public static final String ENABLE_REST_THROUGH_GET = "restThroughGet";
 
         public static final String ARTIFACTS_TEMP_DIR = "artifactsDIR";
 
         //Attachment configurations
         public static final String ENABLE_MTOM = "enableMTOM";
+        public static final String MTOM_THRESHOLD = "mtomThreshold";
         public static final String CACHE_ATTACHMENTS = "cacheAttachments";
         public static final String ATTACHMENT_TEMP_DIR = "attachmentDIR";
         public static final String FILE_SIZE_THRESHOLD = "sizeThreshold";
@@ -267,6 +297,9 @@ public class Constants extends org.apache.axis2.namespace.Constants {
         public static final String MM7_INNER_BOUNDARY = "MM7InnerBoundary";
         public static final String MM7_PART_CID = "MM7PartCID";
 
+
+        public static final String REDUCE_WSDL_MEMORY_CACHE = "reduceWSDLMemoryCache";
+        public static final String REDUCE_WSDL_MEMORY_TYPE  = "reduceWSDLMemoryType";
 
         public static final String HTTP_METHOD_GET = "GET";
         public static final String HTTP_METHOD_DELETE = "DELETE";
@@ -289,7 +322,8 @@ public class Constants extends org.apache.axis2.namespace.Constants {
         public static final String DRILL_DOWN_TO_ROOT_CAUSE_FOR_FAULT_REASON =
                 "drillDownToRootCauseForFaultReason";
 
-        public static final String DISABLE_REST = "disableREST";
+        public static final String DISABLE_REST   = "disableREST";
+        public static final String DISABLE_SOAP12 = "disableSOAP12";
 
         // this will contain the keys of all the properties that will be in the message context
         public static final String TRANSPORT_URL = "TransportURL";

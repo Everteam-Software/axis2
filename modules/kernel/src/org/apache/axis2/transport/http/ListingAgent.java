@@ -23,23 +23,17 @@ package org.apache.axis2.transport.http;
 import org.apache.axiom.attachments.utils.IOUtils;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
-import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.ConfigurationContext;
-import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.context.SessionContext;
 import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.description.AxisDescription;
 import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.Parameter;
 import org.apache.axis2.description.PolicyInclude;
 import org.apache.axis2.description.TransportInDescription;
-import org.apache.axis2.transport.TransportListener;
 import org.apache.axis2.util.ExternalPolicySerializer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.neethi.Policy;
 import org.apache.neethi.PolicyRegistry;
-import org.apache.ws.commons.schema.XmlSchema;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -51,12 +45,9 @@ import javax.xml.stream.XMLStreamWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 public class ListingAgent extends AbstractAgent {
 
@@ -74,13 +65,13 @@ public class ListingAgent extends AbstractAgent {
         super(aConfigContext);
     }
 
-    private void addTransportListner(String schema, int port) {
+    private void addTransportListener(String schema, int port) {
         try {
             TransportInDescription trsIn =
                     configContext.getAxisConfiguration().getTransportIn(schema);
             if (trsIn == null) {
                 trsIn = new TransportInDescription(schema);
-                HTTPSListener httspReceiver = new HTTPSListener(port, schema);
+                CustomListener httspReceiver = new CustomListener(port, schema);
                 httspReceiver.init(configContext, trsIn);
                 trsIn.setReceiver(httspReceiver);
                 configContext.getListenerManager().addListener(trsIn, true);
@@ -111,7 +102,13 @@ public class ListingAgent extends AbstractAgent {
 
     protected void initTransportListener(HttpServletRequest httpServletRequest) {
         // httpServletRequest.getLocalPort() , giving me a build error so I had to use the followin
-        String filePart = httpServletRequest.getRequestURL().toString();
+        String filePart;
+        try {
+            filePart = httpServletRequest.getRequestURL().toString();
+        } catch (Throwable t){
+            log.info("Old Servlet API (fallback to HttpServletRequest.getRequestURI) :" + t);    
+            filePart = httpServletRequest.getRequestURI();
+        }
         int ipindex = filePart.indexOf("//");
         String ip;
         if (ipindex >= 0) {
@@ -125,7 +122,7 @@ public class ListingAgent extends AbstractAgent {
                 portstr = "80";
             }
             try {
-                addTransportListner(httpServletRequest.getScheme(), Integer.parseInt(portstr));
+                addTransportListener(httpServletRequest.getScheme(), Integer.parseInt(portstr));
             } catch (NumberFormatException e) {
                 log.debug(e.toString(), e);
             }
@@ -137,7 +134,11 @@ public class ListingAgent extends AbstractAgent {
         String serviceName = req.getParameter("serviceName");
         if (serviceName != null) {
             AxisService service = configContext.getAxisConfiguration().getService(serviceName);
-            req.getSession().setAttribute(Constants.SINGLE_SERVICE, service);
+            try {
+                req.getSession().setAttribute(Constants.SINGLE_SERVICE, service);
+            } catch (Throwable t) {
+                log.info("Old Servlet API :" + t);
+            }
         }
         renderView(LIST_FAULTY_SERVICES_JSP_NAME, req, res);
     }
@@ -229,7 +230,13 @@ public class ListingAgent extends AbstractAgent {
                                    HttpServletResponse res)
             throws IOException, ServletException {
 
-        String url = req.getRequestURL().toString();
+        String url;
+        try {
+        url = req.getRequestURL().toString();
+        } catch (Throwable t) {
+            log.info("Old Servlet API (Fallback to HttpServletRequest.getRequestURI) :" + t);    
+            url = req.getRequestURI();
+        }
         String serviceName = extractServiceName(url);
         HashMap services = configContext.getAxisConfiguration().getServices();
         String query = req.getQueryString();
@@ -284,71 +291,14 @@ public class ListingAgent extends AbstractAgent {
                     return;
                 } else if (xsd >= 0) {
                     res.setContentType("text/xml");
-                    AxisService axisService = (AxisService) serviceObj;
-                    //call the populator
-                    axisService.populateSchemaMappings();
-                    Map schemaMappingtable =
-                            axisService.getSchemaMappingTable();
-                    ArrayList schemas = axisService.getSchema();
-
-                    //a name is present - try to pump the requested schema
-                    String xsds = req.getParameter("xsd");
-                    if (!"".equals(xsds)) {
-                        XmlSchema schema =
-                                (XmlSchema) schemaMappingtable.get(xsds);
-                        if (schema == null) {
-                            int dotIndex = xsds.indexOf('.');
-                            if (dotIndex > 0) {
-                                String schemaKey = xsds.substring(0,dotIndex);
-                                schema = (XmlSchema) schemaMappingtable.get(schemaKey);
-                            }
-                        }
-                        if (schema != null) {
-                            //schema is there - pump it outs
-                            OutputStream out = res.getOutputStream();
-                            schema.write(new OutputStreamWriter(out, "UTF8"));
-                            out.flush();
-                            out.close();
-                        } else {
-                            InputStream in = axisService.getClassLoader()
-                                    .getResourceAsStream(DeploymentConstants.META_INF + "/" + xsds);
-                            if (in != null) {
-                                OutputStream out = res.getOutputStream();
-                                out.write(IOUtils.getStreamAsByteArray(in));
-                                out.flush();
-                                out.close();
-                            } else {
-                                res.sendError(HttpServletResponse.SC_NOT_FOUND);
-                            }
-                        }
-
+                    int ret = ((AxisService) serviceObj).printXSD(res.getOutputStream(), req.getParameter("xsd"));
+                    if (ret == 0) {
                         //multiple schemas are present and the user specified
                         //no name - in this case we cannot possibly pump a schema
                         //so redirect to the service root
-                    } else if (schemas.size() > 1) {
                         res.sendRedirect("");
-                        //user specified no name and there is only one schema
-                        //so pump that out
-                    } else {
-                        ArrayList list = axisService.getSchema();
-                        if (list.size() > 0) {
-                            XmlSchema schema = axisService.getSchema(0);
-                            if (schema != null) {
-                                OutputStream out = res.getOutputStream();
-                                schema.write(new OutputStreamWriter(out, "UTF8"));
-                                out.flush();
-                                out.close();
-                            }
-                        } else {
-                            res.setContentType("text/xml");
-                            String xsdNotFound = "<error>" +
-                                    "<description>Unable to access schema for this service</description>" +
-                                    "</error>";
-                            OutputStream out = res.getOutputStream();
-                            out.write(xsdNotFound.getBytes());
-                            out.flush();
-                            out.close();
-                        }
+                    } else if (ret == -1) {
+                        res.sendError(HttpServletResponse.SC_NOT_FOUND);
                     }
                     return;
                 } else if (policy >= 0) {
@@ -436,11 +386,20 @@ public class ListingAgent extends AbstractAgent {
 
                     return;
                 } else {
-                    req.getSession().setAttribute(Constants.SINGLE_SERVICE,
-                                                  serviceObj);
+                    try {
+                        req.getSession().setAttribute(Constants.SINGLE_SERVICE,
+                                serviceObj);
+                    } catch (Throwable t) {
+                        log.info("Old Servlet API :" + t);
+                    }
                 }
             } else {
-                req.getSession().setAttribute(Constants.SINGLE_SERVICE, null);
+                try {
+                    req.getSession().setAttribute(Constants.SINGLE_SERVICE, null);
+                } catch (Throwable t){
+                    log.info("Old Servlet API :" + t);    
+                }
+                    
                 res.sendError(HttpServletResponse.SC_NOT_FOUND, url);
             }
         }
@@ -453,9 +412,12 @@ public class ListingAgent extends AbstractAgent {
             throws IOException, ServletException {
 
         populateSessionInformation(req);
-        req.getSession().setAttribute(Constants.ERROR_SERVICE_MAP,
-                                      configContext.getAxisConfiguration().getFaultyServices());
-
+        try {
+            req.getSession().setAttribute(Constants.ERROR_SERVICE_MAP,
+                                          configContext.getAxisConfiguration().getFaultyServices());
+        } catch (Throwable t){
+            log.info("Old Servlet API :" + t);    
+        }
         renderView(LIST_MULTIPLE_SERVICE_JSP_NAME, req, res);
     }
 
@@ -496,72 +458,6 @@ public class ListingAgent extends AbstractAgent {
         }
 
         return null;
-    }
-
-    /**
-     * This class is just to add tarnsport at the runtime if user send requet using
-     * diffrent schemes , simly to handle http/https seperetaly
-     */
-    private class HTTPSListener implements TransportListener {
-
-        private int port;
-        private String schema;
-        private ConfigurationContext axisConf;
-
-        public HTTPSListener(int port, String schema) {
-            this.port = port;
-            this.schema = schema;
-        }
-
-        public void init(ConfigurationContext axisConf,
-                         TransportInDescription transprtIn) throws AxisFault {
-            this.axisConf = axisConf;
-            Parameter param = transprtIn.getParameter(PARAM_PORT);
-            if (param != null) {
-                this.port = Integer.parseInt((String) param.getValue());
-            }
-        }
-
-        public void start() throws AxisFault {
-        }
-
-        public void stop() throws AxisFault {
-        }
-
-        public EndpointReference[] getEPRsForService(String serviceName, String ip)
-                throws AxisFault {
-            String path = axisConf.getServiceContextPath() + "/" + serviceName;
-            if(path.charAt(0)!='/'){
-                path = '/' + path;
-            }
-            return new EndpointReference[]{new EndpointReference(schema + "://" + ip + ":" + port + path )};
-        }
-
-        public EndpointReference getEPRForService(String serviceName, String ip) throws AxisFault {
-            return getEPRsForService(serviceName, ip)[0];
-        }
-
-        public SessionContext getSessionContext(MessageContext messageContext) {
-            HttpServletRequest req = (HttpServletRequest) messageContext.getProperty(
-                    HTTPConstants.MC_HTTP_SERVLETREQUEST);
-            SessionContext sessionContext =
-                    (SessionContext) req.getSession(true).getAttribute(
-                            Constants.SESSION_CONTEXT_PROPERTY);
-            String sessionId = req.getSession().getId();
-            if (sessionContext == null) {
-                sessionContext = new SessionContext(null);
-                sessionContext.setCookieID(sessionId);
-                req.getSession().setAttribute(Constants.SESSION_CONTEXT_PROPERTY,
-                                              sessionContext);
-            }
-            messageContext.setSessionContext(sessionContext);
-            messageContext.setProperty(AxisServlet.SESSION_ID, sessionId);
-            return sessionContext;
-        }
-
-        public void destroy() {
-        }
-
     }
 
 }

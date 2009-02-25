@@ -16,14 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.endpoint;
+
+import junit.framework.TestCase;
 
 import javax.jws.WebService;
 import javax.xml.ws.Binding;
 import javax.xml.ws.Endpoint;
 import javax.xml.ws.soap.SOAPBinding;
-
-import junit.framework.TestCase;
 
 public class BasicEndpointTests extends TestCase {
 
@@ -35,6 +36,7 @@ public class BasicEndpointTests extends TestCase {
         
         ep.publish("test");
         assertTrue("The endpoint was not published successfully", ep.isPublished());
+        ep.stop();
     }
     
     public void testCreateAndPublishEndpoint() {
@@ -43,6 +45,7 @@ public class BasicEndpointTests extends TestCase {
         Endpoint ep = Endpoint.publish("test" , sample);
         assertTrue("The returned Endpoint instance was null", ep != null);
         assertTrue("The endpoint was not published successfully", ep.isPublished());
+        ep.stop();
     }
     
     public void testGetBinding() throws Exception {
@@ -55,9 +58,18 @@ public class BasicEndpointTests extends TestCase {
         assertTrue("The returned Binding instance was null", bnd != null);
         assertTrue("The returned Binding instance was of the wrong type (" + bnd.getClass().getName() + "), expected SOAPBinding", 
                 SOAPBinding.class.isAssignableFrom(bnd.getClass()));
+        ep.stop();
     }
-    
-        @WebService
+
+    public void testCreateAndPublishOnAlternatePort() throws Exception {
+        Endpoint ep = Endpoint.create(new SampleEndpoint());
+        ep.publish("http://localhost:16060/SampleEndpoint");
+        assertTrue("The returned Endpoint instance was null", ep != null);
+        assertTrue("The endpoint was not published successfully", ep.isPublished());
+        ep.stop();
+    }
+
+    @WebService
     class SampleEndpoint {
         
         public int foo(String bar) {

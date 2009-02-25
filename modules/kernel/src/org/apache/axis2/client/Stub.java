@@ -20,15 +20,25 @@
 
 package org.apache.axis2.client;
 
-import org.apache.axiom.om.*;
-import org.apache.axiom.soap.*;
+import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMAttribute;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMFactory;
+import org.apache.axiom.om.OMNamespace;
+import org.apache.axiom.om.OMNode;
+import org.apache.axiom.soap.SOAP11Constants;
+import org.apache.axiom.soap.SOAP12Constants;
+import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.axiom.soap.SOAPFactory;
+import org.apache.axiom.soap.SOAPHeaderBlock;
+import org.apache.axiom.soap.SOAPProcessingException;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.Constants;
-import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.description.OutInAxisOperation;
+import org.apache.axis2.description.OutOnlyAxisOperation;
+import org.apache.axis2.description.RobustOutOnlyAxisOperation;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.commons.httpclient.Header;
@@ -197,9 +207,18 @@ public abstract class Stub {
                 envelop.getHeader().addHeaderBlock(omElementToadd.getLocalName(),omElementToadd.getNamespace());
         soapHeaderBlock.setMustUnderstand(mustUnderstand);
         OMNode omNode = null;
+
+        // add child elements
         for (Iterator iter = omElementToadd.getChildren(); iter.hasNext();){
              omNode = (OMNode) iter.next();
              soapHeaderBlock.addChild(omNode);
+        }
+
+        OMAttribute omatribute = null;
+        // add attributes
+        for (Iterator iter = omElementToadd.getAllAttributes(); iter.hasNext();){
+             omatribute = (OMAttribute) iter.next();
+             soapHeaderBlock.addAttribute(omatribute);
         }
 
     }
@@ -207,6 +226,18 @@ public abstract class Stub {
     protected void addHeader(OMElement omElementToadd,
                              SOAPEnvelope envelop){
         addHeader(omElementToadd,envelop,false);
+    }
+
+    protected void addAnonymousOperations(){
+        RobustOutOnlyAxisOperation robustoutoonlyOperation =
+                new RobustOutOnlyAxisOperation(ServiceClient.ANON_ROBUST_OUT_ONLY_OP);
+        _service.addOperation(robustoutoonlyOperation);
+
+        OutOnlyAxisOperation outOnlyOperation = new OutOnlyAxisOperation(ServiceClient.ANON_OUT_ONLY_OP);
+        _service.addOperation(outOnlyOperation);
+
+        OutInAxisOperation outInOperation = new OutInAxisOperation(ServiceClient.ANON_OUT_IN_OP);
+        _service.addOperation(outInOperation);
     }
 
 }

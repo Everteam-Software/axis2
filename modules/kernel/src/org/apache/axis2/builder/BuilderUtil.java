@@ -20,11 +20,14 @@
 package org.apache.axis2.builder;
 
 import org.apache.axiom.attachments.Attachments;
+import org.apache.axiom.attachments.lifecycle.LifecycleManager;
+import org.apache.axiom.attachments.lifecycle.impl.LifecycleManagerImpl;
 import org.apache.axiom.attachments.utils.IOUtils;
 import org.apache.axiom.om.OMAttribute;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMNamespace;
+import org.apache.axiom.om.OMText;
 import org.apache.axiom.om.impl.MTOMConstants;
 import org.apache.axiom.om.impl.builder.StAXBuilder;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
@@ -41,23 +44,28 @@ import org.apache.axiom.soap.impl.builder.MTOMStAXSOAPModelBuilder;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.Parameter;
+import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.transport.http.HTTPConstants;
+import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.MultipleEntryHashMap;
 import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.ws.commons.schema.XmlSchemaAll;
 import org.apache.ws.commons.schema.XmlSchemaComplexType;
 import org.apache.ws.commons.schema.XmlSchemaElement;
+import org.apache.ws.commons.schema.XmlSchemaGroupBase;
 import org.apache.ws.commons.schema.XmlSchemaParticle;
 import org.apache.ws.commons.schema.XmlSchemaSequence;
 import org.apache.ws.commons.schema.XmlSchemaType;
-import org.apache.ws.commons.schema.XmlSchemaAll;
-import org.apache.ws.commons.schema.XmlSchemaGroupBase;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
+import javax.activation.DataHandler;
 import javax.xml.namespace.QName;
 import javax.xml.parsers.FactoryConfigurationError;
 import javax.xml.stream.XMLStreamException;
@@ -68,8 +76,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PushbackInputStream;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.util.Iterator;
 import java.util.Map;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
+import java.security.PrivilegedActionException;
 
 public class BuilderUtil {
     private static final Log log = LogFactory.getLog(BuilderUtil.class);
@@ -134,16 +146,17 @@ public class BuilderUtil {
                         boolean nillable = innerElement.isNillable();
                         String name =
                                 qName != null ? qName.getLocalPart() : innerElement.getName();
-                        String value;
+                            Object value;
                         OMNamespace ns = (qName == null ||
                                 qName.getNamespaceURI() == null
                                 || qName.getNamespaceURI().length() == 0) ?
                                 null : soapFactory.createOMNamespace(
                                 qName.getNamespaceURI(), null);
-                        while ((value = (String) requestParameterMap.get(name)) != null) {
 
-                            soapFactory.createOMElement(name, ns,
-                                                        bodyFirstChild).setText(value);
+                            // FIXME changed
+                            while ((value = requestParameterMap.get(name)) != null) {
+                                addRequestParameter(soapFactory,
+                                        bodyFirstChild, ns, name, value);
                             minOccurs--;
                         }
                         if (minOccurs > 0) {
@@ -180,12 +193,31 @@ public class BuilderUtil {
             Iterator requestParamMapIter = requestParameterMap.keySet().iterator();
             while (requestParamMapIter.hasNext()) {
                 String key = (String) requestParamMapIter.next();
-                String value = (String) requestParameterMap.get(key);
+                Object value = requestParameterMap.get(key);
                 if (value != null) {
-                    soapFactory.createOMElement(key, null, bodyFirstChild).setText(value);
+                    addRequestParameter(soapFactory, bodyFirstChild, null, key,
+                            value);
                 }
 
             }
+        }
+    }
+
+    private static void addRequestParameter(SOAPFactory soapFactory,
+                                            OMElement bodyFirstChild,
+                                            OMNamespace ns,
+                                            String key,
+                                            Object parameter) {
+        if (parameter instanceof DataHandler) {
+            DataHandler dataHandler = (DataHandler)parameter;
+            OMText dataText = bodyFirstChild.getOMFactory().createOMText(
+                    dataHandler, true);
+            soapFactory.createOMElement(key, ns, bodyFirstChild).addChild(
+                    dataText);
+        } else {
+            String textValue = parameter.toString();
+            soapFactory.createOMElement(key, ns, bodyFirstChild).setText(
+                    textValue);
         }
     }
 
@@ -206,12 +238,24 @@ public class BuilderUtil {
      * @param charSetEncoding
      * @throws java.io.IOException
      */
-    public static Reader getReader(InputStream is, String charSetEncoding) throws IOException {
-        PushbackInputStream is2 = getPushbackInputStream(is);
-        String encoding = getCharSetEncoding(is2, charSetEncoding);
-        return new BufferedReader(new InputStreamReader(is2, encoding));
+    public static Reader getReader(final InputStream is, final String charSetEncoding) throws IOException {
+        final PushbackInputStream is2 = getPushbackInputStream(is);
+        final String encoding = getCharSetEncoding(is2, charSetEncoding);
+        InputStreamReader inputStreamReader = null;
+        try {
+            inputStreamReader = (InputStreamReader) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws UnsupportedEncodingException {
+                            return new InputStreamReader(is2, encoding);
+                        }
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            throw (UnsupportedEncodingException) e.getException();
+        }
+        return new BufferedReader(inputStreamReader);
     }
-    
+
     /**
      * Convenience method to get a PushbackInputStream so that we can read the BOM
      * @param is
@@ -220,7 +264,7 @@ public class BuilderUtil {
     public static PushbackInputStream getPushbackInputStream(InputStream is) {
         return new PushbackInputStream(is, BOM_SIZE);
     }
-    
+
     /**
      * Use the BOM Mark to identify the encoding to be used. Fall back to
      * default encoding specified
@@ -233,9 +277,9 @@ public class BuilderUtil {
         String encoding;
         byte bom[] = new byte[BOM_SIZE];
         int n, unread;
-        
+
         n = is2.read(bom, 0, bom.length);
-        
+
         if ((bom[0] == (byte) 0xEF) && (bom[1] == (byte) 0xBB) && (bom[2] == (byte) 0xBF)) {
             encoding = "UTF-8";
             if (log.isDebugEnabled()) {
@@ -269,7 +313,7 @@ public class BuilderUtil {
             }
             unread = n - 4;
         } else {
-            
+
             // Unicode BOM mark not found, unread all bytes
             encoding = defaultEncoding;
             if (log.isDebugEnabled()) {
@@ -277,7 +321,7 @@ public class BuilderUtil {
             }
             unread = n;
         }
-        
+
         if (unread > 0) {
             is2.unread(bom, (n - unread), unread);
         }
@@ -373,7 +417,7 @@ public class BuilderUtil {
         try {
             PushbackInputStream pis = getPushbackInputStream(attachments.getSOAPPartInputStream());
             String actualCharSetEncoding = getCharSetEncoding(pis, charSetEncoding);
-            
+
             streamReader = StAXUtils.createXMLStreamReader(pis, actualCharSetEncoding);
         } catch (IOException e) {
             throw new XMLStreamException(e);
@@ -430,26 +474,7 @@ public class BuilderUtil {
     protected static Attachments createAttachmentsMap(MessageContext msgContext,
                                                       InputStream inStream,
                                                       String contentTypeString) {
-        Object cacheAttachmentProperty = msgContext
-                .getProperty(Constants.Configuration.CACHE_ATTACHMENTS);
-        String cacheAttachmentString = null;
-        boolean fileCacheForAttachments;
-
-        if (cacheAttachmentProperty != null
-                && cacheAttachmentProperty instanceof String) {
-            cacheAttachmentString = (String) cacheAttachmentProperty;
-            fileCacheForAttachments = (Constants.VALUE_TRUE
-                    .equals(cacheAttachmentString));
-        } else {
-            Parameter parameter_cache_attachment = msgContext
-                    .getParameter(Constants.Configuration.CACHE_ATTACHMENTS);
-            cacheAttachmentString =
-                    (parameter_cache_attachment != null) ? (String) parameter_cache_attachment
-                            .getValue()
-                            : null;
-        }
-        fileCacheForAttachments = (Constants.VALUE_TRUE
-                .equals(cacheAttachmentString));
+        boolean fileCacheForAttachments = isAttachmentsCacheEnabled(msgContext);
 
         String attachmentRepoDir = null;
         String attachmentSizeThreshold = null;
@@ -497,31 +522,74 @@ public class BuilderUtil {
                 }
             }
         }
-        Attachments attachments = null;
-        if (contentLength > 0) {
-            if (log.isDebugEnabled()) {
+        if (log.isDebugEnabled()) {
+            if (contentLength > 0) {
                 log.debug("Creating an Attachments map.  The content-length is" + contentLength);
-            }
-            attachments = 
-                new Attachments(inStream,
-                                contentTypeString,
-                                fileCacheForAttachments,
-                                attachmentRepoDir,
-                                attachmentSizeThreshold,
-                                contentLength);
-        } else {
-            if (log.isDebugEnabled()) {
+            } else {
                 log.debug("Creating an Attachments map.");
             }
-            attachments = 
-                new Attachments(inStream,
-                                contentTypeString,
-                                fileCacheForAttachments,
-                                attachmentRepoDir,
-                                attachmentSizeThreshold);
         }
-            
-        return attachments;
+        return createAttachments(msgContext,
+                inStream,
+                contentTypeString,
+                fileCacheForAttachments,
+                attachmentRepoDir,
+                attachmentSizeThreshold,
+                contentLength);
+    }
+
+    public static boolean isAttachmentsCacheEnabled(MessageContext msgContext) {
+        Object cacheAttachmentProperty = msgContext
+                .getProperty(Constants.Configuration.CACHE_ATTACHMENTS);
+        String cacheAttachmentString = null;
+        boolean fileCacheForAttachments;
+
+        if (cacheAttachmentProperty != null
+                && cacheAttachmentProperty instanceof String) {
+            cacheAttachmentString = (String) cacheAttachmentProperty;
+            fileCacheForAttachments = (Constants.VALUE_TRUE
+                    .equals(cacheAttachmentString));
+        } else {
+            Parameter parameter_cache_attachment = msgContext
+                    .getParameter(Constants.Configuration.CACHE_ATTACHMENTS);
+            cacheAttachmentString =
+                    (parameter_cache_attachment != null) ? (String) parameter_cache_attachment
+                            .getValue()
+                            : null;
+        }
+        fileCacheForAttachments = (Constants.VALUE_TRUE
+                .equals(cacheAttachmentString));
+        return fileCacheForAttachments;
+    }
+
+    public static Attachments createAttachments(MessageContext msgContext, 
+                                                 InputStream inStream,
+                                                 String contentTypeString,
+                                                 boolean fileCacheForAttachments,
+                                                 String attachmentRepoDir,
+                                                 String attachmentSizeThreshold,
+                                                 int contentLength) {
+        LifecycleManager manager = null;
+        try {
+            AxisConfiguration configuration = msgContext.getRootContext().getAxisConfiguration();
+            manager = (LifecycleManager) configuration
+                    .getParameterValue(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER);
+            if(manager == null){
+                manager = new LifecycleManagerImpl();
+                configuration.addParameter(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER, manager);
+            }
+        } catch (Exception e){
+            if(log.isDebugEnabled()){
+                log.debug("Exception getting Attachments LifecycleManager", e);
+            }
+        }
+        return new Attachments(manager, 
+                            inStream,
+                            contentTypeString,
+                            fileCacheForAttachments,
+                            attachmentRepoDir,
+                            attachmentSizeThreshold,
+                            contentLength);
     }
 
     /**
@@ -639,12 +707,46 @@ public class BuilderUtil {
     public static Builder getBuilderFromSelector(String type, MessageContext msgContext)
             throws AxisFault {
 
-        Builder builder = msgContext.getConfigurationContext().getAxisConfiguration()
+        AxisConfiguration configuration =
+                msgContext.getConfigurationContext().getAxisConfiguration();
+        Builder builder = configuration
                 .getMessageBuilder(type);
+        if (builder == null) {
+            builder = configuration.getMessageBuilder(type.toLowerCase());
+        }
         if (builder != null) {
+            // Check whether the request has a Accept header if so use that as the response
+            // message type.
+            // If thats not present,
             // Setting the received content-type as the messageType to make
             // sure that we respond using the received message serialisation
             // format.
+
+            Object contentNegotiation = configuration
+                    .getParameterValue(Constants.Configuration.ENABLE_HTTP_CONTENT_NEGOTIATION);
+            if (JavaUtils.isTrueExplicitly(contentNegotiation)) {
+                Map transportHeaders = (Map) msgContext.getProperty(MessageContext.TRANSPORT_HEADERS);
+                if (transportHeaders != null) {
+                    String acceptHeader = (String) transportHeaders.get(HTTPConstants.HEADER_ACCEPT);
+                    if (acceptHeader != null) {
+                        int index = acceptHeader.indexOf(";");
+                        if (index > 0) {
+                            acceptHeader = acceptHeader.substring(0, index);
+                        }
+                        String[] strings = acceptHeader.split(",");
+                        for (int i = 0; i < strings.length; i++) {
+                            String accept = strings[i].trim();
+                            // We dont want dynamic content negotoatin to work on text.xml as its
+                            // ambiguos as to whether the user requests SOAP 1.1 or POX response
+                            if (!HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(accept) && configuration.getMessageFormatter(accept) != null) {
+                                type = strings[i];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             msgContext.setProperty(Constants.Configuration.MESSAGE_TYPE, type);
         }
         return builder;

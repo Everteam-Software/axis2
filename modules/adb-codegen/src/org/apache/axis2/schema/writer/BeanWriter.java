@@ -16,16 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.writer;
 
-import javax.xml.namespace.QName;
 import org.apache.axis2.schema.BeanWriterMetaInfoHolder;
 import org.apache.axis2.schema.CompilerOptions;
 import org.apache.axis2.schema.SchemaCompilationException;
-import org.apache.ws.commons.schema.XmlSchemaComplexType;
 import org.apache.ws.commons.schema.XmlSchemaElement;
 import org.apache.ws.commons.schema.XmlSchemaSimpleType;
 
+import javax.xml.namespace.QName;
 import java.io.IOException;
 import java.util.Map;
 
@@ -74,6 +74,7 @@ public interface BeanWriter {
      */
     public String write(QName qname,
                         Map typeMap,
+                        Map groupTypeMap,
                         BeanWriterMetaInfoHolder metainf,
                         boolean isAbstract)
             throws SchemaCompilationException;
@@ -87,7 +88,10 @@ public interface BeanWriter {
      * @return Returns String.
      * @throws SchemaCompilationException
      */
-    public String write(XmlSchemaElement element, Map typeMap, BeanWriterMetaInfoHolder metainf) throws SchemaCompilationException;
+    public String write(XmlSchemaElement element,
+                        Map typeMap,
+                        Map groupTypeMap,
+                        BeanWriterMetaInfoHolder metainf) throws SchemaCompilationException;
 
 
     /**
@@ -99,7 +103,10 @@ public interface BeanWriter {
      * @return Returns String.
      * @throws SchemaCompilationException
      */
-    public String write(XmlSchemaSimpleType simpleType, Map typeMap, BeanWriterMetaInfoHolder metainf) throws SchemaCompilationException;
+    public String write(XmlSchemaSimpleType simpleType,
+                        Map typeMap,
+                        Map groupTypeMap,
+                        BeanWriterMetaInfoHolder metainf) throws SchemaCompilationException;
 
 
      /**

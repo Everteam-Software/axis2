@@ -16,10 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
+import org.apache.axiom.om.OMDataSourceExt;
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMOutputFormat;
+import org.apache.axiom.om.ds.ByteArrayDataSource;
 import org.apache.axiom.om.impl.MTOMXMLStreamWriter;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.util.StAXUtils;
@@ -41,7 +45,9 @@ import javax.xml.stream.XMLStreamWriter;
 import javax.xml.ws.WebServiceException;
 import java.io.OutputStream;
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
+import java.util.HashMap;
 
 /**
  * BlockImpl Abstract Base class for various Block Implementations.
@@ -69,6 +75,8 @@ public abstract class BlockImpl implements Block {
     protected BlockFactory factory;
     protected boolean consumed = false;
     protected Message parent;
+    
+    private HashMap map = null; // OMDataSourceExt properties
 
     /**
      * A Block has the following components
@@ -135,13 +143,7 @@ public abstract class BlockImpl implements Block {
             busObject = _getBOFromBO(busObject, busContext, consume);
         } else {
             // Transform reader into business object
-            XMLStreamReader reader;
-            if (omElement.getBuilder() != null && !omElement.getBuilder().isCompleted()) {
-                reader = omElement.getXMLStreamReaderWithoutCaching();
-            } else {
-                reader = omElement.getXMLStreamReader();
-            }
-            busObject = _getBOFromReader(reader, busContext);
+            busObject = _getBOFromOM(omElement, busContext);
             omElement = null;
         }
 
@@ -151,6 +153,7 @@ public abstract class BlockImpl implements Block {
         setConsumed(consume);
         return newBusObject;
     }
+    
 
     /* (non-Javadoc)
       * @see org.apache.axis2.jaxws.message.Block#getQName()
@@ -232,6 +235,16 @@ public abstract class BlockImpl implements Block {
         MTOMXMLStreamWriter writer = new MTOMXMLStreamWriter(output, format);
         serialize(writer);
         writer.flush();
+        try {
+            writer.close();
+        } catch (XMLStreamException e) {
+            // An exception can occur if nothing is written to the 
+            // writer.  This is possible if the underlying data source
+            // writers to the output stream directly.
+            if (log.isDebugEnabled()) {
+                log.debug("Catching and swallowing exception " + e);
+            }
+        }
     }
 
     /* (non-Javadoc)
@@ -243,13 +256,14 @@ public abstract class BlockImpl implements Block {
         writer.setOutputFormat(format);
         serialize(writer);
         writer.flush();
+        writer.close();
     }
 
     /* (non-Javadoc)
       * @see org.apache.axiom.om.OMDataSource#serialize(javax.xml.stream.XMLStreamWriter)
       */
     public void serialize(XMLStreamWriter writer) throws XMLStreamException {
-        outputTo(writer, true);
+        outputTo(writer, isDestructiveWrite());
     }
 
     public OMElement getOMElement() throws XMLStreamException, WebServiceException {
@@ -264,13 +278,12 @@ public abstract class BlockImpl implements Block {
         } else if (busObject != null) {
             // Getting the reader does not destroy the BusinessObject
             busObject = _getBOFromBO(busObject, busContext, consume);
-            XMLStreamReader newReader = _getReaderFromBO(busObject, busContext);
-            StAXOMBuilder builder = new StAXOMBuilder(newReader);
-            newOMElement = builder.getDocumentElement();
+            newOMElement = _getOMFromBO(busObject, busContext);
         }
         setConsumed(consume);
         return newOMElement;
     }
+    
 
     /* (non-Javadoc)
       * @see org.apache.axis2.jaxws.message.Block#isConsumed()
@@ -307,6 +320,9 @@ public abstract class BlockImpl implements Block {
 
     public void outputTo(XMLStreamWriter writer, boolean consume)
             throws XMLStreamException, WebServiceException {
+        if (log.isDebugEnabled()) {
+            log.debug("Start outputTo");
+        }
         if (consumed) {
             // In some scenarios, the message is written out after the service instance is invoked.
             // In these situations, it is preferable to simply ignore this block.
@@ -317,16 +333,18 @@ public abstract class BlockImpl implements Block {
                     Messages.getMessage("BlockImplErr1", this.getClass().getName()));
         }
         if (omElement != null) {
-            if (consume) {
-                omElement.serializeAndConsume(writer);
-            } else {
-                omElement.serialize(writer);
-            }
+            _outputFromOM(omElement, writer, consume);
         } else if (busObject != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Write business object");
+            }
             busObject = _getBOFromBO(busObject, busContext, consume);
             _outputFromBO(busObject, busContext, writer);
         }
         setConsumed(consume);
+        if (log.isDebugEnabled()) {
+            log.debug("End outputTo");
+        }
         return;
     }
 
@@ -411,6 +429,24 @@ public abstract class BlockImpl implements Block {
     protected abstract Object _getBOFromReader(XMLStreamReader reader, Object busContext)
             throws XMLStreamException, WebServiceException;
 
+    
+    /**
+     * Default method for getting business object from OM.
+     * Derived classes may override this method to get the business object from a
+     * data source.
+     * 
+     * @param om
+     * @param busContext
+     * @return Business Object
+     * @throws XMLStreamException
+     * @throws WebServiceException
+     */
+    protected Object _getBOFromOM(OMElement omElement, Object busContext)
+        throws XMLStreamException, WebServiceException {
+        XMLStreamReader reader = _getReaderFromOM(omElement);
+        return _getBOFromReader(reader, busContext);
+    }
+    
     /**
      * Get an XMLStreamReader for the BusinessObject The derived Block must implement this method
      *
@@ -420,6 +456,35 @@ public abstract class BlockImpl implements Block {
      */
     protected abstract XMLStreamReader _getReaderFromBO(Object busObj, Object busContext)
             throws XMLStreamException, WebServiceException;
+    
+    /**
+     * @param omElement
+     * @return XMLStreamReader
+     */
+    protected XMLStreamReader _getReaderFromOM(OMElement omElement) {
+        XMLStreamReader reader;
+        if (omElement.getBuilder() != null && !omElement.getBuilder().isCompleted()) {
+            reader = omElement.getXMLStreamReaderWithoutCaching();
+        } else {
+            reader = omElement.getXMLStreamReader();
+        }
+        return reader;
+    }
+    
+    /**
+     * @param busObject
+     * @param busContext
+     * @return OMElement
+     * @throws XMLStreamException
+     * @throws WebServiceException
+     */
+    protected OMElement _getOMFromBO(Object busObject, Object busContext)
+        throws XMLStreamException, WebServiceException {
+        // Getting the reader does not destroy the BusinessObject
+        XMLStreamReader newReader = _getReaderFromBO(busObject, busContext);
+        StAXOMBuilder builder = new StAXOMBuilder(newReader);
+        return builder.getDocumentElement();
+    }
 
     /**
      * Output Reader contents to a Writer. The default implementation is probably sufficient for most
@@ -433,6 +498,44 @@ public abstract class BlockImpl implements Block {
             throws XMLStreamException {
         Reader2Writer r2w = new Reader2Writer(reader);
         r2w.outputTo(writer);
+    }
+    
+    /**
+     * Output OMElement contents to a Writer. The default implementation is probably sufficient for most
+     * derived classes.
+     *
+     * @param om
+     * @param writer
+     * @throws XMLStreamException
+     */
+    protected void _outputFromOM(OMElement omElement, XMLStreamWriter writer, boolean consume)
+            throws XMLStreamException {
+        if (consume) {
+            if (log.isDebugEnabled()) {
+                log.debug("Write using OMElement.serializeAndConsume");
+            }
+            omElement.serializeAndConsume(writer);
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("Write Using OMElement.serialize");
+            }
+            omElement.serialize(writer);
+        }
+    }
+    
+    /* (non-Javadoc)
+     * @see org.apache.axiom.om.OMDataSourceExt#copy()
+     */
+    public OMDataSourceExt copy() throws OMException {
+        // TODO: This is a default implementation.  Much
+        // more refactoring needs to occur to account for attachments.
+        try {
+            String encoding = "utf-8"; // Choose a common encoding
+            byte[] bytes = this.getXMLBytes(encoding);
+            return new ByteArrayDataSource(bytes, encoding);
+        } catch (UnsupportedEncodingException e) {
+            throw new OMException(e);
+        }
     }
 
     /**
@@ -448,4 +551,24 @@ public abstract class BlockImpl implements Block {
                                           XMLStreamWriter writer)
             throws XMLStreamException, WebServiceException;
 	
+    public Object getProperty(String key) {
+        if (map == null) {
+            return null;
+        }
+        return map.get(key);
+    }
+
+    public Object setProperty(String key, Object value) {
+        if (map == null) {
+            map = new HashMap();
+        }
+        return map.put(key, value);
+    }
+
+    public boolean hasProperty(String key) {
+        if (map == null) {
+            return false;
+        } 
+        return map.containsKey(key);
+    }
 }

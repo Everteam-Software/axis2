@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.i18n.Messages;
@@ -36,9 +38,9 @@ import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPConstants;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.stream.XMLStreamException;
-
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -50,11 +52,16 @@ import java.util.Set;
 public class SoapMessageContext extends BaseMessageContext implements
         javax.xml.ws.handler.soap.SOAPMessageContext {
     private static final Log log = LogFactory.getLog(SoapMessageContext.class);
+    
+    // cache the message object after transformation --- see getMessage and setMessage methods
+    Message cachedMessage = null;
+    SOAPMessage cachedSoapMessage = null;
+    
     public SoapMessageContext(MessageContext messageCtx) {
         super(messageCtx);
     }
 
-    public Object[] getHeaders(QName qname, JAXBContext jaxbcontext, boolean flag) {
+    public Object[] getHeaders(QName qname, JAXBContext jaxbcontext, boolean allRoles) {
         if(log.isDebugEnabled()){
             log.debug("Getting all Headers for Qname: "+qname);
         }
@@ -63,41 +70,56 @@ public class SoapMessageContext extends BaseMessageContext implements
             if(log.isDebugEnabled()){
                 log.debug("Invalid QName, QName cannot be null");
             }
-            ExceptionFactory.makeWebServiceException(Messages.getMessage(""));
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("soapMessageContextErr1"));
         }
         if(jaxbcontext == null){
             if(log.isDebugEnabled()){
                 log.debug("Invalid JAXBContext, JAXBContext cannot be null");
             }
-            ExceptionFactory.makeWebServiceException(Messages.getMessage("SOAPMessageContextErr2"));
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("SOAPMessageContextErr2"));
         }
 
-        if(flag == false){
-            //TODO: Implement, In this case we need to only return headers targetted at roles 
-            // currently played by this SOAPNode. 
-
-        }
+        // The header information is returned as a list of jaxb objects
         List<Object> list = new ArrayList<Object>();
         String namespace = qname.getNamespaceURI();
         String localPart = qname.getLocalPart();
-        BlockFactory blockFactory = (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
+        BlockFactory blockFactory = (JAXBBlockFactory)
+            FactoryRegistry.getFactory(JAXBBlockFactory.class);
         Message m = messageCtx.getMessage();
         JAXBBlockContext jbc = new JAXBBlockContext(jaxbcontext);
+        
+        // If allRoles is not specified, pass in a set of roles.
+        // The headers must support that role.
+        RolePlayer rolePlayer = null;
+        if (allRoles == false) {
+            rolePlayer = getRolePlayer();
+        }
+        
         if(m.getNumHeaderBlocks()>0){
-            Block hb = m.getHeaderBlock(namespace, localPart, jbc, blockFactory);
-            if(hb!=null){
+            // Get the list of JAXB Blocks
+            List<Block> blockList = m.getHeaderBlocks(namespace, 
+                                               localPart, 
+                                               jbc, 
+                                               blockFactory,
+                                               rolePlayer);
+            
+            // Create list of JAXB objects
+            if(blockList!=null && blockList.size() > 0){
                 try{
-
-                    Object bo = hb.getBusinessObject(false);
-                    if(bo!=null){
-                        if(log.isDebugEnabled()){
-                            log.debug("Extracted BO from Header Block");
+                    Iterator it = blockList.iterator();
+                    while (it.hasNext()) {
+                        Block block = (Block) it.next();
+                        Object bo = block.getBusinessObject(false);
+                        if(bo!=null){
+                            if(log.isDebugEnabled()){
+                                log.debug("Extracted BO from Header Block");
+                            }
+                            list.add(bo);
                         }
-                        list.add(bo);
                     }
 
                 }catch(XMLStreamException e){
-                    ExceptionFactory.makeWebServiceException(e);
+                    throw ExceptionFactory.makeWebServiceException(e);
                 }
             }
         }
@@ -107,7 +129,11 @@ public class SoapMessageContext extends BaseMessageContext implements
 
     public SOAPMessage getMessage() {
         Message msg = messageCtx.getMEPContext().getMessageObject();
-        return msg.getAsSOAPMessage();
+        if (msg != cachedMessage) {
+            cachedMessage = msg;
+            cachedSoapMessage = msg.getAsSOAPMessage();
+        } 
+        return cachedSoapMessage;
     }
 
     public Set<String> getRoles() {
@@ -142,8 +168,29 @@ public class SoapMessageContext extends BaseMessageContext implements
             Message msg =
                     ((MessageFactory) FactoryRegistry.getFactory(MessageFactory.class)).createFrom(soapmessage);
             messageCtx.getMEPContext().setMessage(msg);
+            cachedMessage = msg;
+            cachedSoapMessage = soapmessage;
         } catch (XMLStreamException e) {
             // TODO log it, and throw something?
+        }
+    }
+    
+    private RolePlayer getRolePlayer() {
+        List roles = new ArrayList(getRoles());
+        return new SMCRolePlayer(roles);
+    }
+    
+    class SMCRolePlayer implements RolePlayer {
+        private List roles;
+        SMCRolePlayer(List roles) {
+            this.roles = roles;
+        }
+        
+        public List getRoles() {
+            return roles;
+        }
+        public boolean isUltimateDestination() {
+            return true;
         }
     }
 }

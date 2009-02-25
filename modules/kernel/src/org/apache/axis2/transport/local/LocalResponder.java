@@ -21,7 +21,6 @@
 package org.apache.axis2.transport.local;
 
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
@@ -33,8 +32,8 @@ import org.apache.axis2.transport.http.HTTPTransportUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 
 /**
  * LocalResponder
@@ -42,10 +41,12 @@ import java.io.ByteArrayOutputStream;
 public class LocalResponder extends AbstractHandler implements TransportSender {
     protected static final Log log = LogFactory.getLog(LocalResponder.class);
     
-    LocalTransportSender sender;
+    
+    //  fixed for Executing LocalTransport in MulthThread. 
+    private OutputStream out;
 
-    public LocalResponder(LocalTransportSender sender) {
-        this.sender = sender;
+    public LocalResponder(OutputStream response) {
+        this.out = response;        
     }
 
     public void init(ConfigurationContext confContext, TransportOutDescription transportOut)
@@ -71,7 +72,6 @@ public class LocalResponder extends AbstractHandler implements TransportSender {
         msgContext.setDoingMTOM(HTTPTransportUtils.doWriteMTOM(msgContext));
         msgContext.setDoingSwA(HTTPTransportUtils.doWriteSwA(msgContext));
 
-        OutputStream out;
         EndpointReference epr = null;
 
         if (msgContext.getTo() != null && !msgContext.getTo().hasAnonymousAddress()) {
@@ -87,7 +87,6 @@ public class LocalResponder extends AbstractHandler implements TransportSender {
 
             if (epr != null) {
                 if (!epr.hasNoneAddress()) {
-                    out = sender.getResponse();
                     TransportUtils.writeMessage(msgContext, out);
                 }
             } else {
