@@ -42,6 +42,7 @@ import org.apache.commons.logging.LogFactory;
 import javax.xml.namespace.QName;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -196,7 +197,8 @@ public abstract class AbstractHTTPSender {
             throws IOException {
         obtainHTTPHeaderInformation(httpMethod, msgContext);
 
-        InputStream in = httpMethod.getResponseBodyAsStream();
+        // Read the full ResponseBody right now, so we can release the HTTP connection
+        InputStream in = new ByteArrayInputStream(httpMethod.getResponseBody());
         if (in == null) {
             throw new AxisFault(Messages.getMessage("canNotBeNull", "InputStream"));
         }

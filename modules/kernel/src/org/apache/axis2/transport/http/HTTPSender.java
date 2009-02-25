@@ -112,9 +112,10 @@ public class HTTPSender extends AbstractHTTPSender {
     }
 
     private void cleanup(MessageContext msgContext, HttpMethod method) {
-        if (msgContext.isPropertyTrue(HTTPConstants.AUTO_RELEASE_CONNECTION)) {
-            method.releaseConnection();
-        }
+        // Always release the HTTP connection
+        // We can do it safely, the body has been read and stored in the msgContext already
+        // see #processResponse 
+         method.releaseConnection();
     }
 
     /**
