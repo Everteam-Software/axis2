@@ -133,32 +133,32 @@ public class JMSSender extends AbstractHandler implements TransportSender {
                 WSDL2Constants.MEP_URI_OUT_IN.equals(
                     msgContext.getOperationContext().getAxisOperation().getMessageExchangePattern());
 
-            if (waitForResponse) {
-                String replyToJNDIName = (String) msgContext.getProperty(JMSConstants.REPLY_PARAM);
-                if (replyToJNDIName != null && replyToJNDIName.length() > 0) {
-                    Context context = null;
-                    Hashtable props = JMSUtils.getProperties(targetAddress);
-                    try {
-                        context = new InitialContext(props);
-                    } catch (NamingException e) {
-                        handleException("Could not get the initial context", e);
-                    }
+            String replyToJNDIName = (String) msgContext.getProperty(JMSConstants.REPLY_PARAM);
+            if (replyToJNDIName != null && replyToJNDIName.length() > 0) {
+                Context context = null;
+                Hashtable props = JMSUtils.getProperties(targetAddress);
+                try {
+                    context = new InitialContext(props);
+                } catch (NamingException e) {
+                    handleException("Could not get the initial context", e);
+                }
 
-                    try {
-                        replyDest = (Destination) context.lookup(replyToJNDIName);
+                try {
+                    replyDest = (Destination) context.lookup(replyToJNDIName);
 
-                    } catch (NameNotFoundException e) {
-                        log.warn("Cannot get or lookup JMS response destination : " +
-                            replyToJNDIName + " : " + e.getMessage() +
-                            ". Attempting to create a Queue named : " + replyToJNDIName);
-                        replyDest = session.createQueue(replyToJNDIName);
+                } catch (NameNotFoundException e) {
+                    log.warn("Cannot get or lookup JMS response destination : " +
+                        replyToJNDIName + " : " + e.getMessage() +
+                        ". Attempting to create a Queue named : " + replyToJNDIName);
+                    replyDest = session.createQueue(replyToJNDIName);
 
-                    } catch (NamingException e) {
-                        handleException("Cannot get JMS response destination : " +
-                            replyToJNDIName + " : ", e);
-                    }
+                } catch (NamingException e) {
+                    handleException("Cannot get JMS response destination : " +
+                        replyToJNDIName + " : ", e);
+                }
 
-                } else {
+            } else {
+                if (waitForResponse) {
                     try {
                         // create temporary queue to receive reply
                         replyDest = session.createTemporaryQueue();
@@ -166,6 +166,8 @@ public class JMSSender extends AbstractHandler implements TransportSender {
                         handleException("Error creating temporary queue for response");
                     }
                 }
+            }
+            if (replyDest != null) {
                 message.setJMSReplyTo(replyDest);
                 if (log.isDebugEnabled()) {
                     log.debug("Expecting a response to JMS Destination : " +
