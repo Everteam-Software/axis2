@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-java2wsdl</artifactId>
@@ -36,6 +36,18 @@
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-kernel</artifactId>
             <version>${version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-tcp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-local</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.ant</groupId>
@@ -61,10 +73,6 @@
             <artifactId>jaxen</artifactId>
         </dependency>
         <dependency>
-            <groupId>annogen</groupId>
-            <artifactId>annogen</artifactId>
-        </dependency>
-        <dependency>
             <groupId>xalan</groupId>
             <artifactId>xalan</artifactId>
             <scope>test</scope>
@@ -74,14 +82,6 @@
         <sourceDirectory>src</sourceDirectory>
         <testSourceDirectory>test</testSourceDirectory>
         <resources>
-            <resource>
-                <directory>../..</directory>
-                <includes>
-                    <include>NOTICE.txt</include>
-                    <include>LICENSE.txt</include>
-                </includes>
-                <filtering>false</filtering>
-            </resource>
             <resource>
                 <directory>conf</directory>
                 <excludes>

@@ -20,13 +20,17 @@
 package org.apache.axis2.jaxws.message;
 
 import junit.framework.TestCase;
+
+import org.apache.axiom.om.OMAttachmentAccessor;
 import org.apache.axiom.om.OMDataSource;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axiom.om.OMSourcedElement;
+import org.apache.axiom.om.OMXMLStreamReader;
 import org.apache.axiom.om.util.CopyUtils;
 import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.axis2.Constants;
 import org.apache.axis2.Constants.Configuration;
 import org.apache.axis2.datasource.jaxb.JAXBDataSource;
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -35,7 +39,7 @@ import org.apache.axis2.jaxws.message.databinding.impl.JAXBBlockImpl;
 import org.apache.axis2.jaxws.message.factory.JAXBBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.message.util.MessageUtils;
-import org.apache.axis2.jaxws.provider.DataSourceImpl;
+import org.apache.axis2.jaxws.providerapi.DataSourceImpl;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
 import org.test.mtom.ImageDepot;
 import org.test.mtom.SendImage;
@@ -47,6 +51,8 @@ import javax.activation.DataSource;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.FileImageInputStream;
 import javax.imageio.stream.ImageInputStream;
+import javax.xml.namespace.QName;
+
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -66,6 +72,8 @@ public class MessagePersistanceTests extends TestCase {
     DataSource stringDS, imageDS;
     public String imageResourceDir = "test-resources" + File.separator + "image";
     private final String sampleText = "Sample Text";
+    private final static QName XOP_INCLUDE = 
+        new QName("http://www.w3.org/2004/08/xop/include", "Include");
     
     protected void setUp() throws Exception {
         super.setUp();
@@ -114,6 +122,12 @@ public class MessagePersistanceTests extends TestCase {
         // The JAX-WS MessageContext is converted into an Axis2 MessageContext
         org.apache.axis2.context.MessageContext axisMC = jaxwsMC.getAxisMessageContext();
         MessageUtils.putMessageOnMessageContext(m, jaxwsMC.getAxisMessageContext());
+        
+        // Add other properties to the MessageContext
+        axisMC.setProperty(Constants.JAXWS_WEBMETHOD_EXCEPTION, new NullPointerException());
+        axisMC.setProperty("keyString", "valueString");
+        axisMC.setProperty("keyInteger", new Integer(5));
+        
         
         // Make sure the Axiom structure is intact
         SOAPEnvelope env = axisMC.getEnvelope();
@@ -197,6 +211,23 @@ public class MessagePersistanceTests extends TestCase {
         
         // At this point in time, the restoredMessage will be a full tree.
         // TODO If this changes, please add more assertions here.
+        
+        // Check persisted properties
+        
+        // The exception might be persisted....but in the very least it should
+        // not cause an exception.
+        Throwable t = (Throwable) restoredMC.getProperty(Constants.JAXWS_WEBMETHOD_EXCEPTION);
+        assertTrue(t == null || t instanceof NullPointerException);
+        
+        // Make sure the keyString property was persisted
+        String valueString =  (String) restoredMC.getProperty("keyString");
+        assertTrue("valueString".equals(valueString));
+        
+        // Make sure the keyInteger property was persisted.
+        Integer valueInteger =  (Integer) restoredMC.getProperty("keyInteger");
+        assertTrue(valueInteger == 5);
+        
+        axisMC.setProperty("keyInteger", new Integer(5));
         
         // Simulate transport
         baos = new ByteArrayOutputStream();
@@ -455,6 +486,46 @@ public class MessagePersistanceTests extends TestCase {
         assertTrue(restoredText.indexOf(sampleText) > 0);
         assertTrue(restoredText.indexOf("<soapenv:Body><sendImage xmlns=\"urn://mtom.test.org\"><input><imageData><xop:Include") > 0);
         
+        // Now try walking the saved envelope as an XMLInputStream.
+        // try to restore the message context again
+        // Now read in the persisted message
+        // Setup an input stream to the file
+        inStream = new FileInputStream(theFile);
+
+        // attach a stream capable of reading objects from the 
+        // stream connected to the file
+        inObjStream = new ObjectInputStream(inStream);
+        System.out.println("restoring a message context again.....");
+
+        restoredMC = 
+            (org.apache.axis2.context.MessageContext) inObjStream.readObject();
+        inObjStream.close();
+        inStream.close();
+        System.out.println("....restored message context.....");    
+        env = restoredMC.getEnvelope();
+        env.build();
+        
+        // Use tree as input to XMLStreamReader
+        OMXMLStreamReader xmlStreamReader = (OMXMLStreamReader) env.getXMLStreamReader();
+        
+        // Issue XOP:Include events for optimized MTOM text nodes
+        xmlStreamReader.setInlineMTOM(false);
+        
+        DataHandler dh = null;
+        while(xmlStreamReader.hasNext()) {
+            xmlStreamReader.next();
+            if (xmlStreamReader.isStartElement()) {
+                QName qName =xmlStreamReader.getName();
+                if (XOP_INCLUDE.equals(qName)) {
+                    String hrefValue = xmlStreamReader.getAttributeValue("", "href");
+                    if (hrefValue != null) {
+                        dh =((OMAttachmentAccessor)xmlStreamReader).getDataHandler(hrefValue);
+                    }
+                }
+            }
+        }
+        
+        assertTrue(dh != null);       
     }
     
     /**
@@ -549,7 +620,7 @@ public class MessagePersistanceTests extends TestCase {
         assertTrue(!omse.isExpanded());
         ds = omse.getDataSource();
         assertTrue(ds instanceof JAXBDataSource);
-        
+          
         // Simulate transport on the copied message
         baos = new ByteArrayOutputStream();
         outputFormat = new OMOutputFormat();

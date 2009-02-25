@@ -20,6 +20,7 @@
 package org.apache.axis2.jaxws.server;
 
 import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
@@ -44,6 +45,7 @@ import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
 import org.apache.axis2.jaxws.server.dispatcher.EndpointDispatcher;
+import org.apache.axis2.jaxws.server.dispatcher.ProviderDispatcher;
 import org.apache.axis2.jaxws.server.dispatcher.factory.EndpointDispatcherFactory;
 import org.apache.axis2.jaxws.server.endpoint.Utils;
 import org.apache.axis2.jaxws.spi.Constants;
@@ -61,6 +63,7 @@ import javax.xml.ws.handler.PortInfo;
 import java.io.StringReader;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -210,16 +213,7 @@ public class EndpointController {
             Class serviceEndpoint = getServiceImplementation(request);
             EndpointDescription endpointDesc = getEndpointDescription(request);
             request.setEndpointDescription(endpointDesc);
-            
-            // Need to make sure the protocol (envelope ns)  of the request matches the binding
-            // expected by the service description
-            if (!Utils.bindingTypesMatch(request, endpointDesc.getServiceDescription())) {
-                Protocol protocol = request.getMessage().getProtocol();
-                MessageContext faultContext = Utils.createVersionMismatchMessage(request, protocol);
-                eic.setResponseMessageContext(faultContext);
-                return false;
-            }
-            
+           
             //  TODO: review: make sure the handlers are set on the InvocationContext
             //  This implementation of the JAXWS runtime does not use Endpoint, which
             //  would normally be the place to initialize and store the handler list.
@@ -241,41 +235,57 @@ public class EndpointController {
                 eic.setHandlers(hri.getHandlerChain(portInfo));
                 handlerRoles = hri.getRoles(portInfo);
             }
-            //Lets Initialize the understood QName here, add only the headers that the handler 
-            //injects when we invoke the getHeader().
-            //Since we are adding the handlers to description layer here we will register all the
-            //headers set by SOAPHandler->getHeader().
-             List<QName> understood =HandlerUtils.registerSOAPHandlerHeaders(request.getAxisMessageContext(), eic.getHandlers());
-
-            // Get the service instance.  This will run the @PostConstruct code.
+            
+            //  Get the service instance.  This will run the @PostConstruct code.
             ServiceInstanceFactory instanceFactory = (ServiceInstanceFactory) 
                 FactoryRegistry.getFactory(ServiceInstanceFactory.class);
             Object serviceInstance = instanceFactory.createServiceInstance(request, serviceEndpoint);
-
+            
             // The application handlers and dispatcher invoke will 
             // modify/destroy parts of the message.  Make sure to save
             // the request message if appropriate.
             saveRequestMessage(request);
-            //As per section 10.2.1 of JAXWS Specification, perform a mustUnderstand processing before
-            //invoking inbound handlers.
-            HandlerUtils.checkMustUnderstand(request.getAxisMessageContext(), understood, handlerRoles);
-
-            // Invoke inbound application handlers.  It's safe to use the first object on the iterator because there is
-            // always exactly one EndpointDescription on a server invoke
-            HandlerInvocationContext hiContext = buildHandlerInvocationContext(request, eic.getHandlers(), 
-                                                                               HandlerChainProcessor.MEP.REQUEST,
-                                                                               isOneWay(request.getAxisMessageContext()));
-            HandlerInvokerFactory hiFactory = (HandlerInvokerFactory) 
-                FactoryRegistry.getFactory(HandlerInvokerFactory.class);
-            HandlerInvoker handlerInvoker = hiFactory.createHandlerInvoker(request);
-            boolean success = handlerInvoker.invokeInboundHandlers(hiContext);
-
+            
+            boolean success = true;
+            
+            // Perform inbound header/handler processing only if there is are headers OR handlers
+            if ( (request.getAxisMessageContext() != null &&
+                 request.getAxisMessageContext().getEnvelope().getHeader() != null) ||
+                 (eic.getHandlers() != null && !eic.getHandlers().isEmpty())) {
+                success = inboundHeaderAndHandlerProcessing(request, eic, handlerRoles);
+            }
+            
             if (success) {
                 if (log.isDebugEnabled()) {
                     log.debug("JAX-WS inbound handler chain invocation complete.");
                 }
                 // Set the dispatcher.
                 EndpointDispatcher dispatcher = getEndpointDispatcher(request, serviceEndpoint, serviceInstance);
+                Boolean ignoreSOAPVersion = false;
+                if(log.isDebugEnabled()){
+                	log.debug("Checking for ProviderDispatcher instance");
+                }
+                if(dispatcher instanceof ProviderDispatcher){
+                	if(log.isDebugEnabled()){
+                		log.debug("ProviderDispatcher instance Found");
+                	}
+                	String bindingType = endpointDesc.getBindingType();
+                	if(bindingType.equals(org.apache.axis2.jaxws.Constants.SOAP_HTTP_BINDING)){
+                		ignoreSOAPVersion = true;
+                	}   
+                	if(log.isDebugEnabled()){
+                		log.debug("ignoreSOAPVersion Value ="+ignoreSOAPVersion.booleanValue());
+                	}
+                }
+                //Need to make sure the protocol (envelope ns)  of the request matches the binding
+                // expected by the service description
+                if (!ignoreSOAPVersion && !Utils.bindingTypesMatch(request, endpointDesc)) {
+                	Protocol protocol = request.getMessage().getProtocol();
+                	MessageContext faultContext = Utils.createVersionMismatchMessage(request, protocol);
+                	eic.setResponseMessageContext(faultContext);
+                	return false;
+                }
+                
                 eic.setEndpointDispatcher(dispatcher);
                 return true;
             } else { // the inbound handler chain must have had a problem, and we've reversed directions
@@ -298,12 +308,69 @@ public class EndpointController {
         } 
     }
     
+    /**
+     * Perform inbound Handler and Header processing
+     * This includes the must understand checking and
+     * invoking the inbound handler chain
+     * @param request
+     * @param eic
+     * @param handlerRoles
+     * @return
+     * @throws AxisFault
+     */
+    private boolean inboundHeaderAndHandlerProcessing(MessageContext request, 
+                                            EndpointInvocationContext eic, 
+                                            List<String> handlerRoles) throws AxisFault {
+        //Lets Initialize the understood QName here, add only the headers that the handler 
+        //injects when we invoke the getHeader().
+        //Since we are adding the handlers to description layer here we will register all the
+        //headers set by SOAPHandler->getHeader().
+         List<QName> understood =
+             HandlerUtils.registerSOAPHandlerHeaders(request.getAxisMessageContext(), eic.getHandlers());
+
+        //As per section 10.2.1 of JAXWS Specification, perform a mustUnderstand processing before
+        //invoking inbound handlers.
+        HandlerUtils.checkMustUnderstand(request.getAxisMessageContext(), understood, handlerRoles);
+
+        // Invoke inbound application handlers.  It's safe to use the first object on the iterator because there is
+        // always exactly one EndpointDescription on a server invoke
+        HandlerInvocationContext hiContext = buildHandlerInvocationContext(request, eic.getHandlers(), 
+                                                                           HandlerChainProcessor.MEP.REQUEST,
+                                                                           isOneWay(request.getAxisMessageContext()));
+        HandlerInvokerFactory hiFactory = (HandlerInvokerFactory) 
+        FactoryRegistry.getFactory(HandlerInvokerFactory.class);
+        HandlerInvoker handlerInvoker = hiFactory.createHandlerInvoker(request);
+        boolean success = handlerInvoker.invokeInboundHandlers(hiContext);
+
+        return success;
+        
+    }
+    
     protected boolean handleResponse(EndpointInvocationContext eic) {
         MessageContext request = eic.getRequestMessageContext();
         MessageContext response = eic.getResponseMessageContext();
         
         try {
             if (response != null) {
+            	//Before running inbound handlers lets make sure that the request and response have no protocol mismatch.
+            	EndpointDescription endpointDesc =request.getEndpointDescription();
+            	String bindingType = endpointDesc.getBindingType();
+            	if(bindingType.equals(org.apache.axis2.jaxws.Constants.SOAP_HTTP_BINDING)){
+            		if(log.isDebugEnabled()){
+            			log.debug("Check for protocol mismatch");
+            		}
+            		MessageContext faultContext = isProtocolMismatch(request, response);
+            		if(faultContext!=null){
+            			if(log.isDebugEnabled()){
+            				log.debug("There is a protocol mismatch, generating fault message");
+            			}
+            			eic.setResponseMessageContext(faultContext);
+            			return false;
+            		}
+            		if(log.isDebugEnabled()){
+            			log.debug("There is no protocol mismatch");
+            		}
+            	}
                // Invoke the outbound response handlers.
                // If the message is one way, we should not invoke the response handlers.  There is no response
                // MessageContext since a one way invocation is considered to have a "void" return.
@@ -615,6 +682,30 @@ public class EndpointController {
         HandlerLifecycleManagerFactory elmf = (HandlerLifecycleManagerFactory)FactoryRegistry
                 .getFactory(HandlerLifecycleManagerFactory.class);
         return elmf.createHandlerLifecycleManager();
+    }
+    
+    private MessageContext isProtocolMismatch(MessageContext request, MessageContext response){
+    	Protocol requestProtocol =request.getMessage().getProtocol();
+    	Protocol responseProtocol = response.getMessage().getProtocol();
+    	boolean protocolMismatch = false;
+    	String msg = null;
+    	if(requestProtocol.equals(Protocol.soap11)){
+    		if(!responseProtocol.equals(Protocol.soap11)){
+    			protocolMismatch = true;
+    			msg = "Request SOAP message protocol is version 1.1, but Response SOAP message is configured for SOAP 1.2.  This is not supported.";
+    		}
+    	}
+    	else if(requestProtocol.equals(Protocol.soap12)){
+    		if(!responseProtocol.equals(Protocol.soap12)){
+    			protocolMismatch = true;
+    			msg = "Request SOAP message protocol is version 1.2, but Response SOAP message is configured for SOAP 1.1.  This is not supported.";
+    		}
+    	}
+    	MessageContext msgContext = null;
+    	if(protocolMismatch){
+    		msgContext = Utils.createFaultMessage(response, msg);
+    	}
+    	return msgContext;
     }
     
 }

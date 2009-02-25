@@ -27,6 +27,7 @@ import com.sun.tools.xjc.api.Property;
 import com.sun.tools.xjc.api.S2JJAXBModel;
 import com.sun.tools.xjc.api.SchemaCompiler;
 import com.sun.tools.xjc.api.XJC;
+import com.sun.tools.xjc.BadCommandLineException;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
@@ -56,19 +57,15 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
+import java.net.URLClassLoader;
+import java.net.URL;
 
 public class CodeGenerationUtility {
     private static final Log log = LogFactory.getLog(CodeGenerationUtility.class);
+
+    public static final String BINDING_FILE_NAME = "bindingFileName";
 
     /**
      * @param additionalSchemas
@@ -106,7 +103,7 @@ public class CodeGenerationUtility {
                 //here we have to set a proper system ID. otherwise when processing the
                 // included schaemas for this schema we have a problem
                 // it creates the system ID using this target namespace value
-                
+
                 inputSource.setSystemId(baseURI + "xsd" + i + ".xsd");
                 inputSource.setPublicId(schema.getTargetNamespace());
                 schemaToInputSourceMap.put(schema,inputSource);
@@ -140,17 +137,33 @@ public class CodeGenerationUtility {
                         // then we have to find this using the file system
                         if (systemId != null){
                             returnInputSource = new InputSource(systemId);
+                            returnInputSource.setSystemId(systemId);
                         }
                     }
                     return returnInputSource;
                 }
             };
 
+
+            Map properties = cgconfig.getProperties();
+            String bindingFileName = (String) properties.get(BINDING_FILE_NAME);
+
             XmlSchema key = null;
             for (Iterator schemaIter = schemaToInputSourceMap.keySet().iterator();
                  schemaIter.hasNext();) {
 
                 SchemaCompiler sc = XJC.createSchemaCompiler();
+                if (bindingFileName != null){
+                    if (bindingFileName.endsWith(".jar")) {
+                        scanEpisodeFile(new File(bindingFileName), sc);
+                    } else {
+                        InputSource inputSoruce = new InputSource(new FileInputStream(bindingFileName));
+                        inputSoruce.setSystemId(new File(bindingFileName).toURI().toString());
+                        sc.getOptions().addBindFile(inputSoruce);
+                    }
+
+                }
+
                 key = (XmlSchema) schemaIter.next();
 
                 if (nsMap != null) {
@@ -161,7 +174,7 @@ public class CodeGenerationUtility {
                         String pkg = (String)nsMap.get(namespace);
                         registerNamespace(sc, namespace, pkg);
                     }
-                } 
+                }
 
                 sc.setEntityResolver(resolver);
 
@@ -304,6 +317,19 @@ public class CodeGenerationUtility {
             throw new RuntimeException(e);
         }
     }
+
+    private static void scanEpisodeFile(File jar, SchemaCompiler sc)
+            throws BadCommandLineException, IOException {
+
+        URLClassLoader ucl = new URLClassLoader(new URL[]{jar.toURL()});
+        Enumeration<URL> resources = ucl.findResources("META-INF/sun-jaxb.episode");
+        while (resources.hasMoreElements()) {
+            URL url = resources.nextElement();
+            sc.getOptions().addBindFile(new InputSource(url.toExternalForm()));
+        }
+
+    }
+
 
     private static void registerNamespace(SchemaCompiler sc, String namespace, String pkgName) throws Exception {
         Document doc = XMLUtils.newDocument();

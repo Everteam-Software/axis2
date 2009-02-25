@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-kernel</artifactId>
@@ -33,6 +33,26 @@
     <description>Core Parts of Axis 2.0. This includes Axis 2.0 engine, Client API, Addressing support, etc.,
     </description>
     <dependencies>
+        <dependency>
+            <groupId>org.apache.ws.commons.axiom</groupId>
+            <artifactId>axiom-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.ws.commons.axiom</groupId>
+            <artifactId>axiom-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.ws.commons.axiom</groupId>
+            <artifactId>axiom-dom</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-ws-metadata_2.0_spec</artifactId>
+        </dependency>
+	  <dependency>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-jta_1.1_spec</artifactId>
+        </dependency>
         <dependency>
             <groupId>javax.servlet</groupId>
             <artifactId>servlet-api</artifactId>
@@ -46,25 +66,8 @@
             <artifactId>commons-fileupload</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpcore</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpcore-nio</artifactId>
-        </dependency>
-        <dependency>
             <groupId>wsdl4j</groupId>
             <artifactId>wsdl4j</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>backport-util-concurrent</groupId>
-            <artifactId>backport-util-concurrent</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>${stax.impl.groupid}</groupId>
-            <artifactId>${stax.impl.artifact}</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.ws.commons.schema</groupId>
@@ -105,62 +108,14 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>annogen</groupId>
-            <artifactId>annogen</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.geronimo.specs</groupId>
-            <artifactId>geronimo-jms_1.1_spec</artifactId>
-        </dependency>
-        <dependency>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
         </dependency>
-
-        <!-- Smack Jabber client libraries to be included -->
-        <dependency>
-            <groupId>org.igniterealtime</groupId>
-            <artifactId>smack</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>commons-lang</groupId>
-            <artifactId>commons-lang</artifactId>
-        </dependency>
     </dependencies>
-    <profiles>
-        <profile>
-            <id>java14</id>
-            <activation>
-                <jdk>1.4</jdk>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <inherited>true</inherited>
-                        <configuration>
-                            <excludes>
-                                <exclude>**/nhttp/**</exclude>
-                                <exclude>**/XMPP*.java</exclude>
-                            </excludes>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
     <build>
         <sourceDirectory>src</sourceDirectory>
         <testSourceDirectory>test</testSourceDirectory>
         <resources>
-            <resource>
-                <directory>../..</directory>
-                <includes>
-                    <include>NOTICE.txt</include>
-                    <include>LICENSE.txt</include>
-                </includes>
-                <filtering>false</filtering>
-            </resource>
             <resource>
                 <directory>conf</directory>
                 <excludes>
@@ -207,7 +162,8 @@
                     <excludes>
                         <exclude>**/*Abstract*.java</exclude>
                         <exclude>**/*Util*.java</exclude>
-                        <exclude>**/*PhaseResolvingTest.java</exclude>
+                        <exclude>**/*MessageContextChangeTest.java</exclude>
+                        <exclude>**/MessageContextChangeTest.java</exclude> <!-- Removed because of problem on Java5. Needs reinstated -->
                     </excludes>
                     <includes>
                         <include>**/*Test.java</include>
@@ -267,28 +223,6 @@
                                 <property name="maven.build.dir" location="${basedir}/target"/>
                                 <ant antfile="j2secbuild.xml" inheritall="true" inheritrefs="true"
                                      dir="test-resources/"/>
-                            </tasks>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>fault-module-package</id>
-                        <phase>package</phase>
-                        <configuration>
-                            <tasks>
-                                <property name="aar.tmp.dir" location="${basedir}/target/tmp"/>
-                                <mkdir dir="${aar.tmp.dir}/META-INF"/>
-                                <copy file="${basedir}/resources/smtpfault-module.xml"
-                                      tofile="${aar.tmp.dir}/META-INF/module.xml"/>
-                                <copy todir="${aar.tmp.dir}">
-                                    <fileset dir="${basedir}/target/classes">
-                                        <include name="**/*SMTPFaultHandler.class"/>
-                                    </fileset>
-                                </copy>
-                                <jar destfile="${basedir}/target/smtpfault.mar" basedir="${aar.tmp.dir}"/>
-                                <delete dir="${aar.tmp.dir}"/>
                             </tasks>
                         </configuration>
                         <goals>

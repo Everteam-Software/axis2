@@ -611,4 +611,23 @@ public class CodeGenConfiguration implements CommandLineOptionConstants {
         this.skeltonClassName = skeltonClassName;
     }
 
+    private boolean overrideAbsoluteAddress;
+
+    public boolean isOverrideAbsoluteAddress() {
+        return overrideAbsoluteAddress;
+    }
+
+    public void setOverrideAbsoluteAddress(boolean overrideAbsoluteAddress) {
+        this.overrideAbsoluteAddress = overrideAbsoluteAddress;
+    }
+
+    private String exceptionBaseClassName;
+
+    public String getExceptionBaseClassName() {
+        return exceptionBaseClassName;
+    }
+
+    public void setExceptionBaseClassName(String exceptionBaseClassName) {
+        this.exceptionBaseClassName = exceptionBaseClassName;
+    }
 }

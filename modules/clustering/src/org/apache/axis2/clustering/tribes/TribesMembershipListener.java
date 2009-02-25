@@ -24,8 +24,8 @@ import org.apache.catalina.tribes.MembershipListener;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-/**                                                                          In
- * 
+/**
+ * Membership changes are notified using this class
  */
 public class TribesMembershipListener implements MembershipListener {
 
@@ -37,15 +37,20 @@ public class TribesMembershipListener implements MembershipListener {
     }
 
     public void memberAdded(Member member) {
-        log.info("New member " + TribesUtil.getHost(member) + " joined cluster.");
-        membershipManager.memberAdded(member);
-       //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
+        if (membershipManager.memberAdded(member)) {
+            log.info("New member " + TribesUtil.getName(member) + " joined cluster.");
+            /*if (TribesUtil.toAxis2Member(member).isActive()) {
+            } else {
+            }*/
+        }
+        //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
     }
 
     public void memberDisappeared(Member member) {
-        log.info("Member " + TribesUtil.getHost(member) + " left cluster");
+        log.info("Member " + TribesUtil.getName(member) + " left cluster");
         membershipManager.memberDisappeared(member);
 
 //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
+        
     }
 }

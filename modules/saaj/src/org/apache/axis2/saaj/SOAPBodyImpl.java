@@ -97,24 +97,41 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
         return childEle;
     }
 
+    @Override
+    protected Element appendElement(ElementImpl child) throws SOAPException {    
+        String namespaceURI = child.getNamespaceURI();
+        String prefix = child.getPrefix();
+
+        element.declareNamespace(namespaceURI, prefix);
+        
+        SOAPBodyElementImpl childEle = new SOAPBodyElementImpl(child);
+
+        childEle.element.setUserData(SAAJ_NODE, childEle, null);
+        childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        element.appendChild(childEle.element);
+        ((NodeImpl)childEle.element.getParentNode()).setUserData(SAAJ_NODE, this, null);
+        childEle.setParentElement(this);
+        return childEle;
+    }
+    
     public SOAPElement addChildElement(SOAPElement soapElement) throws SOAPException {
         String namespaceURI = soapElement.getNamespaceURI();
         String prefix = soapElement.getPrefix();
         String localName = soapElement.getLocalName();
-        element.declareNamespace(namespaceURI, prefix);
+
         SOAPBodyElementImpl childEle;
-        
-        if (localName == null) {
+        if (namespaceURI == null || namespaceURI.trim().length() == 0) {
             childEle =
                 new SOAPBodyElementImpl(
-                        (ElementImpl)getOwnerDocument().createElementNS(namespaceURI,
-                                                                        ""));
+                        (ElementImpl)getOwnerDocument().createElement(localName));
         } else {
+            element.declareNamespace(namespaceURI, prefix);
             childEle =
                 new SOAPBodyElementImpl(
                         (ElementImpl)getOwnerDocument().createElementNS(namespaceURI,
                                                                         localName));            
         }
+
         for (Iterator iter = soapElement.getAllAttributes(); iter.hasNext();) {
             Name name = (Name)iter.next();
             childEle.addAttribute(name, soapElement.getAttributeValue(name));
@@ -130,7 +147,9 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
         }
 
         childEle.element.setUserData(SAAJ_NODE, childEle, null);
-        childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        if (namespaceURI != null && namespaceURI.trim().length() > 0) {
+            childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        }
         element.appendChild(childEle.element);
         ((NodeImpl)childEle.element.getParentNode()).setUserData(SAAJ_NODE, this, null);
         childEle.setParentElement(this);

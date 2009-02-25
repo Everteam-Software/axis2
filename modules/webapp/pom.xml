@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-webapp</artifactId>
@@ -64,10 +64,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -104,8 +100,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -143,10 +139,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -183,8 +175,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -222,10 +214,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -262,8 +250,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -300,10 +288,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -340,8 +324,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>javax.jms</groupId>
@@ -395,10 +379,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -435,8 +415,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -474,10 +454,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -514,8 +490,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -553,10 +529,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -593,8 +565,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -632,10 +604,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -672,8 +640,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -711,10 +679,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -751,8 +715,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -790,10 +754,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -830,15 +790,15 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>soapmonitor</artifactId>
-            <version>${soapmonitor.mar.version}</version>
+            <version>${version}</version>
             <type>mar</type>
             <exclusions>
                 <exclusion>
@@ -868,10 +828,6 @@
                 <exclusion>
                     <groupId>org.apache.geronimo.specs</groupId>
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>jakarta-regexp</groupId>
@@ -910,15 +866,15 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>addressing</artifactId>
-            <version>1.41</version>
+            <version>${version}</version>
             <type>mar</type>
             <exclusions>
                 <exclusion>
@@ -948,10 +904,6 @@
                 <exclusion>
                     <groupId>org.apache.geronimo.specs</groupId>
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>jakarta-regexp</groupId>
@@ -990,15 +942,15 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>ping</artifactId>
-            <version>${ping.mar.version}</version>
+            <version>${version}</version>
             <type>mar</type>
             <exclusions>
                 <exclusion>
@@ -1028,10 +980,6 @@
                 <exclusion>
                     <groupId>org.apache.geronimo.specs</groupId>
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>jakarta-regexp</groupId>
@@ -1070,15 +1018,15 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>mex</artifactId>
-            <version>1.41</version>
+            <version>${version}</version>
             <type>jar</type>
             <classifier>impl</classifier>
             <exclusions>
@@ -1111,10 +1059,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -1151,15 +1095,15 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-scripting</artifactId>
-            <version>1.41</version>
+            <version>${version}</version>
             <type>mar</type>
             <exclusions>
                 <exclusion>
@@ -1191,10 +1135,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -1231,8 +1171,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -1270,10 +1210,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -1310,8 +1246,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -1350,10 +1286,6 @@
                     <artifactId>geronimo-javamail_1.4_spec</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-jms_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>jakarta-regexp</groupId>
                     <artifactId>jakarta-regexp</artifactId>
                 </exclusion>
@@ -1390,8 +1322,8 @@
                     <artifactId>bsf</artifactId>
                 </exclusion>
                 <exclusion>
-                   <groupId>javax.servlet</groupId>
-                   <artifactId>servlet-api</artifactId>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -1403,6 +1335,16 @@
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-mtompolicy</artifactId>
             <version>${version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-jaxws-mar</artifactId>
+            <version>${version}</version>
+            <type>mar</type>
         </dependency>
     </dependencies>
     <build>
@@ -1427,7 +1369,14 @@
                             </includes>
                         </resource>
                         <resource>
-                            <directory>${basedir}/../soapmonitor/target/mar</directory>
+                            <directory>${basedir}/../jaxws-mar/target</directory>
+                            <targetPath>WEB-INF/modules</targetPath>
+                            <includes>
+                                <include>axis2-jaxws-mar*.mar</include>
+                            </includes>
+                        </resource>
+                        <resource>
+                            <directory>${basedir}/../soapmonitor/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>soapmonitor*.mar</include>
@@ -1444,21 +1393,21 @@
                             </excludes>
                         </resource>
                         <resource>
-                            <directory>${basedir}/../mex/target/mar</directory>
+                            <directory>${basedir}/../mex/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>mex*.mar</include>
                             </includes>
                         </resource>
                         <resource>
-                            <directory>${basedir}/../ping/target/mar</directory>
+                            <directory>${basedir}/../ping/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>ping*.mar</include>
                             </includes>
                         </resource>
                         <resource>
-                            <directory>${basedir}/../scripting/target/mar</directory>
+                            <directory>${basedir}/../scripting/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>*scripting*.mar</include>

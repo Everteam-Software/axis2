@@ -28,9 +28,9 @@
 	xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 	 <wsdl:types>
 		<xsd:schema
-			xmlns="http://www.w3.org/2001/XMLSchema"
-			xmlns:tns="http://swamtomservice.types.test.org"
-			targetNamespace="http://swamtomservice.types.test.org">
+		  xmlns="http://www.w3.org/2001/XMLSchema"
+		  xmlns:tns="http://swamtomservice.types.test.org"
+		  targetNamespace="http://swamtomservice.types.test.org">
 
 		<element name="mtomAttachment" >
 			<complexType>
@@ -51,7 +51,7 @@
 	</wsdl:types>
 
 
-  <!-- attachment ...note no body part-->
+  <!-- attachment...note no body part -->
   <wsdl:message name="swaAttachmentRequest">
     <part name="jpegImageRequest" type="xsd:hexBinary"/>
   </wsdl:message>

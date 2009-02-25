@@ -30,7 +30,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.apache.axis2</groupId>
     <artifactId>axis2-parent</artifactId>
-    <version>1.4.1</version>
+    <version>1.5-beta-2</version>
     <packaging>pom</packaging>
     <name>Apache Axis2 - Parent</name>
     <inceptionYear>2004</inceptionYear>
@@ -80,23 +80,18 @@
               element, and it will need to be changed manually before a release,
               as the maven-release-plugin will not update this value.
         -->
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
 
         <!-- Version #'s for the mars that we generate -->
-        <addressing.mar.version>1.41</addressing.mar.version>
-        <soapmonitor.mar.version>1.41</soapmonitor.mar.version>
-        <mex.mar.version>1.41</mex.mar.version>
-        <ping.mar.version>1.41</ping.mar.version>
-        <scripting.mar.version>1.41</scripting.mar.version>
+        <addressing.mar.version>1.5-beta-2</addressing.mar.version>
+        <soapmonitor.mar.version>1.5-beta-2</soapmonitor.mar.version>
+        <mex.mar.version>1.5-beta-2</mex.mar.version>
+        <ping.mar.version>1.5-beta-2</ping.mar.version>
+        <scripting.mar.version>1.5-beta-2</scripting.mar.version>
 
-        <!-- Version #'s of all our dependencies -->
-        <activemq.version>5.1.0</activemq.version>
-        <activemq.version-jdk14>4.1.1</activemq.version-jdk14>
-        <annogen.version>0.1.0</annogen.version>
         <ant.version>1.7.0</ant.version>
         <antlr.version>2.7.7</antlr.version>
-        <axiom.version>1.2.7</axiom.version>
-        <backport.util.concurrent.version>3.1</backport.util.concurrent.version>
+        <axiom.version>SNAPSHOT</axiom.version>
         <bcel.version>5.2</bcel.version>
         <bsf.version>2.4.0</bsf.version>
         <commons.codec.version>1.3</commons.codec.version>
@@ -104,19 +99,21 @@
         <commons.httpclient.version>3.1</commons.httpclient.version>
         <commons.io.version>1.4</commons.io.version>
         <commons.logging.version>1.1.1</commons.logging.version>
-        <eclipse.plugins.version>1.3.0</eclipse.plugins.version>
+        <eclipse.plugins.version>1.4.0</eclipse.plugins.version>
         <eclipse.version>3.2.0</eclipse.version>
         <fi.version>1.1.8</fi.version>
         <geronimo.spec.activation.version>1.0.1</geronimo.spec.activation.version>
         <geronimo.spec.annotation.version>1.1</geronimo.spec.annotation.version>
         <geronimo.spec.javamail.version>1.2</geronimo.spec.javamail.version>
         <geronimo.spec.stax.version>1.0.1</geronimo.spec.stax.version>
-        <geronimo.spec.jms.version>1.1</geronimo.spec.jms.version>
+        <geronimo.spec.metadata.version>1.1.2</geronimo.spec.metadata.version>
+        <geronimo.spec.saaj.version>1.0.1</geronimo.spec.saaj.version>
+        <geronimo.spec.jaxws.version>1.0</geronimo.spec.jaxws.version>
         <httpcore.version>4.0-beta1</httpcore.version>
         <intellij.version>5.0</intellij.version>
         <jalopy.version>1.5rc3</jalopy.version>
         <jaxb.api.version>2.1</jaxb.api.version>
-        <jaxbri.version>2.1.6</jaxbri.version>
+        <jaxbri.version>2.1.7</jaxbri.version>
         <jaxen.version>1.1.1</jaxen.version>
         <jettison.version>1.0-RC2</jettison.version>
         <jibx.version>1.1.5</jibx.version>
@@ -126,7 +123,7 @@
         <maven.antrun.version>1.1</maven.antrun.version>
         <maven.archiver.version>2.2</maven.archiver.version>
         <maven.artifact.version>2.0.8</maven.artifact.version>
-        <maven.assembly.version>2.2-beta-1</maven.assembly.version>
+        <maven.assembly.version>2.2-beta-2</maven.assembly.version>
         <maven.plugin.version>2.3</maven.plugin.version>
         <maven.plugin.testing.version>1.1</maven.plugin.testing.version>
         <maven.version>2.0.7</maven.version>
@@ -140,20 +137,27 @@
         <stax.impl.artifact>wstx-asl</stax.impl.artifact>
         <stax.impl.groupid>org.codehaus.woodstox</stax.impl.groupid>
         <stax.impl.version>3.2.4</stax.impl.version>
-        <tomcat.version>6.0.14</tomcat.version>
-        <woden.version>1.0M8</woden.version>
+        <tomcat.version>6.0.16</tomcat.version>
+        <!--<woden.version>1.0M8</woden.version>-->
+        <woden.version>1.0-SNAPSHOT</woden.version>
         <wsdl4j.version>1.6.2</wsdl4j.version>
         <xalan.version>2.7.0</xalan.version>
         <xerces.version>2.8.1</xerces.version>
         <xml_apis.version>1.3.04</xml_apis.version>
         <xmlbeans.version>2.3.0</xmlbeans.version>
         <xml_resolver.version>1.2</xml_resolver.version>
-        <xmlschema.version>1.4.2</xmlschema.version>
+        <xmlschema.version>1.4.3</xmlschema.version>
         <xmlunit.version>1.1</xmlunit.version>
         <smack.version>3.0.4</smack.version>
         <commons.lang.version>2.3</commons.lang.version>
+        <javax.mail.version>1.4</javax.mail.version>
+        <transport.http.version>SNAPSHOT</transport.http.version>
+        <transport.tcp.version>SNAPSHOT</transport.tcp.version>
+        <transport.local.version>SNAPSHOT</transport.local.version>
         <!-- The build failing if tests are skipped is very annoying -->
         <failIfNoTests>false</failIfNoTests>
+        <m2Repository>'${settings.localRepository}'</m2Repository>
+        <geronimo-spec.jta.version>1.1</geronimo-spec.jta.version>
     </properties>
     <mailingLists>
         <mailingList>
@@ -391,9 +395,21 @@
             <organization>Purdue University, USA</organization>
         </developer>
         <developer>
+            <name>Eranga Jayasundera</name>
+            <id>eranga</id>
+            <email>eranga AT apache.org</email>
+            <organization></organization>
+        </developer>
+        <developer>
             <name>Sanjiva Weerawarana</name>
             <id>sanjiva</id>
             <email>sanjiva AT wso2.com</email>
+            <organization>WSO2</organization>
+        </developer>
+        <developer>
+            <name>Keith Chapman</name>
+            <id>keithc</id>
+            <email>keith AT wso2.com</email>
             <organization>WSO2</organization>
         </developer>
     </developers>
@@ -437,7 +453,7 @@
         <contributor>
             <name>Shivantha Huruggamuwa</name>
             <email>shivanthah AT gmail.com</email>
-            <organization>University Of Peradeniya , Sri Lanaka</organization>
+            <organization>University Of Peradeniya , Sri Lanka</organization>
         </contributor>
 
     </contributors>
@@ -645,6 +661,39 @@
                 </exclusions>
             </dependency>
             <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>axis2-transport-http</artifactId>
+                <version>${transport.http.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.axis2</groupId>
+                        <artifactId>axis2-kernel</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>axis2-transport-tcp</artifactId>
+                <version>${transport.tcp.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.axis2</groupId>
+                        <artifactId>axis2-kernel</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>axis2-transport-local</artifactId>
+                <version>${transport.local.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.axis2</groupId>
+                        <artifactId>axis2-kernel</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.ant</groupId>
                 <artifactId>ant-launcher</artifactId>
                 <version>${ant.version}</version>
@@ -723,23 +772,29 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.geronimo.specs</groupId>
-                <artifactId>geronimo-jms_1.1_spec</artifactId>
-                <version>${geronimo.spec.jms.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.geronimo.specs</groupId>
                 <artifactId>geronimo-annotation_1.0_spec</artifactId>
                 <version>${geronimo.spec.annotation.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-ws-metadata_2.0_spec</artifactId>
+                <version>${geronimo.spec.metadata.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-saaj_1.3_spec</artifactId>
+                <version>${geronimo.spec.saaj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-jaxws_2.1_spec</artifactId>
+                <version>${geronimo.spec.jaxws.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>jaxen</groupId>
                 <artifactId>jaxen</artifactId>
                 <version>${jaxen.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>annogen</groupId>
-                <artifactId>annogen</artifactId>
-                <version>${annogen.version}</version>
             </dependency>
             <dependency>
                 <groupId>commons-httpclient</groupId>
@@ -757,16 +812,6 @@
                 <version>${httpcore.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpcore-nio</artifactId>
-                <version>${httpcore.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpcore-niossl</artifactId>
-                <version>${httpcore.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>commons-fileupload</groupId>
                 <artifactId>commons-fileupload</artifactId>
                 <version>${commons.fileupload.version}</version>
@@ -775,11 +820,6 @@
                 <groupId>wsdl4j</groupId>
                 <artifactId>wsdl4j</artifactId>
                 <version>${wsdl4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>backport-util-concurrent</groupId>
-                <artifactId>backport-util-concurrent</artifactId>
-                <version>${backport.util.concurrent.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.woden</groupId>
@@ -954,33 +994,6 @@
                 <version>${bsf.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.activemq</groupId>
-                <artifactId>activemq-core</artifactId>
-                <version>${activemq.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.codehaus.woodstox</groupId>
-                        <artifactId>wstx-asl</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>stax</groupId>
-                        <artifactId>stax-api</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.apache.activemq</groupId>
-                        <artifactId>activeio-core</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>activesoap</groupId>
-                        <artifactId>jaxp-api</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>axis</groupId>
-                        <artifactId>axis</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
                 <groupId>jalopy</groupId>
                 <artifactId>jalopy</artifactId>
                 <version>${jalopy.version}</version>
@@ -994,14 +1007,24 @@
                 <groupId>org.igniterealtime</groupId>
                 <artifactId>smack</artifactId>
                 <version>${smack.version}</version>
-                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.igniterealtime</groupId>
+                <artifactId>smackx</artifactId>
+                <version>${smack.version}</version>
             </dependency>
             <dependency>
                 <groupId>commons-lang</groupId>
                 <artifactId>commons-lang</artifactId>
                 <version>${commons.lang.version}</version>
-                <scope>provided</scope>
             </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-jta_1.1_spec</artifactId>
+                <version>${geronimo-spec.jta.version}</version>
+            </dependency>
+
+
         </dependencies>
     </dependencyManagement>
     <!-- Top level dependencies that will be needed in all sub mvn modules -->
@@ -1049,6 +1072,11 @@
             <artifactId>xercesImpl</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
         </dependency>
@@ -1077,20 +1105,6 @@
                     </plugin>
                 </plugins>
             </build>
-        </profile>
-        <profile>
-            <id>java14</id>
-            <activation>
-                <jdk>1.4</jdk>
-            </activation>
-            <dependencies>
-                <!-- Junit testing environment-->
-                <dependency>
-                    <groupId>junit</groupId>
-                    <artifactId>junit</artifactId>
-                    <version>${junit.version-jdk1.4}</version>
-                </dependency>
-            </dependencies>
         </profile>
         <profile>
             <id>java15</id>
@@ -1159,6 +1173,7 @@
             <id>apache-snapshots</id>
             <name>Apache Development Repository</name>
             <url>scpexe://people.apache.org//www/people.apache.org/repo/m2-snapshot-repository</url>
+            <uniqueVersion>false</uniqueVersion>
         </snapshotRepository>
     </distributionManagement>
     <build>
@@ -1167,8 +1182,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <inherited>true</inherited>
                 <configuration>
-                    <source>1.4</source>
-                    <target>1.4</target>
+                    <source>1.5</source>
+                    <target>1.5</target>
                 </configuration>
             </plugin>
             <plugin>

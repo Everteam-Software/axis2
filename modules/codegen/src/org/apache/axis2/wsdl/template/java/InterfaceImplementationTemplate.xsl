@@ -65,13 +65,13 @@
 
         private static int counter = 0;
 
-        private static synchronized String getUniqueSuffix(){
+        private static synchronized java.lang.String getUniqueSuffix(){
             // reset the counter if it is greater than 99999
             if (counter > 99999){
                 counter = 0;
             }
             counter = counter + 1; 
-            return Long.toString(System.currentTimeMillis()) + "_" + counter;
+            return java.lang.Long.toString(System.currentTimeMillis()) + "_" + counter;
         }
 
     
@@ -154,8 +154,6 @@
         _service.applyPolicy();
         </xsl:if>
 	
-        configurationContext = _serviceClient.getServiceContext().getConfigurationContext();
-
         _serviceClient.getOptions().setTo(new org.apache.axis2.addressing.EndpointReference(
                 targetEndpoint));
         _serviceClient.getOptions().setUseSeparateListener(useSeparateListener);

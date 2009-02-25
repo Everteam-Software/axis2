@@ -110,7 +110,7 @@ public abstract class XMLPartBase implements XMLPart {
 
     boolean consumed = false;
 
-    Message parent;
+    MessageImpl parent;
 
 
     /**
@@ -673,7 +673,7 @@ public abstract class XMLPartBase implements XMLPart {
      * Set the backpointer to this XMLPart's parent Message
      */
     public void setParent(Message p) {
-        parent = p;
+        parent = (MessageImpl) p;
     }
 
     /**
@@ -749,7 +749,7 @@ public abstract class XMLPartBase implements XMLPart {
             this.consumed = true;
             if (log.isDebugEnabled()) {
                 log.debug("Debug Monitoring When Block is Consumed");
-                log.debug(JavaUtils.stackToString());
+                log.trace(JavaUtils.stackToString());
             }
         } else {
             consumed = false;

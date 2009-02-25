@@ -38,6 +38,7 @@ public class MDQConstants {
     public static final String PROVIDER_DATASOURCE =
             "javax.xml.ws.Provider<javax.activation.DataSource>";
     public static final String PROVIDER_STRING = "javax.xml.ws.Provider<java.lang.String>";
+    public static final String PROVIDER_OMELEMENT = "javax.xml.ws.Provider<org.apache.axiom.om.OMElement>";
 
     public static final String WSDL_FILE_NAME = "WSDL_FILE_NAME";
     public static final String SCHEMA_DOCS = "SCHEMA_DOCS";
@@ -52,6 +53,11 @@ public class MDQConstants {
     public static final String CLIENT_SERVICE_CLASS = "CLIENT_SERVICE_CLASS";
     public static final String CLIENT_SEI_CLASS = "CLIENT_SEI_CLASS";
     
+    public static final String HANDLER_CHAIN_DECLARING_CLASS = "HANDLER_CHAIN_DECLARING_CLASS";
+    
+    public static final String SEI_MTOM_ENABLEMENT_MAP = "org.apache.axis2.jaxws.description.builder.SEI_MTOM_ENABLEMENT_MAP";
+    public static final String BINDING_PROPS_MAP = "org.apache.axis2.jaxws.description.builder.BINDING_PROPS_MAP";    
+    
     //Represent SOAP/JMS Bindings
     //REVIEW: SOAP-JMS may be using the same NS for SOAP11 and SOAP12, 
     //  if so we could remove some duplicate values below
@@ -59,5 +65,5 @@ public class MDQConstants {
     public static final String SOAP12JMS_BINDING = "http://www.example.org/2006/06/soap/bindings/JMS/";
     public static final String SOAP11JMS_MTOM_BINDING = "http://http://www.example.org/2006/06/soap/bindings/JMS/?mtom=true";
     public static final String SOAP12JMS_MTOM_BINDING = "http://http://www.example.org/2006/06/soap/bindings/JMS/?mtom=true";
-
+    public static final String SOAP_HTTP_BINDING ="SOAP_HTTP_BINDING";
 }

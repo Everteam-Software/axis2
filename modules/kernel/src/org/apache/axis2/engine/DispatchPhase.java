@@ -73,7 +73,7 @@ public class DispatchPhase extends Phase {
         // If we're configured to do so, check the service for a single op...
         if (operation == null &&
                 JavaUtils.isTrue(service.getParameterValue(AxisService.SUPPORT_SINGLE_OP))) {
-            Iterator ops = service.getOperations();
+            Iterator<AxisOperation> ops = service.getOperations();
             // If there's exactly one, that's the one we want.  If there's more, forget it.
             if (ops.hasNext()) {
                 operation = (AxisOperation)ops.next();
@@ -119,6 +119,11 @@ public class DispatchPhase extends Phase {
         // We should send an early ack to the transport whever possible, but some modules need
         // to use the backchannel, so we need to check if they have disabled this code.
         Boolean disableAck = (Boolean) msgContext.getProperty(Constants.Configuration.DISABLE_RESPONSE_ACK);
+        if(disableAck == null) {
+            disableAck = (Boolean) (msgContext.getAxisService() != null ? 
+                    msgContext.getAxisService().getParameterValue(Constants.Configuration.DISABLE_RESPONSE_ACK) : null);
+        }
+        
         if(disableAck == null || disableAck.booleanValue() == false) {
         	String mepString = msgContext.getAxisOperation().getMessageExchangePattern();
         	if (isOneway(mepString)) {
@@ -225,6 +230,8 @@ public class DispatchPhase extends Phase {
     /**
      * To check whether the incoming request has come in valid binding , we check whether service
      * author has disabled any binding using parameters
+     * <code>org.apache.axis2.Constants.Configuration.DISABLE_SOAP12</code>
+     * <code>org.apache.axis2.Constants.Configuration.DISABLE_SOAP11</code>
      * <code>org.apache.axis2.Constants.Configuration.DISABLE_REST</code>
      * @param service msgctx the current MessageContext
      * @throws AxisFault in case of error
@@ -241,9 +248,36 @@ public class DispatchPhase extends Phase {
                 disableREST = true;
         }
         
-        if (msgctx.isDoingREST() && disableREST) {
-            throw new AxisFault(Messages.getMessage("bindingDisabled","Http"));     
-        } 
+        boolean disableSOAP11 = false;
+        Parameter disableSOAP11Parameter = service
+                        .getParameter(org.apache.axis2.Constants.Configuration.DISABLE_SOAP11);
+        if (disableSOAP11Parameter != null
+                        && JavaUtils.isTrueExplicitly(disableSOAP11Parameter.getValue())) {
+                disableSOAP11 = true;
+        }
+
+        boolean disableSOAP12 = false;
+        Parameter disableSOAP12Parameter = service
+                        .getParameter(org.apache.axis2.Constants.Configuration.DISABLE_SOAP12);
+        if (disableSOAP12Parameter != null
+                        && JavaUtils
+                                        .isTrueExplicitly(disableSOAP12Parameter.getValue())) {
+                disableSOAP12 = true;
+        }
+        
+        if (msgctx.isDoingREST()) {
+            if (disableREST) {
+                throw new AxisFault(Messages.getMessage("bindingDisabled","Http"));
+            }
+        } else if (msgctx.isSOAP11()) {
+            if (disableSOAP11) {
+                throw new AxisFault(Messages.getMessage("bindingDisabled","SOAP11"));
+            }
+        } else {
+            if(disableSOAP12) {
+                throw new AxisFault(Messages.getMessage("bindingDisabled","SOAP12"));  
+            }
+        }
         
     }
 

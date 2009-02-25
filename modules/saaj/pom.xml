@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-saaj</artifactId>
@@ -39,19 +39,20 @@
     </scm>
     <dependencies>
         <dependency>
-            <groupId>org.apache.axis2</groupId>
-            <artifactId>axis2-saaj-api</artifactId>
-            <version>${version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-activation_1.1_spec</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-            </exclusions>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-saaj_1.3_spec</artifactId>
+        </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-http</artifactId>
+        </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-tcp</artifactId>
+        </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-local</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
@@ -125,8 +126,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <inherited>true</inherited>
                 <configuration>
-                    <source>1.4</source>
-                    <target>1.4</target>
+                    <source>1.5</source>
+                    <target>1.5</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -135,7 +136,7 @@
                 <configuration>
                     <skip>false</skip>
                     <forkMode>once</forkMode>
-                    <argLine>-Djava.endorsed.dirs=${project.build.directory}/../../saaj-api/target/</argLine>
+                    <argLine>-Djava.endorsed.dirs=${m2Repository}/org/apache/geronimo/specs/geronimo-saaj_1.3_spec/1.0.0/</argLine>
                     <systemProperties>
                         <property>
                             <name>javax.xml.soap.MessageFactory</name>

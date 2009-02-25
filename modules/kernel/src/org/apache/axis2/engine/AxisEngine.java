@@ -20,6 +20,12 @@
 
 package org.apache.axis2.engine;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.xml.namespace.QName;
+
 import org.apache.axiom.soap.RolePlayer;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPHeaderBlock;
@@ -43,11 +49,6 @@ import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.xml.namespace.QName;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
 /**
  * There is one engine for the Server and the Client. the send() and receive()
  * Methods are the basic operations the Sync, Async messageing are build on top.
@@ -62,14 +63,8 @@ public class AxisEngine {
     private static boolean RESUMING_EXECUTION = true;
     private static boolean NOT_RESUMING_EXECUTION = false;
 
-    /**
-     * Constructor AxisEngine
-     */
-    public AxisEngine(ConfigurationContext engineContext) {
-    }
-
     private static void checkMustUnderstand(MessageContext msgContext) throws AxisFault {
-        List unprocessed = null;
+        List<QName> unprocessed = null;
         SOAPEnvelope envelope = msgContext.getEnvelope();
         if (envelope.getHeader() == null) {
             return;
@@ -90,7 +85,7 @@ public class AxisEngine {
             }
             if(isReceiverMustUnderstandProcessor(msgContext)){
                 if(unprocessed == null){
-                    unprocessed = new ArrayList();
+                    unprocessed = new ArrayList<QName>();
                 }
                 if(!unprocessed.contains(headerName)){
                     unprocessed.add(headerName);
@@ -147,7 +142,7 @@ public class AxisEngine {
             log.trace(msgContext.getLogIDString() + " receive:" + msgContext.getMessageID());
         }
         ConfigurationContext confContext = msgContext.getConfigurationContext();
-        ArrayList preCalculatedPhases;
+        List<Phase> preCalculatedPhases;
         if (msgContext.isFault() || msgContext.isProcessingFault()) {
             preCalculatedPhases = confContext.getAxisConfiguration().getInFaultFlowPhases();
             msgContext.setFLOW(MessageContext.IN_FAULT_FLOW);
@@ -158,7 +153,9 @@ public class AxisEngine {
         // Set the initial execution chain in the MessageContext to a *copy* of what
         // we got above.  This allows individual message processing to change the chain without
         // affecting later messages.
-        msgContext.setExecutionChain((ArrayList) preCalculatedPhases.clone());
+        ArrayList<Handler> executionChain = new ArrayList<Handler>();
+        executionChain.addAll(preCalculatedPhases);
+        msgContext.setExecutionChain(executionChain);
         try {
             InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
 
@@ -218,16 +215,6 @@ public class AxisEngine {
         return InvocationResponse.CONTINUE;
     }
 
-    private static void processFault(MessageContext msgContext, AxisFault e) {
-        try {
-            MessageContext faultMC = MessageContextBuilder.createFaultMessageContext(msgContext, e);
-
-            // Figure out where this goes
-            sendFault(faultMC);
-        } catch (AxisFault axisFault) {
-            log.error(axisFault.getMessage(), axisFault);
-        }
-    }
 
     /**
      * Take the execution chain from the msgContext , and then take the current Index
@@ -290,7 +277,7 @@ public class AxisEngine {
     }
 
     private static void flowComplete(MessageContext msgContext) {
-        Iterator invokedPhaseIterator = msgContext.getExecutedPhases();
+        Iterator<Handler> invokedPhaseIterator = msgContext.getExecutedPhases();
 
         while (invokedPhaseIterator.hasNext()) {
             Handler currentHandler = ((Handler) invokedPhaseIterator.next());
@@ -514,8 +501,9 @@ public class AxisEngine {
             }
         }
 
-        msgContext.setExecutionChain((ArrayList) msgContext.getConfigurationContext()
-                .getAxisConfiguration().getOutFaultFlowPhases().clone());
+        ArrayList<Handler> executionChain = new ArrayList<Handler>(msgContext.getConfigurationContext()
+                .getAxisConfiguration().getOutFaultFlowPhases());
+        msgContext.setExecutionChain(executionChain);
         msgContext.setFLOW(MessageContext.OUT_FAULT_FLOW);
         InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
 
@@ -576,8 +564,9 @@ public class AxisEngine {
             }
         }
 
-        msgContext.setExecutionChain((ArrayList) msgContext.getConfigurationContext()
-                .getAxisConfiguration().getOutFaultFlowPhases().clone());
+        ArrayList<Handler> executionChain = new ArrayList<Handler>(msgContext.getConfigurationContext()
+                .getAxisConfiguration().getOutFaultFlowPhases());
+        msgContext.setExecutionChain(executionChain);
         msgContext.setFLOW(MessageContext.OUT_FAULT_FLOW);
         InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
 
@@ -639,11 +628,20 @@ public class AxisEngine {
                             Object callback = ((CallbackReceiver) msgReceiver)
                                     .lookupCallback(msgctx.getMessageID());
                             if (callback == null) return; // TODO: should we log this??
-
+                            
                             if (callback instanceof Callback) {
+                                // Instances of Callback only expect onComplete to be called
+                                // for a successful MEP.  Errors are reported through the
+                                // Async Response object, which the Callback implementations 
+                                // all use.
                                 ((Callback)callback).onError(e);
                             } else {
+                                // The AxisCallback (which is OutInAxisOperationClient$SyncCallBack
+                                // used to support async-on-the-wire under a synchronous API 
+                                // operation) need to be told the MEP is complete after being told
+                                // of the error.
                                 ((AxisCallback)callback).onError(e);
+                                ((AxisCallback)callback).onComplete();
                             }
                         }
                     }

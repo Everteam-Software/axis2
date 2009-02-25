@@ -28,24 +28,33 @@ import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.datasource.jaxb.JAXBCustomBuilder;
 import org.apache.axis2.datasource.jaxb.JAXBDSContext;
 import org.apache.axis2.datasource.jaxb.JAXBDataSource;
-import org.apache.axis2.jaxws.TestLogger;
+import org.apache.axis2.jaxws.addressing.SubmissionEndpointReference;
+import org.apache.axis2.jaxws.addressing.SubmissionEndpointReferenceBuilder;
 import org.apache.axis2.jaxws.message.databinding.JAXBBlockContext;
+import org.apache.axis2.jaxws.message.databinding.JAXBUtils;
 import org.apache.axis2.jaxws.message.factory.JAXBBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.message.factory.SAAJConverterFactory;
 import org.apache.axis2.jaxws.message.factory.XMLStringBlockFactory;
 import org.apache.axis2.jaxws.message.util.SAAJConverter;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.unitTest.TestLogger;
+
 import test.EchoStringResponse;
 import test.ObjectFactory;
 
+import javax.xml.bind.JAXBContext;
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPEnvelope;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.ws.wsaddressing.W3CEndpointReference;
+import javax.xml.ws.wsaddressing.W3CEndpointReferenceBuilder;
+
 import java.io.ByteArrayOutputStream;
 import java.io.StringReader;
+import java.util.TreeSet;
 
 /**
  * MessageTests
@@ -126,6 +135,26 @@ public class MessageTests extends TestCase {
     private static final QName sampleQName = new QName("urn://sample", "a");
 
     private static XMLInputFactory inputFactory = XMLInputFactory.newInstance();
+    
+    private W3CEndpointReference w3cEPR;
+    private SubmissionEndpointReference subEPR;
+    
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        
+        W3CEndpointReferenceBuilder w3cBuilder = new W3CEndpointReferenceBuilder();
+        w3cBuilder = w3cBuilder.address("http://somewhere.com/somehow");
+        w3cBuilder = w3cBuilder.serviceName(new QName("http://test", "TestService"));
+        w3cBuilder = w3cBuilder.endpointName(new QName("http://test", "TestPort"));
+        w3cEPR = w3cBuilder.build();
+        
+        SubmissionEndpointReferenceBuilder subBuilder = new SubmissionEndpointReferenceBuilder();
+        subBuilder = subBuilder.address("http://somewhere.com/somehow");
+        subBuilder = subBuilder.serviceName(new QName("http://test", "TestService"));
+        subBuilder = subBuilder.endpointName(new QName("http://test", "TestPort"));
+        subEPR = subBuilder.build();
+    }
 
     public MessageTests() {
         super();
@@ -702,6 +731,75 @@ public class MessageTests extends TestCase {
     }
     
     /**
+     * Create a JAXBBlock containing a JAX-B business object 
+     * and simulate a normal Dispatch<Object> output flow
+     * @throws Exception
+     */
+    public void testJAXBOutflow_W3CEndpointReference() throws Exception {
+        // Create a SOAP 1.1 Message
+        MessageFactory mf = (MessageFactory)
+            FactoryRegistry.getFactory(MessageFactory.class);
+        Message m = mf.create(Protocol.soap11);
+        
+        // Get the BlockFactory
+        JAXBBlockFactory bf = (JAXBBlockFactory)
+            FactoryRegistry.getFactory(JAXBBlockFactory.class);
+        
+        // Create the JAX-B object... a W3CEndpointReference
+        W3CEndpointReference obj = w3cEPR;
+       
+        
+        // Create the JAXBContext
+        Class[] classes = new Class[] {W3CEndpointReference.class};
+        //JAXBContext jaxbContext = JAXBContext.newInstance(classes);
+        //JAXBBlockContext context = new JAXBBlockContext(jaxbContext);
+        JAXBBlockContext context = new JAXBBlockContext("javax.xml.ws.wsaddressing");
+        
+        System.out.println("JAXBContext= " + context);
+        
+        // Create a JAXBBlock using the Echo object as the content.  This simulates
+        // what occurs on the outbound JAX-WS Dispatch<Object> client
+        Block block = bf.createFrom(obj, context, null);
+        
+        // Add the block to the message as normal body content.
+        m.setBodyBlock(block);
+        
+        // Check to see if the message is a fault.  The client/server will always call this method.
+        // The Message must respond appropriately without doing a conversion.
+        boolean isFault = m.isFault();
+        assertTrue(!isFault);
+        assertTrue("XMLPart Representation is " + m.getXMLPartContentType(),
+                    "SPINE".equals(m.getXMLPartContentType()));
+        
+        // On an outbound flow, we need to convert the Message 
+        // to an OMElement, specifically an OM SOAPEnvelope, 
+        // so we can set it on the Axis2 MessageContext
+        org.apache.axiom.soap.SOAPEnvelope env = 
+            (org.apache.axiom.soap.SOAPEnvelope) m.getAsOMElement();
+        
+        // Check to see if the message is a fault.  The client/server will always call this method.
+        // The Message must respond appropriately without doing a conversion.
+        isFault = m.isFault();
+        assertTrue(!isFault);
+        assertTrue("XMLPart Representation is " + m.getXMLPartContentType(),
+                    "OM".equals(m.getXMLPartContentType()));
+        
+        // Serialize the Envelope using the same mechanism as the 
+        // HTTP client.
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        env.serializeAndConsume(baos, new OMOutputFormat());
+        
+        // To check that the output is correct, get the String contents of the 
+        // reader
+        String newText = baos.toString();
+        System.out.println(newText);
+        assertTrue(newText.contains("http://somewhere.com/somehow"));
+        assertTrue(newText.contains("soap"));
+        assertTrue(newText.contains("Envelope"));
+        assertTrue(newText.contains("Body"));
+    }
+    
+    /**
      * Same as JAXBOutputflow, but has an additional check
      * to make sure that the JAXB serialization is deferrred
      * until the actual serialization of the message.
@@ -806,8 +904,9 @@ public class MessageTests extends TestCase {
         StAXSOAPModelBuilder builder = new StAXSOAPModelBuilder(inflow, null);
         OMElement omElement = builder.getSOAPEnvelope();
         
+        JAXBDSContext jds = null;
         if (installJAXBCustomBuilder) {
-            JAXBDSContext jds = new JAXBDSContext(EchoStringResponse.class.getPackage().getName());
+            jds = new JAXBDSContext(EchoStringResponse.class.getPackage().getName());
             JAXBCustomBuilder jcb = new JAXBCustomBuilder(jds);
             builder.registerCustomBuilderForPayload(jcb);
         }
@@ -823,6 +922,57 @@ public class MessageTests extends TestCase {
         assertTrue(!isFault);
         assertTrue("XMLPart Representation is " + m.getXMLPartContentType(),
                     "OM".equals(m.getXMLPartContentType()));
+        
+        if (installJAXBCustomBuilder) {
+            // The JAXBDSContext and the JAXBUtils access the JAXBContext
+            // for the "test" package.
+            // The JAXBContext creation is very expensive.
+            // However the JAXBContext can also be very large.
+            // 
+            // For these reasons, the JAXBUtils code caches the JAXBContext values.
+            // And, the JAXBDSContext and JAXBUtils code use WeakReferences to refer 
+            // to the JAXBContext (so that it is easily gc'd).
+            
+            // The following code checks makes sure that the caching and gc is correct.
+            
+            // Get the JAXBContext
+            JAXBContext context = jds.getJAXBContext();
+            
+            // Get the identity hash code.  This is an indicator of the unique memory pointer
+            // for the context.
+            int contextPointer = System.identityHashCode(context);
+            
+            // Release our access to the context.
+            // Now the only accesses in the system should be "soft refs"
+            context = null;
+            
+            // Force garbage collection
+            System.gc();
+            
+            // Get a new context from JAXBUtils
+            TreeSet<String> packages = new TreeSet<String>();
+            packages.add(EchoStringResponse.class.getPackage().getName());
+            context = JAXBUtils.getJAXBContext(packages);
+            
+            // This new context should have a different pointer than the original
+            int contextPointer2 = System.identityHashCode(context);
+            
+            // The following statement is no longer valid.  The 
+            // JAXBContext is stored in a SoftReference (which will only
+            // get gc'd if memory is low).  
+            //assertTrue(contextPointer != contextPointer2);
+            
+            // Release the hold on the context
+            context = null;
+            
+            // Now call JAXBUtils again to get a JAXBContext.
+            // Since there was no intervening gc(), it should return the cached value
+            context = JAXBUtils.getJAXBContext(packages);
+            int contextPointer3 = System.identityHashCode(context);
+            assertTrue(contextPointer3 == contextPointer2);
+            
+           
+        }
         
         String saveMsgText = "";
         if (persist == SAVE_AND_PERSIST) {

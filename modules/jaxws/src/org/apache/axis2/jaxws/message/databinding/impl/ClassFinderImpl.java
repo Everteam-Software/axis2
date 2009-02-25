@@ -56,7 +56,7 @@ public class ClassFinderImpl implements ClassFinder {
             //Read resources as URL from class loader.
             for (URL url : srcURL) {
                 if ("file".equals(url.getProtocol())) {
-                    File f = new File(url.getPath());
+                    File f = new File(url.toURI().getPath()); 
                     //If file is not of type directory then its a jar file
                     if (f.exists() && !f.isDirectory()) {
                         try {
@@ -74,8 +74,7 @@ public class ClassFinderImpl implements ClassFinder {
                                     //We are only going to add the class that belong to the provided package.
                                     if (clazzName.startsWith(pkg)) {
                                         try {
-                                            Class clazz = forName(clazzName, false,
-                                                                  getContextClassLoader());
+                                            Class clazz = forName(clazzName, false, cl);
                                             // Don't add any interfaces or JAXWS specific classes.
                                             // Only classes that represent data and can be marshalled
                                             // by JAXB should be added.
@@ -100,7 +99,7 @@ public class ClassFinderImpl implements ClassFinder {
                                                 log.debug(
                                                         "  The reason that class could not be loaded:" +
                                                                 e.toString());
-                                                log.debug(JavaUtils.stackToString(e));
+                                                log.trace(JavaUtils.stackToString(e));
                                             }
                                         }
                                     }

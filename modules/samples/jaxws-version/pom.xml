@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../../parent/pom.xml</relativePath>
     </parent>
     <artifactId>version</artifactId>
@@ -47,11 +47,6 @@
         </plugins>
     </build>
     <dependencies>
-        <dependency>
-            <groupId>org.apache.axis2</groupId>
-            <artifactId>axis2-jws-api</artifactId>
-            <version>${version}</version>
-        </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-kernel</artifactId>

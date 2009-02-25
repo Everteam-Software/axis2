@@ -29,9 +29,7 @@ import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisServiceGroup;
 import org.apache.axis2.engine.AxisConfiguration;
-import org.apache.axis2.transport.http.server.HttpUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.axis2.util.Utils;
 
 public abstract class ClusterManagerTestCase extends TestCase {
 
@@ -54,8 +52,6 @@ public abstract class ClusterManagerTestCase extends TestCase {
     protected boolean skipChannelTests = false;
     protected TestConfigurationManagerListener configurationManagerListener;
     protected DefaultContextManagerListener contextManagerListener;
-
-    private static final Log log = LogFactory.getLog(ClusterManagerTestCase.class);
 
     protected void setUp() throws Exception {
 
@@ -92,7 +88,7 @@ public abstract class ClusterManagerTestCase extends TestCase {
         axisConfiguration2.addServiceGroup(serviceGroup2);
 
         //Initiating ClusterManagers
-        System.setProperty(ClusteringConstants.LOCAL_IP_ADDRESS, HttpUtils.getIpAddress());
+        System.setProperty(ClusteringConstants.LOCAL_IP_ADDRESS, Utils.getIpAddress());
         try {
             clusterManager1.init();
             System.out.println("ClusterManager-1 successfully initialized");
@@ -102,7 +98,8 @@ public abstract class ClusterManagerTestCase extends TestCase {
         } catch (ClusteringFault e) {
             String message =
                     "Could not initialize ClusterManagers. Please check the network connection";
-            log.error(message, e);
+            System.out.println(message + ": " + e);
+            e.printStackTrace();
             skipChannelTests = true;
         }
     }

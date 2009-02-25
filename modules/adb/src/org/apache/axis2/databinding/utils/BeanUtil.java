@@ -20,11 +20,7 @@
 package org.apache.axis2.databinding.utils;
 
 
-import org.apache.axiom.om.OMAbstractFactory;
-import org.apache.axiom.om.OMAttribute;
-import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.OMFactory;
-import org.apache.axiom.om.OMText;
+import org.apache.axiom.om.*;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.impl.llom.factory.OMXMLBuilderFactory;
 import org.apache.axiom.om.util.Base64;
@@ -33,18 +29,11 @@ import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.databinding.typemapping.SimpleTypeMapper;
 import org.apache.axis2.databinding.utils.reader.ADBXMLStreamReaderImpl;
 import org.apache.axis2.deployment.util.BeanExcludeInfo;
-import org.apache.axis2.deployment.util.ExcludeInfo;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.java2wsdl.TypeTable;
 import org.apache.axis2.engine.ObjectSupplier;
 import org.apache.axis2.util.Loader;
 import org.apache.axis2.util.StreamWrapper;
-import org.codehaus.jam.JClass;
-import org.codehaus.jam.JProperty;
-import org.codehaus.jam.JamClassIterator;
-import org.codehaus.jam.JamService;
-import org.codehaus.jam.JamServiceFactory;
-import org.codehaus.jam.JamServiceParams;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamReader;
@@ -55,12 +44,7 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Locale;
+import java.util.*;
 
 
 public class BeanUtil {
@@ -78,228 +62,205 @@ public class BeanUtil {
                                                 TypeTable typeTable,
                                                 boolean qualified,
                                                 boolean processingDocLitBare) {
-        try {
-            JamServiceFactory factory = JamServiceFactory.getInstance();
-            JamServiceParams jam_service_parms = factory.createServiceParams();
-            ClassLoader cl = beanObject.getClass().getClassLoader();
-            if (cl == null)
-                cl = ClassLoader.getSystemClassLoader();
-            jam_service_parms.addClassLoader(cl);
 
-            jam_service_parms.includeClass(beanObject.getClass().getName());
-            JamService service = factory.createService(jam_service_parms);
-            JamClassIterator jClassIter = service.getClasses();
-            JClass jClass;
-            if (jClassIter.hasNext()) {
-                jClass = (JClass)jClassIter.next();
+        Class beanClass = beanObject.getClass();
+        List propertyQnameValueList = getPropertyQnameList(beanObject,
+                beanClass, beanName, typeTable, qualified, processingDocLitBare);
+
+        ArrayList objectAttributes = new ArrayList();
+        objectAttributes.add(new QName(Constants.XSI_NAMESPACE, "type", "xsi"));
+        if (typeTable != null && qualified) {
+            QName qNamefortheType = typeTable.getQNamefortheType(getClassName(beanClass));
+            if (qNamefortheType == null) {
+                // Added objectAttributes as a fix for issues AXIS2-2055 and AXIS2-1899 to
+                // support polymorphism in POJO approach.
+                objectAttributes.add(beanClass.getName());
             } else {
-                throw new AxisFault("No service class found , exception from JAM");
+                objectAttributes.add(qNamefortheType);
             }
+        } else {
+            objectAttributes.add(beanClass.getName());
+        }
+
+        return new ADBXMLStreamReaderImpl(beanName, propertyQnameValueList.toArray(), objectAttributes.toArray(),
+                typeTable, qualified);
+
+    }
+
+    private static String getClassName(Class type) {
+        String name = type.getName();
+        if (name.indexOf("$") > 0) {
+            name = name.replace('$', '_');
+        }
+        return name;
+    }
+
+    private static List getPropertyQnameList(Object beanObject,
+                                             Class beanClass,
+                                             QName beanName,
+                                             TypeTable typeTable,
+                                             boolean qualified,
+                                             boolean processingDocLitBare) {
+        List propertyQnameValueList;
+        Class supperClass = beanClass.getSuperclass();
+
+        if (!getQualifiedName(supperClass.getPackage()).startsWith("java.")) {
+            propertyQnameValueList = getPropertyQnameList(beanObject,
+                    supperClass, beanName, typeTable, qualified, processingDocLitBare);
+        } else {
+            propertyQnameValueList = new ArrayList();
+        }
+
+        try {
             QName elemntNameSpace = null;
             if (typeTable != null && qualified) {
-                QName qNamefortheType =
-                        typeTable.getQNamefortheType(beanObject.getClass().getName());
+                QName qNamefortheType = typeTable.getQNamefortheType(beanClass.getName());
                 if (qNamefortheType == null) {
-                    qNamefortheType = typeTable.getQNamefortheType(
-                            beanObject.getClass().getPackage().getName());
+                    qNamefortheType = typeTable.getQNamefortheType(beanClass.getPackage().getName());
                 }
                 if (qNamefortheType == null) {
                     throw new AxisFault("Mapping qname not fond for the package: " +
                             beanObject.getClass().getPackage().getName());
                 }
 
-                elemntNameSpace = new QName(qNamefortheType.getNamespaceURI(),
-                                            "elementName");
+                elemntNameSpace = new QName(qNamefortheType.getNamespaceURI(), "elementName");
             }
             AxisService axisService = null;
             if (MessageContext.getCurrentMessageContext() != null) {
                 axisService = MessageContext.getCurrentMessageContext().getAxisService();
             }
+
             BeanExcludeInfo beanExcludeInfo = null;
             if (axisService != null && axisService.getExcludeInfo() != null) {
-                beanExcludeInfo = axisService.getExcludeInfo().getBeanExcludeInfoForClass(
-                        jClass.getQualifiedName());
+                beanExcludeInfo = axisService.getExcludeInfo().getBeanExcludeInfoForClass(beanClass.getName());
             }
-            // properties from JAM
-            ArrayList propertyList = new ArrayList();
-            JProperty properties [] = jClass.getDeclaredProperties();
-            for (int i = 0; i < properties.length; i++) {
-                JProperty property = properties[i];
-                String propertyName = getCorrectName(property.getSimpleName());
-                if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)){
-                    propertyList.add(property);
-                }
-
-            }
-            JClass supClass = jClass.getSuperclass();
-            while (!supClass.getQualifiedName().startsWith("java.")) {
-                properties = supClass.getDeclaredProperties();
-                ExcludeInfo excludeInfo = axisService.getExcludeInfo();
-                if (excludeInfo != null) {
-                    beanExcludeInfo = excludeInfo.getBeanExcludeInfoForClass(supClass.getQualifiedName());
-                }
-                for (int i = 0; i < properties.length; i++) {
-                    JProperty property = properties[i];
-                    String propertyName = getCorrectName(property.getSimpleName());
-                    if ((beanExcludeInfo == null) || !beanExcludeInfo.isExcludedProperty(propertyName)) {
-                        propertyList.add(property);
-                    }
-                }
-                supClass = supClass.getSuperclass();
-            }
-            properties = new JProperty[propertyList.size()];
-            for (int i = 0; i < propertyList.size(); i++) {
-                JProperty jProperty = (JProperty)propertyList.get(i);
-                properties[i] = jProperty;
-            }
-            Arrays.sort(properties);
-            BeanInfo beanInfo = Introspector.getBeanInfo(beanObject.getClass());
-            PropertyDescriptor [] propDescs = beanInfo.getPropertyDescriptors();
-            HashMap propertMap = new HashMap();
-            for (int i = 0; i < propDescs.length; i++) {
-                PropertyDescriptor propDesc = propDescs[i];
-                if (propDesc.getName().equals("class")) {
-                    continue;
-                }
-                propertMap.put(propDesc.getName(), propDesc);
-            }
-            ArrayList object = new ArrayList();
-            for (int i = 0; i < properties.length; i++) {
-                JProperty property = properties[i];
-                PropertyDescriptor propDesc = (PropertyDescriptor)propertMap.get(
-                        getCorrectName(property.getSimpleName()));
-                if (propDesc == null) {
-                    propDesc = (PropertyDescriptor)propertMap.get(
-                        (property.getSimpleName()));
-                }
-                 if (propDesc == null) {
-                    continue;
-                }
-                Class ptype = propDesc.getPropertyType();
-                if (propDesc.getName().equals("class")) {
-                    continue;
-                }
-                if (SimpleTypeMapper.isSimpleType(ptype)) {
-                    Method readMethod = propDesc.getReadMethod();
-                    Object value;
-                    if(readMethod!=null){
-                        if (property.getGetter() !=null && property.getGetter().isPublic()){
-                            readMethod.setAccessible(true);
-                        }
-                        value = readMethod.invoke(beanObject, null);
-                    } else {
-                        throw new AxisFault("can not find read method for : "  + propDesc.getName());
-                    }
-
-                    addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                    object.add(value == null ? null : SimpleTypeMapper.getStringValue(value));
-                } else if (ptype.isArray()) {
-                    if (SimpleTypeMapper.isSimpleType(ptype.getComponentType())) {
-                        Method readMethod = propDesc.getReadMethod();
-                        Object value;
-                        if(readMethod!=null){
-                            if (property.getGetter() !=null && property.getGetter().isPublic()){
+            BeanInfo beanInfo = Introspector.getBeanInfo(beanClass, beanClass.getSuperclass());
+            PropertyDescriptor[] properties = beanInfo.getPropertyDescriptors();
+            PropertyDescriptor property;
+            for (PropertyDescriptor property1 : properties) {
+                property = property1;
+                if (!property.getName().equals("class")) {
+                    if ((beanExcludeInfo == null) ||
+                        !beanExcludeInfo.isExcludedProperty(property.getName())) {
+                        Class ptype = property.getPropertyType();
+                        if (SimpleTypeMapper.isSimpleType(ptype)) {
+                            Method readMethod = property.getReadMethod();
+                            Object value;
+                            if (readMethod != null) {
                                 readMethod.setAccessible(true);
-                            }
-                            value = readMethod.invoke(beanObject,null);
-                        } else {
-                            throw new AxisFault("can not find read method for : "  + propDesc.getName());
-                        }
-                        if (value != null) {
-                            if("byte".equals(ptype.getComponentType().getName())) {
-                                addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                                object.add(Base64.encode((byte[]) value));
+                                value = readMethod.invoke(beanObject, null);
                             } else {
-                                int i1 = Array.getLength(value);
-                                for (int j = 0; j < i1; j++) {
-                                    Object o = Array.get(value, j);
-                                    addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                                    object.add(o == null ? null : SimpleTypeMapper.getStringValue(o));
+                                throw new AxisFault(
+                                        "can not find read method for : " + property.getName());
+                            }
+
+                            addTypeQname(elemntNameSpace, propertyQnameValueList, property,
+                                         beanName, processingDocLitBare);
+                            propertyQnameValueList.add(
+                                    value == null ? null : SimpleTypeMapper.getStringValue(value));
+                        } else if (ptype.isArray()) {
+                            if (SimpleTypeMapper.isSimpleType(ptype.getComponentType())) {
+                                Method readMethod = property.getReadMethod();
+                                Object value;
+                                if (readMethod != null) {
+                                    readMethod.setAccessible(true);
+                                    value = readMethod.invoke(beanObject, null);
+                                } else {
+                                    throw new AxisFault(
+                                            "can not find read method for : " + property.getName());
+                                }
+                                if (value != null) {
+                                    if ("byte".equals(ptype.getComponentType().getName())) {
+                                        addTypeQname(elemntNameSpace, propertyQnameValueList,
+                                                     property, beanName, processingDocLitBare);
+                                        propertyQnameValueList.add(Base64.encode((byte[])value));
+                                    } else {
+                                        int i1 = Array.getLength(value);
+                                        for (int j = 0; j < i1; j++) {
+                                            Object o = Array.get(value, j);
+                                            addTypeQname(elemntNameSpace, propertyQnameValueList,
+                                                         property, beanName, processingDocLitBare);
+                                            propertyQnameValueList.add(o == null ? null :
+                                                    SimpleTypeMapper.getStringValue(o));
+                                        }
+                                    }
+                                } else {
+                                    addTypeQname(elemntNameSpace, propertyQnameValueList, property,
+                                                 beanName, processingDocLitBare);
+                                    propertyQnameValueList.add(value);
+                                }
+                            } else {
+                                Method readMethod = property.getReadMethod();
+                                Object value[] = null;
+                                if (readMethod != null) {
+                                    readMethod.setAccessible(true);
+                                    value = (Object[])property.getReadMethod().invoke(beanObject,
+                                                                                      null);
+                                }
+
+                                if (value != null) {
+                                    for (Object o : value) {
+                                        addTypeQname(elemntNameSpace, propertyQnameValueList,
+                                                     property, beanName, processingDocLitBare);
+                                        propertyQnameValueList.add(o);
+                                    }
+                                } else {
+                                    addTypeQname(elemntNameSpace, propertyQnameValueList, property,
+                                                 beanName, processingDocLitBare);
+                                    propertyQnameValueList.add(value);
                                 }
                             }
-                        } else {
-                            addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                            object.add(value);
-                        }
-                    } else {
-                        Method readMethod = propDesc.getReadMethod();
-                        Object value [] = null;
-                        if(readMethod!=null){
-                            if (property.getGetter() !=null && property.getGetter().isPublic()){
-                                readMethod.setAccessible(true);
-                            }
-                            value = (Object[])propDesc.getReadMethod().invoke(beanObject,
-                                    null);
-                        }
+                        } else if (SimpleTypeMapper.isCollection(ptype)) {
+                            Method readMethod = property.getReadMethod();
+                            readMethod.setAccessible(true);
+                            Object value = readMethod.invoke(beanObject,
+                                                             null);
+                            Collection objList = (Collection)value;
+                            if (objList != null && objList.size() > 0) {
+                                //this was given error , when the array.size = 0
+                                // and if the array contain simple type , then the ADBPullParser asked
+                                // PullParser from That simpel type
+                                for (Object o : objList) {
+                                    if (SimpleTypeMapper.isSimpleType(o)) {
+                                        addTypeQname(elemntNameSpace, propertyQnameValueList,
+                                                     property, beanName, processingDocLitBare);
+                                        propertyQnameValueList.add(o);
+                                    } else {
+                                        addTypeQname(elemntNameSpace, propertyQnameValueList,
+                                                     property, beanName, processingDocLitBare);
+                                        propertyQnameValueList.add(o);
+                                    }
+                                }
 
-                        if (value != null) {
-                            for (int j = 0; j < value.length; j++) {
-                                Object o = value[j];
-                                addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                                object.add(o);
-                            }
-                        } else {
-                            addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                            object.add(value);
-                        }
-                    }
-                } else if (SimpleTypeMapper.isCollection(ptype)) {
-                    Method readMethod = propDesc.getReadMethod();
-                    if (property.getGetter() !=null && property.getGetter().isPublic()){
-                        readMethod.setAccessible(true);
-                    }
-                    Object value = readMethod.invoke(beanObject,
-                                                                   null);
-                    Collection objList = (Collection)value;
-                    if (objList != null && objList.size() > 0) {
-                        //this was given error , when the array.size = 0
-                        // and if the array contain simple type , then the ADBPullParser asked
-                        // PullParser from That simpel type
-                        for (Iterator j = objList.iterator(); j.hasNext();) {
-                            Object o = j.next();
-                            if (SimpleTypeMapper.isSimpleType(o)) {
-                                addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                                object.add(o);
                             } else {
-                                addTypeQname(elemntNameSpace, object, propDesc, beanName ,processingDocLitBare);
-                                object.add(o);
+                                addTypeQname(elemntNameSpace, propertyQnameValueList, property,
+                                             beanName, processingDocLitBare);
+                                propertyQnameValueList.add(value);
                             }
-                        }
+                        } else {
+                            addTypeQname(elemntNameSpace, propertyQnameValueList, property,
+                                         beanName, processingDocLitBare);
+                            Method readMethod = property.getReadMethod();
+                            readMethod.setAccessible(true);
+                            Object value = readMethod.invoke(beanObject,
+                                                             null);
+                            if ("java.lang.Object".equals(ptype.getName())) {
+                                if ((value instanceof Integer) ||
+                                    (value instanceof Short) ||
+                                    (value instanceof Long) ||
+                                    (value instanceof Float)) {
+                                    propertyQnameValueList.add(value.toString());
+                                    continue;
+                                }
+                            }
 
-                    } else {
-                        addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                        object.add(value);
-                    }
-                } else {
-                    addTypeQname(elemntNameSpace, object, propDesc, beanName,processingDocLitBare);
-                    Method readMethod = propDesc.getReadMethod();
-                    if (property.getGetter() !=null && property.getGetter().isPublic()){
-                        readMethod.setAccessible(true);
-                    }
-                    Object value = readMethod.invoke(beanObject,
-                            null);
-                    if ("java.lang.Object".equals(ptype.getName())){
-                        if ((value instanceof Integer ) ||
-                                (value instanceof Short) ||
-                                (value instanceof Long) ||
-                                (value instanceof Float)) {
-                            object.add(value.toString());
-                            continue;
+                            propertyQnameValueList.add(value);
                         }
                     }
-
-                    object.add(value);
                 }
             }
-             // Added objectAttributes as a fix for issues AXIS2-2055 and AXIS2-1899 to 
-            // support polymorphism in POJO approach.
-            // For some reason, using QName(Constants.XSI_NAMESPACE, "type", "xsi") does not generate
-            // an xsi:type attribtue properly for inner objects. So just using a simple QName("type").
-            ArrayList objectAttributes = new ArrayList();
-            objectAttributes.add(new QName("type"));
-            objectAttributes.add(beanObject.getClass().getName());
-            return new ADBXMLStreamReaderImpl(beanName, object.toArray(), objectAttributes.toArray(),
-                                              typeTable, qualified);
+
+            return propertyQnameValueList;
 
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);
@@ -313,19 +274,18 @@ public class BeanUtil {
     }
 
     private static void addTypeQname(QName elemntNameSpace,
-                                     ArrayList object,
+                                     List propertyQnameValueList,
                                      PropertyDescriptor propDesc,
                                      QName beanName,
                                      boolean processingDocLitBare) {
         if (elemntNameSpace != null) {
-            object.add(new QName(elemntNameSpace.getNamespaceURI(),
-                   getCorrectName(propDesc.getName()) , elemntNameSpace.getPrefix()));
+            propertyQnameValueList.add(new QName(elemntNameSpace.getNamespaceURI(),
+                    propDesc.getName(), elemntNameSpace.getPrefix()));
         } else {
-            if(processingDocLitBare){
-                object.add(new QName(getCorrectName(propDesc.getName())));
+            if (processingDocLitBare) {
+                propertyQnameValueList.add(new QName(propDesc.getName()));
             } else {
-                object.add(new QName(beanName.getNamespaceURI(),
-                        getCorrectName(propDesc.getName()), beanName.getPrefix()));
+                propertyQnameValueList.add(new QName(beanName.getNamespaceURI(), propDesc.getName(), beanName.getPrefix()));
             }
 
         }
@@ -341,7 +301,7 @@ public class BeanUtil {
         String className = beanObject.getClass().getName();
         if (className.indexOf(".") > 0) {
             className = className.substring(className.lastIndexOf('.') + 1,
-                                            className.length());
+                    className.length());
         }
         return getPullParser(beanObject, new QName(className), null, false, false);
     }
@@ -366,6 +326,12 @@ public class BeanUtil {
                 }
             }
 
+            // check for nil attribute:
+            QName nilAttName = new QName(Constants.XSI_NAMESPACE, Constants.NIL, "xsi");
+            if (beanElement.getAttribute(nilAttName) != null) {
+            	return null;
+            }
+            
             if (beanClass.isArray()) {
                 ArrayList valueList = new ArrayList();
                 Class arrayClassType = beanClass.getComponentType();
@@ -378,19 +344,18 @@ public class BeanUtil {
                         Object objValue = parts.next();
                         if (objValue instanceof OMElement) {
                             omElement = (OMElement)objValue;
-                            if (!arrayLocalName.equals(omElement.getLocalName())) {
+                            if ((arrayLocalName != null) && !arrayLocalName.equals(omElement.getLocalName())) {
                                 continue;
                             }
+                            // this is a multi dimentional array so always inner element is array
                             Object obj = deserialize(arrayClassType,
                                     omElement,
-                                    objectSupplier, null);
-                            if (obj != null) {
-                                valueList.add(obj);
-                            }
+                                    objectSupplier, "array");
+                            
+                            	valueList.add(obj);
                         }
                     }
-                    return ConverterUtil.convertToArray(arrayClassType,
-                            valueList);
+                    return ConverterUtil.convertToArray(arrayClassType, valueList);
                 }
             } else {
                 if (SimpleTypeMapper.isSimpleType(beanClass)) {
@@ -401,14 +366,11 @@ public class BeanUtil {
                 HashMap properties = new HashMap();
                 BeanInfo beanInfo = Introspector.getBeanInfo(beanClass);
                 PropertyDescriptor [] propDescs = beanInfo.getPropertyDescriptors();
-                for (int i = 0; i < propDescs.length; i++) {
-                    PropertyDescriptor proprty = propDescs[i];
+                for (PropertyDescriptor proprty : propDescs) {
                     properties.put(proprty.getName(), proprty);
                 }
                 Iterator elements = beanElement.getChildren();
-                if (beanObj == null) {
-                    beanObj = objectSupplier.getObject(beanClass);
-                }
+                beanObj = objectSupplier.getObject(beanClass);
                 while (elements.hasNext()) {
                     // the beanClass could be an abstract one.
                     // so create an instance only if there are elements, in
@@ -429,7 +391,7 @@ public class BeanUtil {
                     PropertyDescriptor prty = (PropertyDescriptor)properties.remove(partsLocalName);
                     if (prty != null) {
                         Class parameters = prty.getPropertyType();
-                        if (prty.equals("class"))
+                        if (prty.getName().equals("class"))
                             continue;
 
                         Object partObj;
@@ -438,6 +400,9 @@ public class BeanUtil {
                         } else {
                             if (SimpleTypeMapper.isSimpleType(parameters)) {
                                 partObj = SimpleTypeMapper.getSimpleTypeObject(parameters, parts);
+                            }    else if (SimpleTypeMapper.isHashSet(parameters)) {
+                                partObj = SimpleTypeMapper.getHashSet((OMElement)
+                                        parts.getParent(), prty.getName());
                             } else if (SimpleTypeMapper.isCollection(parameters)) {
                                 partObj = SimpleTypeMapper.getArrayList((OMElement)
                                         parts.getParent(), prty.getName());
@@ -500,7 +465,7 @@ public class BeanUtil {
                         partsLocalName.toLowerCase());
                 if (prty != null) {
                     Class parameters = prty.getPropertyType();
-                    if (prty.equals("class"))
+                    if (prty.getName().equals("class"))
                         continue;
                     Object partObj;
                     OMAttribute attr = MultirefHelper.processRefAtt(parts);
@@ -600,12 +565,12 @@ public class BeanUtil {
             currentLocalName = omElement.getLocalName();
             classType = (Class)javaTypes[count];
             omElement = ProcessElement(classType, omElement, helper, parts,
-                                       currentLocalName, retObjs, count, objectSupplier);
+                    currentLocalName, retObjs, count, objectSupplier);
             while (omElement != null) {
                 count ++;
                 omElement = ProcessElement((Class)javaTypes[count], omElement,
-                                           helper, parts, omElement.getLocalName(), retObjs, count,
-                                           objectSupplier);
+                        helper, parts, omElement.getLocalName(), retObjs, count,
+                        objectSupplier);
             }
             count ++;
         }
@@ -639,7 +604,7 @@ public class BeanUtil {
                 return null;
             } else {
                 valueList.add(processObject(omElement, arrayClassType, helper, true,
-                                            objectSupplier));
+                        objectSupplier));
             }
             while (parts.hasNext()) {
                 objValue = parts.next();
@@ -653,7 +618,7 @@ public class BeanUtil {
                     break;
                 }
                 Object o = processObject(omElement, arrayClassType,
-                                         helper, true, objectSupplier);
+                        helper, true, objectSupplier);
                 valueList.add(o);
             }
             if(valueList.get(0)==null){
@@ -749,39 +714,46 @@ public class BeanUtil {
                 objects.add(arg);
                 continue;
             }
-            //todo if the request parameter has name other than argi (0<i<n) , there should be a
-            //way to do that , to solve that problem we need to have RPCRequestParameter
-            //note that The value of request parameter can either be simple type or JavaBean
+
             if (arg instanceof Object[]) {
-                Object array [] = (Object[])arg;
-                for (int j = 0; j < array.length; j++) {
-                    Object o = array[j];
-                    if (o == null) {
-                        objects.add("item" + argCount);
-                        objects.add(o);
-                    } else {
-                        if (SimpleTypeMapper.isSimpleType(o)) {
+                // at the client side the partname is always null. At client side this means user try to
+                // invoke a service with an array argument.
+                if (partName == null) {
+                    Object array [] = (Object[]) arg;
+                    for (int j = 0; j < array.length; j++) {
+                        Object o = array[j];
+                        if (o == null) {
                             objects.add("item" + argCount);
-                            objects.add(SimpleTypeMapper.getStringValue(o));
+                            objects.add(o);
                         } else {
-                            objects.add(new QName("item" + argCount));
-                            if (o instanceof OMElement) {
-                                OMFactory fac = OMAbstractFactory.getOMFactory();
-                                OMElement wrappingElement;
-                                if (partName == null) {
-                                    wrappingElement = fac.createOMElement("item" + argCount, null);
-                                    wrappingElement.addChild((OMElement)o);
-                                } else {
-                                    wrappingElement = fac.createOMElement(partName, null);
-                                    wrappingElement.addChild((OMElement)o);
-                                }
-                                objects.add(wrappingElement);
+                            if (SimpleTypeMapper.isSimpleType(o)) {
+                                objects.add("item" + argCount);
+                                objects.add(SimpleTypeMapper.getStringValue(o));
                             } else {
-                                objects.add(o);
+                                objects.add(new QName("item" + argCount));
+                                if (o instanceof OMElement) {
+                                    OMFactory fac = OMAbstractFactory.getOMFactory();
+                                    OMElement wrappingElement;
+                                    if (partName == null) {
+                                        wrappingElement = fac.createOMElement("item" + argCount, null);
+                                        wrappingElement.addChild((OMElement) o);
+                                    } else {
+                                        wrappingElement = fac.createOMElement(partName, null);
+                                        wrappingElement.addChild((OMElement) o);
+                                    }
+                                    objects.add(wrappingElement);
+                                } else {
+                                    objects.add(o);
+                                }
                             }
                         }
                     }
+                } else {
+                    // this happens at the server side. this means it is an multidimentional array.
+                    objects.add(partName);
+                    objects.add(arg);
                 }
+
             } else {
                 if (SimpleTypeMapper.isSimpleType(arg)) {
                     if (partName == null) {
@@ -857,20 +829,11 @@ public class BeanUtil {
     }
 
 
-    /**
-     * JAM convert first name of an attribute into UpperCase as an example if there is a instance
-     * variable called foo in a bean , then Jam give that as Foo so this method is to correct that
-     * error
-     *
-     * @param wrongName
-     * @return the right name, using english as the locale for case conversion
-     */
-    private static String getCorrectName(String wrongName) {
-        if (wrongName.length() > 1) {
-            return wrongName.substring(0, 1).toLowerCase(Locale.ENGLISH)
-                    + wrongName.substring(1, wrongName.length());
+    private static String getQualifiedName(Package packagez) {
+        if (packagez != null) {
+            return packagez.getName();
         } else {
-            return wrongName.substring(0, 1).toLowerCase(Locale.ENGLISH);
+            return "";
         }
     }
 

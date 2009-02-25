@@ -99,6 +99,7 @@ public class UnmarshalMessageContextListener implements MessageContextListener {
         if (axisOp == null) {
             return;
         }
+        
         Parameter parameterInfo = axisOp.getParameter(UnmarshalInfo.KEY);
         if (parameterInfo == null) {
             return;

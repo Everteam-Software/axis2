@@ -22,6 +22,7 @@ package org.apache.axis2.jaxws.description.impl;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ClientConfigurationFactory;
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -30,12 +31,15 @@ import org.apache.axis2.jaxws.catalog.impl.OASISCatalogManager;
 import org.apache.axis2.jaxws.description.DescriptionFactory;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
+import org.apache.axis2.jaxws.description.ResolvedHandlersDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.description.ServiceDescriptionJava;
 import org.apache.axis2.jaxws.description.ServiceDescriptionWSDL;
 import org.apache.axis2.jaxws.description.ServiceRuntimeDescription;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
 import org.apache.axis2.jaxws.description.builder.MDQConstants;
+import org.apache.axis2.jaxws.description.builder.PortComposite;
+
 import static org.apache.axis2.jaxws.description.builder.MDQConstants.RETURN_TYPE_FUTURE;
 import static org.apache.axis2.jaxws.description.builder.MDQConstants.RETURN_TYPE_RESPONSE;
 import org.apache.axis2.jaxws.description.builder.MethodDescriptionComposite;
@@ -44,8 +48,11 @@ import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.util.WSDL4JWrapper;
 import org.apache.axis2.jaxws.util.WSDLWrapper;
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.xml.resolver.Catalog;
 
 import javax.jws.HandlerChain;
 import javax.wsdl.Definition;
@@ -56,12 +63,15 @@ import javax.wsdl.WSDLException;
 import javax.wsdl.extensions.ExtensibilityElement;
 import javax.xml.namespace.QName;
 import javax.xml.ws.WebServiceClient;
+import javax.xml.ws.WebServiceException;
 import javax.xml.ws.handler.PortInfo;
 import javax.xml.ws.soap.SOAPBinding;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.lang.ref.SoftReference;
+import java.lang.ref.WeakReference;
 import java.net.ConnectException;
 import java.net.URL;
 import java.net.UnknownHostException;
@@ -74,6 +84,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -84,10 +95,13 @@ class ServiceDescriptionImpl
     private ClientConfigurationFactory clientConfigFactory;
     private ConfigurationContext configContext;
 
+    // Number of times this instance is being used.  For service-providers, this is not decremented
+    // since the serice isn't un-used once it is created.  For service-requesters, the service
+    // is used by ServiceDelegates, and becomes un-used when the ServiceDelegate is released.
+    private int useCount = 0;
     private String wsdlURL;
     private QName serviceQName;
 
-    // TODO: Possibly remove Definition and delegate to the Defn on the AxisSerivce set as a paramater by WSDLtoAxisServicBuilder?
     private WSDLWrapper wsdlWrapper;
     private WSDLWrapper generatedWsdlWrapper;
     
@@ -100,12 +114,16 @@ class ServiceDescriptionImpl
                 new HashMap<QName, EndpointDescription>();
 
     // Endpoints for dynamic ports
+    // This needs to be a strong reference (not Weak or Soft) so that the resource release logic
+    // in the finalizer still has a reference to the EndpointDescriptions so they can be
+    // released.  Otherwise, this collection will be null when the finalizer is called.
     private Map<Object, Map<QName, EndpointDescriptionImpl>> dynamicEndpointDescriptions =
-                new WeakHashMap<Object, Map<QName, EndpointDescriptionImpl>>();
+                new HashMap<Object, Map<QName, EndpointDescriptionImpl>>();
 
-    // Cache classes for the handler chain
-    Map<PortInfo, List<Class>> handlerClassesMap =
-            new WeakHashMap<PortInfo, List<Class>>();
+    // Cache classes for the info for resolved handlers
+    private SoftReference<Map<PortInfo, ResolvedHandlersDescription>> resolvedHandlersDescription =
+            new SoftReference<Map<PortInfo, ResolvedHandlersDescription>>
+        (new ConcurrentHashMap<PortInfo, ResolvedHandlersDescription>());
     
     private static final Log log = LogFactory.getLog(ServiceDescriptionImpl.class);
 
@@ -120,10 +138,7 @@ class ServiceDescriptionImpl
     // RUNTIME INFORMATION
     Map<String, ServiceRuntimeDescription> runtimeDescMap =
             new ConcurrentHashMap<String, ServiceRuntimeDescription>();
-            //Collections.synchronizedMap(new HashMap<String, ServiceRuntimeDescription>());
-
-    
-    
+    private static final String JAXWS_DYNAMIC_ENDPOINTS = "jaxws.dynamic.endpoints";
 
     /**
      * Create a service-requester side (aka client-side) service description.
@@ -159,10 +174,12 @@ class ServiceDescriptionImpl
             log.debug("ServiceDescriptionImpl(URL,QName,Class,DescriptionBuilderComposite,Object)");
         }
     	
-    	if (sparseComposite != null)
+    	if (sparseComposite != null) {
     	    catalogManager = sparseComposite.getCatalogManager();
-    	else
+        }
+    	if (catalogManager == null) {
     		catalogManager = new OASISCatalogManager();
+        }
     	
         if (serviceQName == null) {
             throw ExceptionFactory.makeWebServiceException(Messages.getMessage("serviceDescErr0"));
@@ -241,39 +258,17 @@ class ServiceDescriptionImpl
         }
         return theUrl;
     }
-    
-
-
-    /**
-     * Create a service-provider side ServiceDesciption.  Create a service Description
-     * based on a service implementation class.  Note this is for test-only code; it should not be 
-     * used in production code.  And it is being removed from the test code as well.
-     *
-     * @deprecated
-     * @param serviceImplClass
-     */
-    ServiceDescriptionImpl(Class serviceImplClass, AxisService axisService) {
-        if (log.isDebugEnabled()) {
-            log.debug("ServiceDescriptionImpl(Class,AxisService)");
-        }
-        composite = new DescriptionBuilderComposite();
-        composite.setIsDeprecatedServiceProviderConstruction(true);
-        composite.setIsServiceProvider(true);
-        isServerSide = true;
-
-        // Create the EndpointDescription hierachy from the service impl annotations; Since the PortQName is null, 
-        // it will be set to the annotation value.
-        EndpointDescriptionImpl endpointDescription =
-                new EndpointDescriptionImpl(serviceImplClass, null, axisService, this);
-        addEndpointDescription(endpointDescription);
-
-        // TODO: The ServiceQName instance variable should be set based on annotation or default
-    }
 
     ServiceDescriptionImpl(
                            HashMap<String, DescriptionBuilderComposite> dbcMap,
                            DescriptionBuilderComposite composite) {
         this(dbcMap, composite, null);
+    }
+    
+    ServiceDescriptionImpl(HashMap<String, DescriptionBuilderComposite> dbcMap,
+                           DescriptionBuilderComposite composite,
+                           ConfigurationContext configContext) {
+        this(dbcMap, composite, configContext, null);
     }
     
     /**
@@ -286,7 +281,8 @@ class ServiceDescriptionImpl
     ServiceDescriptionImpl(
             HashMap<String, DescriptionBuilderComposite> dbcMap,
             DescriptionBuilderComposite composite, 
-            ConfigurationContext configContext) {
+            ConfigurationContext configContext, 
+            QName serviceQName) {
         this.composite = composite;
         
         this.configContext = configContext;
@@ -297,34 +293,77 @@ class ServiceDescriptionImpl
         String serviceImplName = this.composite.getClassName();
 
         this.dbcMap = dbcMap;
-        //TODO: How to we get this when called from server side, create here for now
-        //REVIEW: The value being set here is used later in validation checking to
-        //        validation that should occur separately on server and client. If
-        //        at some point this constructor is ever called by the client side,
-        //        then we'll have to get smarter about how we determine server/client
-        //        validation
         this.isServerSide = true;
-
+        this.serviceQName = serviceQName;
+        
+        
+        // if the ServiceDescriptionImpl was constructed with a specific service QName
+        // we should use that to retrieve the potential list of PortComposite objects
+        List<PortComposite> portComposites = null;
+        
+        if(this.serviceQName != null) {
+            portComposites = composite.getPortComposites(this.serviceQName);
+        }
+        else {
+            portComposites = composite.getPortComposites();
+        }
+        
+        
+        
         //capture the WSDL, if there is any...to be used for later processing
         setupWsdlDefinition();
 
         // Do a first pass validation for this DescriptionBuilderComposite.
         // This is not intended to be a full integrity check, but rather a fail-fast mechanism
-        // TODO: Refactor this to a seperate validator class?
         validateDBCLIntegrity();
 
         // The ServiceQName instance variable is set based on annotation or default
         // It will be set by the EndpointDescriptionImpl since it is the one that knows
         // how to process the annotations and the defaults.
-        //TODO: When we get this, need to consider verifying service name between WSDL
-        //      and annotations, so
 
-        // Create the EndpointDescription hierachy from the service impl annotations; Since the PortQName is null, 
-        // it will be set to the annotation value.
-        //EndpointDescription endpointDescription = new EndpointDescription(null, this, serviceImplName);
-        EndpointDescriptionImpl endpointDescription =
-                new EndpointDescriptionImpl(this, serviceImplName, composite.getProperties());
-        addEndpointDescription(endpointDescription);
+        
+        
+        // If PortComposite instances were specified on the DBC we are currently processing
+        // we want to switch the context of processing to the PortComposites
+        if(portComposites != null
+                &&
+                !portComposites.isEmpty()) {
+            if(log.isDebugEnabled()) {
+                log.debug("Constructing EndpointDescription instance from PortComposites for " +
+                		"implementation class: " + composite.getClassName());
+            }
+            int i = 0;
+            for(PortComposite portComposite : portComposites) {
+                
+                // get the properties from the SEI and the Impl
+                Map<String, Object> props = getAllProps(portComposite, dbcMap);
+                
+                // here we pass in an index so the EndpointDescriptionImpl instance will know
+                // which PortComposite instance it is associated with and can retrieve that 
+                // instance as required
+                EndpointDescriptionImpl endpointDescription =
+                    new EndpointDescriptionImpl(this, serviceImplName, props, i);
+                addEndpointDescription(endpointDescription);
+                i++;
+            }
+        }
+        
+        // If no PortComposites then we build the EndpointDescriptionImpl instance from the
+        // DBC that was supplied
+        else {
+            if(log.isDebugEnabled()) {
+                log.debug("No PortComposites found for implementation class: " + composite.getClassName());
+            }
+            
+                // get the properties from the SEI and the Impl
+                Map<String, Object> props = getAllProps(composite, dbcMap);
+                
+                // Create the single EndpointDescription hierachy from the service impl annotations; Since the PortQName is null, 
+        	// it will be set to the annotation value.
+        	EndpointDescriptionImpl endpointDescription =
+                	new EndpointDescriptionImpl(this, serviceImplName, props, null);
+        	addEndpointDescription(endpointDescription);
+        }
     }
 
     /*=======================================================================*/
@@ -369,7 +408,9 @@ class ServiceDescriptionImpl
                                                   QName portQName,
                                                   DescriptionFactory.UpdateType updateType,
                                                   DescriptionBuilderComposite composite,
-                                                  Object serviceDelegateKey) {
+                                                  Object serviceDelegateKey,
+                                                  String bindingId,
+                                                  String endpointAddress) {
 
 	
     	EndpointDescriptionImpl endpointDescription = getEndpointDescriptionImpl(portQName);
@@ -417,8 +458,7 @@ class ServiceDescriptionImpl
                                  Messages.getMessage("serviceDescriptionImplAddPortErr"));
                     }
 
-                    endpointDescription = new EndpointDescriptionImpl(sei, portQName, true, this);
-
+                    endpointDescription = createEndpointDescriptionImpl(sei, portQName, bindingId, endpointAddress);    
                     addDynamicEndpointDescriptionImpl(endpointDescription, serviceDelegateKey);
 
                 } else {
@@ -501,19 +541,19 @@ class ServiceDescriptionImpl
                     // The EndpointDescription already exists; nothing needs to be done
                 } else if (sei != null) {
                     // The Dispatch should not have an SEI associated with it on the update call.
-                    // REVIEW: Is this a valid check?
                     throw ExceptionFactory.makeWebServiceException(
                     		Messages.getMessage("createDispatchFail3",portQName.toString()));
                 } else if (getWSDLWrapper() != null && isPortDeclared) {
                     // EndpointDescription doesn't exist and this is a declared Port, so create one
-                    // Use the SEI Class and its annotations to finish creating the Description hierarchy.  Note that EndpointInterface, Operations, Parameters, etc.
-                    // are not created for Dispatch-based ports, but might be updated later if a getPort is done against the same declared port.
-                    // TODO: Need to create the Axis Description objects after we have all the config info (i.e. from this SEI)
+                    // Use the SEI Class and its annotations to finish creating the Description hierarchy.  
+                    // Note that EndpointInterface, Operations, Parameters, etc. are not created for 
+                    // Dispatch-based ports, but might be updated later if a getPort is done against 
+                    // the same declared port.
                     endpointDescription = new EndpointDescriptionImpl(sei, portQName, this);
                     addEndpointDescription(endpointDescription);
                 } else {
                     // The port is not a declared port and it does not have an EndpointDescription, 
-                	// meaning an addPort has not been done for it
+                    // meaning an addPort has not been done for it
                     // This is an error.
                     throw ExceptionFactory.makeWebServiceException(
                             Messages.getMessage("createDispatchFail1", portQName.toString()));
@@ -521,6 +561,103 @@ class ServiceDescriptionImpl
                 break;
         }
         return endpointDescription;
+    }
+
+    private EndpointDescriptionImpl createEndpointDescriptionImpl(Class sei, QName portQName, String bindingId, String endpointAddress) {
+        if (log.isDebugEnabled()) {
+            log.debug("Calling createEndpointDescriptionImpl : ("
+                      + portQName + "," + bindingId + "," + endpointAddress + ")");
+        }
+        EndpointDescriptionImpl endpointDescription = null;
+        AxisConfiguration configuration = configContext.getAxisConfiguration();
+        if (log.isDebugEnabled()) {
+            log.debug("looking for " + JAXWS_DYNAMIC_ENDPOINTS + " in AxisConfiguration : " + configuration);
+        }
+        Parameter parameter = configuration.getParameter(JAXWS_DYNAMIC_ENDPOINTS);
+        HashMap cachedDescriptions = (HashMap)
+                ((parameter == null) ? null : parameter.getValue());
+        if(cachedDescriptions == null) {
+            cachedDescriptions = new HashMap();
+            try {
+                configuration.addParameter(JAXWS_DYNAMIC_ENDPOINTS, cachedDescriptions);
+            } catch (AxisFault axisFault) {
+                throw new RuntimeException(axisFault);
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("Added new instance of cachedDescriptions : " + cachedDescriptions);
+            }
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("found old jaxws.dynamic.endpoints cache in AxisConfiguration ("  +  cachedDescriptions + ") with size : ("
+                          + cachedDescriptions.size() + ")");
+            }
+        }
+
+        StringBuffer key = new StringBuffer();
+        key.append(portQName == null ? "NULL" : portQName.toString());
+        key.append(':');
+        key.append(bindingId == null ? "NULL" : bindingId);
+        key.append(':');
+        key.append(endpointAddress == null ? "NULL" : endpointAddress);
+        synchronized(cachedDescriptions) {
+            WeakReference ref = (WeakReference) cachedDescriptions.get(key.toString());
+            if (ref != null) {
+                endpointDescription = (EndpointDescriptionImpl) ref.get();
+            }
+        }
+        if(endpointDescription == null) {
+            endpointDescription = new EndpointDescriptionImpl(sei, portQName, true, this);
+            synchronized(cachedDescriptions) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Calling cachedDescriptions.put : ("
+                              + key.toString() + ") : size - " + cachedDescriptions.size());
+                }
+                cachedDescriptions.put(key.toString(), new WeakReference(endpointDescription));
+            }
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("found old entry for endpointDescription in jaxws.dynamic.endpoints cache : ("
+                          + cachedDescriptions.size() + ")");
+            }
+        }
+        return endpointDescription;
+    }
+    
+    /**
+     * This method will get all properties that have been set on the DescriptionBuilderComposite
+     * instance. If the DBC represents an implementation class that references an SEI, the
+     * properties from the SEI will also be merged with the returned result.
+     */
+    private Map<String, Object> getAllProps(DescriptionBuilderComposite dbc, 
+                                            Map<String, DescriptionBuilderComposite> dbcMap) {
+        Map<String, Object> props = new HashMap<String, Object>();
+        
+        // first get the properties from the DBC
+        if(dbc.getProperties() != null
+                &&
+                !dbc.getProperties().isEmpty()) {
+            props.putAll(dbc.getProperties());
+        }
+        
+        // no need to continue if the 'dbcMap' is null
+        if(dbcMap != null) {
+            
+         // now if this is a web service impl with an SEI, get the SEI props
+            if(dbc.getWebServiceAnnot() != null
+                    &&
+                    !DescriptionUtils.isEmpty(dbc.getWebServiceAnnot().endpointInterface())) {
+                DescriptionBuilderComposite seiDBC = dbcMap.get(dbc.getWebServiceAnnot().endpointInterface());
+                if(seiDBC != null
+                        &&
+                        seiDBC.getProperties() != null
+                        &&
+                        !seiDBC.getProperties().isEmpty()) {
+                    props.putAll(seiDBC.getProperties());
+                }
+            }
+        }
+        
+        return props;
     }
 
     private Class getEndpointSEI(QName portQName) {
@@ -621,9 +758,61 @@ class ServiceDescriptionImpl
         }
         return null;
     }
-
+    
     public DescriptionBuilderComposite getDescriptionBuilderComposite() {
-        return composite;
+        return getDescriptionBuilderComposite(null, null);
+    }
+
+    /**
+     * This method provides a means for accessing a DescriptionBuilderComposite instance.
+     * If the integer value passed in is an index in the list of PortComposite objects, 
+     * then the indiciated PortComposite will be returned. Otherwise, the instance DBC
+     * will be returned.
+     */
+    public DescriptionBuilderComposite getDescriptionBuilderComposite(QName serviceQName, 
+                                                                      Integer portCompositeIndex) {
+        
+        DescriptionBuilderComposite dbc = null;
+        
+        // if the service QName was specified let's attempt to get the correct 
+        // PortComposite list
+        if(serviceQName != null
+                &&
+                composite.getServiceQNames() != null
+                &&
+                !composite.getServiceQNames().isEmpty()
+                &&
+                portCompositeIndex != null) {
+            List<PortComposite> pcList = composite.getPortComposites(serviceQName);
+            if(pcList != null) {
+                dbc = pcList.get(portCompositeIndex);
+            }
+            else {
+                dbc = composite;
+            }
+        }
+        
+        // ignore null values or values that would cause an IndexOutOfBoundsException
+        else if(portCompositeIndex == null 
+                || 
+                composite.getPortComposites() == null
+                ||
+                portCompositeIndex < 0
+                ||
+                portCompositeIndex >= composite.getPortComposites().size()) {
+            dbc = composite;  
+        }
+        
+        // return the appropriate PortComposite instance
+        else {
+            if(log.isDebugEnabled()) {
+                log.debug("Returning PortComposite at index: " + portCompositeIndex + 
+                          " from ServiceDescriptionImpl: " + this.hashCode());
+            }
+            dbc = composite.getPortComposites().get(portCompositeIndex);
+        }
+        
+        return dbc;
     }
 
     /* (non-Javadoc)
@@ -666,12 +855,40 @@ class ServiceDescriptionImpl
         }
         
         if (composite.isServiceProvider()) {
-
+            
             //  Currently, there is a bug which allows the wsdlDefinition to be placed
             //  on either the impl class composite or the sei composite, or both. We need to
             //  look in both places and find the correct one, if it exists.
+            
+            if(serviceQName != null
+                    &&
+                    composite.getWsdlDefinition(serviceQName) != null) {
+                if(log.isDebugEnabled()) {
+                    log.debug("Found WSDL definition by service QName");
+                }
+                Definition def = composite.getWsdlDefinition(serviceQName);
+                URL url = composite.getWsdlURL(serviceQName);
+                this.wsdlURL = url != null ? url.toString() : null;
+                try {
+                    if (log.isDebugEnabled() ) {
+                        if (configContext != null) {
+                            log.debug("new WSDL4JWrapper-ConfigContext not null1"); 
+                        } else {
+                            log.debug("new WSDL4JWrapper-ConfigContext null1"); 
+                        }
+                    }
 
-            if (((composite.getWebServiceAnnot() != null) &&
+                    this.wsdlWrapper = new WSDL4JWrapper(url,
+                                                         def, 
+                                                         configContext,
+                                                         this.catalogManager);
+                } catch (WSDLException e) {
+                    throw ExceptionFactory.makeWebServiceException(
+                            Messages.getMessage("wsdlException", e.getMessage()), e);
+                }
+            }
+
+            else if (((composite.getWebServiceAnnot() != null) &&
                     DescriptionUtils.isEmpty(composite.getWebServiceAnnot().endpointInterface()))
                     ||
                     (!(composite.getWebServiceProviderAnnot() == null))) {
@@ -704,7 +921,7 @@ class ServiceDescriptionImpl
                 	if(wsdlLocation != null
                 			&&
                 			!"".equals(wsdlLocation)) {
-                		setWSDLDefinitionOnDBC(wsdlLocation);
+                	    setWSDLDefinitionOnDBC(wsdlLocation);
                 	}
                 }
 
@@ -745,6 +962,7 @@ class ServiceDescriptionImpl
                                                   this.catalogManager);
                             
                     } else if (composite.getWsdlDefinition() != null) {
+                        
                         //set the wsdl def from the impl. class composite
                         if (log.isDebugEnabled()) {
                             log.debug("Get the wsdl definition from the impl class composite.");
@@ -774,7 +992,7 @@ class ServiceDescriptionImpl
                     	    }
                     	    wsdlLocation = seic.getWebServiceAnnot().wsdlLocation();
                     	}
-                    	
+                    	                    	
                     	// now check the impl
                     	if(wsdlLocation == null
                     	        ||
@@ -791,8 +1009,9 @@ class ServiceDescriptionImpl
                     	    if (log.isDebugEnabled()) {
                     	        log.debug("wsdl location =" + wsdlLocation);
                     	    }
-                            this.wsdlURL = wsdlLocation;
-                            setWSDLDefinitionOnDBC(wsdlLocation);
+                    	    
+                    	    this.wsdlURL = wsdlLocation;
+                    	    setWSDLDefinitionOnDBC(wsdlLocation);
                     	}
                     }
                 } catch (WSDLException e) {
@@ -891,6 +1110,8 @@ class ServiceDescriptionImpl
     /**
      * This method will handle obtaining a URL for the given WSDL location.  The WSDL will be
      * looked for in the following places in this order:
+     * 
+     * PreResolution) check for xmlcatalog resolver
      * 1) As a resource on the classpath
      * 2) As a fully specified URL
      * 3) As a file on the filesystem.  This is analagous to what the generated
@@ -902,6 +1123,10 @@ class ServiceDescriptionImpl
      */
     private URL getWSDLURL(String wsdlLocation) {
         // Look for the WSDL file as follows:
+        // PreResolution) check for xmlcatalog resolver
+        wsdlLocation = resolveWSDLLocationByCatalog(wsdlLocation);
+        
+        
         // 1) As a resource on the classpath
 
         ClassLoader loader = composite.getClassLoader();
@@ -963,7 +1188,6 @@ class ServiceDescriptionImpl
         );
     }
 
-    // TODO: Remove these and replace with appropraite get* methods for WSDL information
     /* (non-Javadoc)
      * @see org.apache.axis2.jaxws.description.ServiceDescriptionWSDL#getWSDLWrapper()
      */
@@ -978,10 +1202,6 @@ class ServiceDescriptionImpl
         return wsdlURL;
     }
 
-    /**
-     * TODO: This method should be replaced with specific methods for getWSDLGenerated... similar to
-     * how getWsdlWrapper should be replaced.
-     */
     public WSDLWrapper getGeneratedWsdlWrapper() {
         return this.generatedWsdlWrapper;
     }
@@ -1063,6 +1283,65 @@ class ServiceDescriptionImpl
     }
     
     /* (non-Javadoc)
+     * @see org.apache.axis2.jaxws.description.ServiceDescription#isMTOMEnabled(java.lang.Object, Class seiClass)
+     */
+    public boolean isMTOMEnabled(Object key, Class seiClass) {
+        if(log.isDebugEnabled()) {
+            log.debug("isMTOMEnabled, key= " + key + ", seiClass= " + seiClass);
+        }
+        
+        boolean mtomEnabled = false;
+        DescriptionBuilderComposite sparseComposite = getDescriptionBuilderComposite().getSparseComposite(key);
+        if(sparseComposite != null
+                &&
+                seiClass != null) {
+            Map<String, Boolean> seiToMTOM = (Map<String, Boolean>) 
+                sparseComposite.getProperties().get(MDQConstants.SEI_MTOM_ENABLEMENT_MAP);
+            if(seiToMTOM != null
+                    &&
+                    seiToMTOM.get(seiClass.getName()) != null) {
+                mtomEnabled = seiToMTOM.get(seiClass.getName());
+            }
+            else {
+                mtomEnabled = isMTOMEnabled(key);
+            }
+        }
+        else {
+            mtomEnabled = isMTOMEnabled(key);
+        }
+        
+        if(log.isDebugEnabled()) {
+            log.debug("isMTOMEnabled, key= " + key + ", seiClass= " + seiClass + ", isMTOMEnabled= " + mtomEnabled);
+        }
+        return mtomEnabled;
+    }
+    
+    /* (non-Javadoc)
+     * @see org.apache.axis2.jaxws.description.ServiceDescription#getBindingProperites(java.lang.Object, String key)
+     */
+    public Map<String, Object> getBindingProperties(Object serviceDelegateKey, String key) {
+        if(log.isDebugEnabled()) {
+            log.debug("getBindingProperties, serviceDelegateKey= " + serviceDelegateKey + 
+                      ", key= " + key);
+        }
+
+        Map<String, Object> bindingProps = null;
+        DescriptionBuilderComposite sparseComposite = getDescriptionBuilderComposite().getSparseComposite(serviceDelegateKey);
+        if(sparseComposite != null) {
+            Map<String, Map<String, Object>> allBindingProps = (Map<String, Map<String, Object>>) 
+                sparseComposite.getProperties().get(MDQConstants.BINDING_PROPS_MAP);
+            bindingProps = allBindingProps != null ? (Map<String, Object>) allBindingProps.get(key) : null;
+        }
+
+        if(log.isDebugEnabled()) {
+            log.debug("getBindingProperties, serviceDelegateKey= " + serviceDelegateKey + 
+                      ", key= " + key + ", propsSize= " + (bindingProps != null ? bindingProps.size() : 0));
+        }    
+
+        return bindingProps;
+    }
+
+    /* (non-Javadoc)
      * @see org.apache.axis2.jaxws.description.ServiceDescription#getPreferredPort(java.lang.Object)
      */
     public QName getPreferredPort(Object key) {
@@ -1094,13 +1373,6 @@ class ServiceDescriptionImpl
         //and retrieve
         //the composite that represents this impl
 
-//TODO: Currently, we are calling this method on the DBC. However, the DBC
-//will eventually need access to to the whole DBC map to do proper validation.
-//We don't want to pass the map of DBC's back into a single DBC.
-//So, for starters, this method and all the privates that it calls should be 
-// moved to here. At some point, we should consider using a new class that we
-//can implement scenarios of, like validateServiceImpl implements validator
-
         try {
             validateIntegrity();
         }
@@ -1114,16 +1386,9 @@ class ServiceDescriptionImpl
       * Validates the integrity of an impl. class. This should not be called directly for an SEI composite
       */
     void validateIntegrity() {
-        //TODO: Consider moving this to a utils area, do we really want a public
-        //      method that checks integrity...possibly
-
         //In General, this integrity checker should do gross level checking
         //It should not be setting spec-defined default values, but can look
         //at things like empty strings or null values
-
-        //TODO: This method will validate the integrity of this object. Basically, if
-        //consumer set this up improperly, then we should fail fast, should consider placing
-        //this method in a utils class within the 'description' package
 
         //Verify that, if this implements a strongly typed provider interface, that it
         // also contain a WebServiceProvider annotation per JAXWS Sec. 5.1
@@ -1138,7 +1403,8 @@ class ServiceDescriptionImpl
             if (interfaceString.equals(MDQConstants.PROVIDER_SOURCE)
                     || interfaceString.equals(MDQConstants.PROVIDER_SOAP)
                     || interfaceString.equals(MDQConstants.PROVIDER_DATASOURCE)
-                    || interfaceString.equals(MDQConstants.PROVIDER_STRING)) {
+                    || interfaceString.equals(MDQConstants.PROVIDER_STRING)
+                    || interfaceString.equals(MDQConstants.PROVIDER_OMELEMENT)) {
                 providerInterfaceValid = true;
                 //This is a provider based endpoint, make sure the annotation exists
                 if (composite.getWebServiceProviderAnnot() == null) {
@@ -1183,14 +1449,17 @@ class ServiceDescriptionImpl
                 		Messages.getMessage("validateIntegrityErr6",composite.getClassName()));
             }
 
-            //TODO: hmmm, will we ever actually validate an interface directly...don't think so
             if (!composite.isInterface()) {
                 // TODO: Validate on the class that this.classModifiers Array does not contain the strings
                 //        FINAL or ABSTRACT, but does contain PUBLIC
                 // TODO: Validate on the class that a public constructor exists
                 // TODO: Validate on the class that a finalize() method does not exist
                 if (!DescriptionUtils.isEmpty(composite.getWebServiceAnnot().wsdlLocation())) {
-                    if (composite.getWsdlDefinition() == null && composite.getWsdlURL() == null) {
+                    if (composite.getWsdlDefinition(getServiceQName()) == null
+                            &&
+                            composite.getWsdlDefinition() == null 
+                            &&
+                            composite.getWsdlURL() == null) {
                         throw ExceptionFactory.makeWebServiceException(
                         		Messages.getMessage("validateIntegrityErr7",composite.getClassName(),
                         				composite.getWebServiceAnnot().wsdlLocation()));
@@ -1254,8 +1523,6 @@ class ServiceDescriptionImpl
             }
 
             // Verify that the SOAPBinding annotations are supported.
-            //REVIEW: The assumption here is that SOAPBinding annotation can be place on an impl. class
-            //        (implicit SEI) or a WebServiceProvider
             if (composite.getSoapBindingAnnot() != null) {
                 if (composite.getSoapBindingAnnot().use() == javax.jws.soap.SOAPBinding.Use.ENCODED) {
                     throw ExceptionFactory.makeWebServiceException(
@@ -1263,7 +1530,6 @@ class ServiceDescriptionImpl
                 }
             }
             
-            //TODO: don't think this is necessary
             checkMethodsAgainstWSDL();
         }
     }
@@ -1345,7 +1611,9 @@ class ServiceDescriptionImpl
 							&& !bindingType
 									.equals(MDQConstants.SOAP12JMS_BINDING)
 							&& !bindingType
-									.equals(MDQConstants.SOAP12JMS_MTOM_BINDING))
+									.equals(MDQConstants.SOAP12JMS_MTOM_BINDING)
+							&& !bindingType
+							        .equals(MDQConstants.SOAP_HTTP_BINDING))
 
 						throw ExceptionFactory.makeWebServiceException(Messages
 								.getMessage("validatePIsErr2", composite
@@ -1635,9 +1903,9 @@ class ServiceDescriptionImpl
       * that all the public methods are in the wsdl
       */
     private void checkMethodsAgainstWSDL() {
-//Verify that, for ImplicitSEI, that all methods that should exist(if one false found, then
-//only look for WebMethods w/ False, else take all public methods but ignore those with
-//exclude == true
+        // Verify that, for ImplicitSEI, that all methods that should exist(if one false found, then
+        // only look for WebMethods w/ False, else take all public methods but ignore those with
+        // exclude == true
         if (webMethodAnnotationsExist()) {
             if (DescriptionUtils.falseExclusionsExist(composite))
                 verifyFalseExclusionsWithWSDL();
@@ -1675,8 +1943,6 @@ class ServiceDescriptionImpl
 
     private void validateSEI(DescriptionBuilderComposite seic) {
 
-        //TODO: Validate SEI superclasses -- hmmm, may be doing this below
-        //
         if (seic.getWebServiceAnnot() == null) {
             throw ExceptionFactory.makeWebServiceException(
             		Messages.getMessage("validateSEIErr1",composite.getClassName(),seic.getClassName()));
@@ -1821,10 +2087,12 @@ class ServiceDescriptionImpl
      * @see org.apache.axis2.jaxws.description.ServiceDescription#getHandlerChain(java.lang.Object)
      */
     public HandlerChainsType getHandlerChain(Object sparseCompositeKey) {
+        DescriptionBuilderComposite sparseComposite = null;
+
         // If there is a HandlerChainsType in the sparse composite for this ServiceDelegate
         // (i.e. this sparseCompositeKey), then return that.
         if (sparseCompositeKey != null) {
-            DescriptionBuilderComposite sparseComposite = composite.getSparseComposite(sparseCompositeKey);
+            sparseComposite = composite.getSparseComposite(sparseCompositeKey);
             if (sparseComposite != null && sparseComposite.getHandlerChainsType() != null) {
                 return sparseComposite.getHandlerChainsType();
             }
@@ -1834,7 +2102,7 @@ class ServiceDescriptionImpl
         // on the HandlerChain annotation if it is present.
         if (handlerChainsType == null) {
 
-            getAnnoHandlerChainAnnotation();
+            getAnnoHandlerChainAnnotation(sparseCompositeKey);
             if (handlerChainAnnotation != null) {
 
                 String handlerFileName = handlerChainAnnotation.file();
@@ -1852,9 +2120,24 @@ class ServiceDescriptionImpl
                         DescriptionUtils.openHandlerConfigStream(handlerFileName,
                                                                  className,
                                                                  classLoader);
+                if (is == null) {
+                    // config stream is still null.  This may mean the @HandlerChain annotation is on a *driver* class
+                    // next to a @WebServiceRef annotation, so the path is relative to the class declaring @HandlerChain
+                    // and NOT relative to the Service or Endpoint class, which also means we should use the sparseComposite
+                    // since that is where the @HandlerChain annotation info would have been loaded.
+                    if (sparseComposite != null) {
+                        String handlerChainDeclaringClass = (String)sparseComposite.getProperties().get(MDQConstants.HANDLER_CHAIN_DECLARING_CLASS);
+                        if (handlerChainDeclaringClass != null) {
+                            className = handlerChainDeclaringClass;
+                            is = DescriptionUtils.openHandlerConfigStream(handlerFileName, className, classLoader);
+                        }
+                    }
+                }
 
                 if(is == null) {
-                    log.warn("Unable to load handlers from file: " + handlerFileName);
+                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage("handlerChainNS",
+                            handlerFileName, className));
+
                 }
                 else {
                     handlerChainsType =
@@ -1871,12 +2154,20 @@ class ServiceDescriptionImpl
      * This is a client side only method. The generated service class may contain 
      * handler chain annotations
      */
-    public HandlerChain getAnnoHandlerChainAnnotation() {
+    public HandlerChain getAnnoHandlerChainAnnotation(Object sparseCompositeKey) {
         if (this.handlerChainAnnotation == null) {
             Class serviceClass = composite.getCorrespondingClass();
                 if (serviceClass != null) {
                     handlerChainAnnotation =
                             (HandlerChain) getAnnotation(serviceClass, HandlerChain.class);
+            }
+        }
+	if (handlerChainAnnotation == null) {
+            if (sparseCompositeKey != null) {
+                DescriptionBuilderComposite sparseComposite = composite.getSparseComposite(sparseCompositeKey);
+                if (sparseComposite != null && sparseComposite.getHandlerChainAnnot() != null) {
+                    handlerChainAnnotation = sparseComposite.getHandlerChainAnnot();
+                }
             }
         }
 
@@ -2046,7 +2337,7 @@ class ServiceDescriptionImpl
             innerMap.put(endpointDescriptionImpl.getPortQName(), endpointDescriptionImpl);
         }
     }
-    
+        
     /** Return a string representing this Description object and all the objects it contains. */
     public String toString() {
         final String newline = "\n";
@@ -2175,12 +2466,185 @@ class ServiceDescriptionImpl
         return cl;
     }
 
-    public List<Class> getHandlerChainClasses(PortInfo portinfo) {
-        return handlerClassesMap.get(portinfo);
+    public void setResolvedHandlersDescription(PortInfo portInfo, ResolvedHandlersDescription resolvedHandlersInfo) {
+        // Get the cache and store the handler description
+        Map<PortInfo, ResolvedHandlersDescription> cache = resolvedHandlersDescription.get();
+        
+        if (cache == null) {
+            cache = new ConcurrentHashMap<PortInfo, ResolvedHandlersDescription>();
+            resolvedHandlersDescription =
+                new SoftReference<Map<PortInfo, ResolvedHandlersDescription>>(cache);
+            
+        }
+        cache.put(portInfo, resolvedHandlersInfo);
+        
     }
 
-    public void setHandlerChainClasses(PortInfo portinfo, List<Class> handlerClasses) {
-        handlerClassesMap.put(portinfo, handlerClasses);
+    
+    public ResolvedHandlersDescription getResolvedHandlersDescription(PortInfo portInfo) {
+        Map<PortInfo, ResolvedHandlersDescription> cache = resolvedHandlersDescription.get();
+
+        return (cache == null) ?
+                null: // No Cache
+                cache.get(portInfo); 
+       
+    }
+    
+    private String resolveWSDLLocationByCatalog(String wsdlLocation) {
+        if (catalogManager != null) {
+            Catalog catalog = catalogManager.getCatalog();
+            if (catalog != null) {
+                String resolvedLocation = null;
+                try {
+                    resolvedLocation = catalog.resolveSystem(wsdlLocation);
+                    if (resolvedLocation == null) {
+                        resolvedLocation = catalog.resolveURI(wsdlLocation);
+                    }
+                    // normally, one might also do the following, but in this case we're looking at a top-level WSDL, so no parent
+                    // resolvedLocation = catalog.resolvePublic(wsdlLocation, parent);
+                    if (resolvedLocation != null) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("XMLCatalog transformed original wsdl location \""
+                                    + wsdlLocation
+                                    + "\" to \""
+                                    + resolvedLocation + "\"");
+                        }
+                        return resolvedLocation;
+                    }
+                } catch (Exception e) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Catalog resolution attempt caused exception: "
+                                + e);
+                    }
+                }
+            }
+        }
+        return wsdlLocation;
+    }
+    
+    /**
+     * Increment the use count for this ServiceDescription instance.  Note the use count is
+     * only used on the client side.
+     * @return
+     */
+    boolean isInUse() {
+        return useCount > 0;
+    }
+    
+    /**
+     * Register that this ServiceDescription is being used by a service delegate instance.  Note
+     * this is only used on the client side (since the service delegate is what is being 
+     * registered).
+     * 
+     * Note that this is package protected since only the implementation classes should be calling
+     * it.
+     */
+    void registerUse() {
+        useCount++;
     }
 
+    /**
+     * Deregister that this ServiceDescription is being used by a service delegate instance.  Note
+     * this is only used on the client side (since the service delegate is what is being 
+     * registered).
+
+     * Note that this is package protected since only the implementation classes should be calling
+     * it.
+     */
+    void deregisterUse() {
+        if (useCount > 0) {
+            useCount--;
+        }
+    }
+
+    public void releaseResources(Object delegate) {
+        try {
+        if (log.isDebugEnabled()) {
+            log.debug("ServiceDescription release resources called with delegate " + delegate);
+        }
+        // If the service desc can be removed from the cache, which means no other service delegates
+        // are using it, then we will release the resources associated with it.  If it can't be 
+        // removed because it is still in use, then just return.
+        if (!DescriptionFactoryImpl.removeFromCache(this)) {
+            if (log.isDebugEnabled()) {
+                log.debug("ServiceDesc was not removed from cache, so it will not be released");
+            }
+            return;
+        }
+        
+        if (log.isDebugEnabled()) {
+            log.debug("ServiceDesc was removed from cache, so releasing associated resources");
+        }
+                
+        
+        // Close all the endpoint descs, both declared and dynamic
+        Collection<EndpointDescription> definedEndpoints = definedEndpointDescriptions.values(); 
+        if (definedEndpoints.size() > 0) {
+            if (log.isDebugEnabled()) {
+                log.debug("Releasing defined endpoints, size: " + definedEndpoints.size());
+            }
+            for (EndpointDescription endpointDesc : definedEndpoints) {
+                ((EndpointDescriptionImpl) endpointDesc).releaseResources(getAxisConfigContext());
+            }
+        }
+        definedEndpointDescriptions.clear();
+        
+        Collection<Map<QName, EndpointDescriptionImpl>> dynamicEndpointsMap = 
+            dynamicEndpointDescriptions.values();
+        if (log.isDebugEnabled()) {
+            log.debug("Releasing dynamic endpoints, size: " + dynamicEndpointsMap.size());
+        }
+        Iterator<Map<QName, EndpointDescriptionImpl>> dynamicEndpointsMapIterator = dynamicEndpointsMap.iterator();
+        while (dynamicEndpointsMapIterator.hasNext()) {
+            Map<QName, EndpointDescriptionImpl> mapEntry = dynamicEndpointsMapIterator.next();
+            Collection<EndpointDescriptionImpl> dynamicEndpoints = mapEntry.values();
+            if (dynamicEndpoints != null && dynamicEndpoints.size() > 0) {
+                for (EndpointDescription endpointDesc : dynamicEndpoints) {
+                    ((EndpointDescriptionImpl) endpointDesc).releaseResources(getAxisConfigContext());
+                    // Remove this endpoint from the list on axis config 
+                    removeFromDynamicEndpointCache(endpointDesc);
+                }
+            }
+        }
+        dynamicEndpointDescriptions.clear();
+        
+        } catch (Throwable t) {
+            if (log.isDebugEnabled()) {
+                log.debug("Release resorces in ServiceDesc caught throwable ", t);
+            }
+            throw ExceptionFactory.makeWebServiceException(t);
+        }
+    }
+    
+    /**
+     * Remove the endpointDescription from the list of dynamic ports held on the
+     * AxisConfiguration object.
+     * 
+     * @param endpointDesc The endpointDescription to be removed from the list.
+     */
+    private void removeFromDynamicEndpointCache(EndpointDescription endpointDesc) {
+        AxisConfiguration configuration = configContext.getAxisConfiguration();
+        Parameter parameter = configuration.getParameter(JAXWS_DYNAMIC_ENDPOINTS);
+        HashMap cachedDescriptions = (HashMap)
+                ((parameter == null) ? null : parameter.getValue());
+        if (cachedDescriptions != null) {
+            synchronized(cachedDescriptions) {
+                Set cachedDescSet = cachedDescriptions.entrySet();
+                Iterator cachedDescIterator = cachedDescSet.iterator();
+                while (cachedDescIterator.hasNext()) {
+                    Map.Entry mapEntry = (Map.Entry) cachedDescIterator.next();
+                    WeakReference weakRef = (WeakReference) mapEntry.getValue();
+                    if (weakRef != null) {
+                        EndpointDescriptionImpl checkDynamicEndpointDesc = (EndpointDescriptionImpl) weakRef.get();
+                        if (endpointDesc == checkDynamicEndpointDesc) {
+                            cachedDescIterator.remove();
+                            if (log.isDebugEnabled()) {
+                                log.debug("Removing endpoint desc from dynamic cache on configuration");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

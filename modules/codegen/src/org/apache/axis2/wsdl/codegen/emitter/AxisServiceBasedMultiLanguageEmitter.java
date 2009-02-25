@@ -75,8 +75,6 @@ import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.stream.FactoryConfigurationError;
-import javax.xml.stream.XMLStreamException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -94,7 +92,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import java.lang.reflect.Constructor;
 
 
 public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
@@ -275,7 +273,7 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
     }
 
     protected Policy getBindingPolicyFromMessage(AxisBindingOperation axisBindingOperation,
-                                               String key) {
+                                                 String key) {
         AxisBindingMessage axisBindingMessage = null;
 
         if (axisBindingOperation != null) {
@@ -409,7 +407,7 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
                     QName faultQName = new QName(codeGenConfiguration.getTargetNamespace(), faultMessage.getName());
                     if (this.mapper.getQNameToMappingObject(faultQName) != null) {
                         // i.e we already have an entry
-                        className = makeJavaClassName(className + "Exception" + (uniqueFaultNameCounter++));
+                        className = makeJavaClassName(className + "Exception");
                     }
                     while (fullyQualifiedFaultClassNameMap.containsValue(className)) {
                         className = makeJavaClassName(className + (uniqueFaultNameCounter++));
@@ -451,6 +449,7 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
                 this.axisService = (AxisService) axisServicesIter.next();
                 //we have to generate the code for each bininding
                 //for the moment lets genrate the stub name with the service name and end point name
+                this.axisBinding = axisService.getEndpoint(axisService.getEndpointName()).getBinding();
 
                 if (!codeGenConfiguration.isPackClasses()) {
                     // write the call back handlers
@@ -1051,6 +1050,19 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
                     (String) faultClassNameMap.get(key),
                     faultElement);
 
+            //added the base exception class name
+            if (this.codeGenConfiguration.getExceptionBaseClassName() != null) {
+                addAttribute(doc, "exceptionBaseClass",
+                        this.codeGenConfiguration.getExceptionBaseClassName(), faultElement);
+                try {
+                    addConstructorDetails(doc, faultElement, this.codeGenConfiguration.getExceptionBaseClassName());
+                } catch (ClassNotFoundException e) {
+                    log.warn("Can not load the Exception base class");
+                }
+            } else {
+                addAttribute(doc, "exceptionBaseClass", Exception.class.getName(), faultElement);
+            }
+
             //the type represents the type that will be wrapped by this
             //name
             String typeMapping =
@@ -1087,6 +1099,56 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
             exceptionWriter.setOverride(codeGenConfiguration.isOverride());
             writeFile(doc, exceptionWriter);
         }
+    }
+
+    private void addConstructorDetails(Document doc,
+                                       Element faultElement,
+                                       String exceptionClassName) throws ClassNotFoundException {
+        Class exceptionClass = Class.forName(exceptionClassName);
+        Constructor[] constructors =  exceptionClass.getConstructors();
+        for (int i = 0; i < constructors.length; i++) {
+            Element constructorElement = doc.createElement("constructor");
+            faultElement.appendChild(constructorElement);
+            Class[] parameters = constructors[i].getParameterTypes();
+            List existingParamNames = new ArrayList();
+            for (int j = 0; j < parameters.length; j++){
+                Element parameterElement = doc.createElement("param");
+                constructorElement.appendChild(parameterElement);
+                addAttribute(doc, "type",
+                        getTypeName(parameters[j]), parameterElement);
+                addAttribute(doc, "name",
+                        getParameterName(parameters[j], existingParamNames), parameterElement);
+
+            }
+        }
+    }
+
+    private String getParameterName(Class type, List existingParamNames) {
+        String paramName = null;
+        if (type.isArray()) {
+            paramName = getParameterName(type.getComponentType(), existingParamNames);
+        } else {
+            String className = type.getName();
+            if (className.lastIndexOf(".") > 0) {
+                className = className.substring(className.lastIndexOf(".") + 1);
+            }
+            paramName = JavaUtils.xmlNameToJavaIdentifier(className);
+            if (existingParamNames.contains(paramName)){
+               paramName = paramName + existingParamNames.size();
+            }
+            existingParamNames.add(paramName);
+        }
+        return paramName;
+    }
+
+    private String getTypeName(Class type){
+        String typeName = null;
+        if (type.isArray()){
+            typeName = getTypeName(type.getComponentType()) + "[]";
+        } else {
+            typeName = type.getName();
+        }
+        return typeName;
     }
 
     /**
@@ -1386,7 +1448,7 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
         axisService.setSchemaLocationsAdjusted(false);
         //when generating the code we should copy all the schemas to
         // resource folder.
-        Map changedMap = axisService.populateSchemaMappings(true);
+        Map changedMap = axisService.populateSchemaMappings(this.codeGenConfiguration.isOverrideAbsoluteAddress());
 
         // add these two attribute to use the user defined wsdl to use.
         try {
@@ -1407,12 +1469,12 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
         // then use the changedMap got above to adjust the names.
         Map schemaMappings = axisService.getSchemaMappingTable();
         Iterator keys = schemaMappings.keySet().iterator();
+        String key = null;
         while (keys.hasNext()) {
-            Object key = keys.next();
-            schemaWriter.writeSchema(
-                    (XmlSchema) schemaMappings.get(key),
-                    (String) key
-            );
+            key = (String) keys.next();
+            if (!key.startsWith("http")){
+               schemaWriter.writeSchema((XmlSchema) schemaMappings.get(key), key);
+            }
         }
 
         //switch between the correct writer
@@ -1522,6 +1584,7 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
         String localPart = makeJavaClassName(axisService.getName());
 
         addAttribute(doc, "name", localPart + mepToSuffixMap.get(mep), rootElement);
+
         //add backwordcompatibility attribute
         addAttribute(doc, "isbackcompatible",
                 String.valueOf(codeGenConfiguration.isBackwordCompatibilityMode()),
@@ -1958,10 +2021,14 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
 
         addAttribute(doc, "package", "", rootElement);
         addAttribute(doc, "classpackage", codeGenConfiguration.getPackageName(), rootElement);
-        if (this.codeGenConfiguration.isBackwordCompatibilityMode()) {
-            addAttribute(doc, "name", className + SKELETON_CLASS_SUFFIX_BACK, rootElement);
+        if (this.codeGenConfiguration.getSkeltonClassName() != null) {
+            addAttribute(doc, "name", this.codeGenConfiguration.getSkeltonClassName(), rootElement);
         } else {
-            addAttribute(doc, "name", className + SKELETON_CLASS_SUFFIX, rootElement);
+            if (this.codeGenConfiguration.isBackwordCompatibilityMode()) {
+                addAttribute(doc, "name", className + SKELETON_CLASS_SUFFIX_BACK, rootElement);
+            } else {
+                addAttribute(doc, "name", className + SKELETON_CLASS_SUFFIX, rootElement);
+            }
         }
 
         if (!codeGenConfiguration.isWriteTestCase()) {
@@ -2186,8 +2253,8 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
         List soapHeaderOutputParameterList = new ArrayList();
         methodElement = doc.createElement("method");
         String localPart = axisOperation.getName().getLocalPart();
-
-        addAttribute(doc, "name", JavaUtils.xmlNameToJava(localPart), methodElement);
+        addAttribute(doc, "name", JavaUtils.xmlNameToJavaIdentifier(localPart), methodElement);
+        addAttribute(doc, "originalName", localPart, methodElement);
         addAttribute(doc, "namespace", axisOperation.getName().getNamespaceURI(), methodElement);
         addAttribute(doc, "style", (String) getBindingPropertyFromOperation(
                 WSDLConstants.WSDL_1_1_STYLE, axisOperation.getName()), methodElement);
@@ -3191,8 +3258,10 @@ public class AxisServiceBasedMultiLanguageEmitter implements Emitter {
             //parameters in the signatures
             // in out put params we only intersted if there is only one parameter
             // otherwise we can not unwrap it.
-            if (partsList.size() == 1) {
-                QName qName = (QName) partsList.get(0);
+            // this logic handles at the template level
+             QName qName = null;
+            for (Iterator iter = partsList.iterator(); iter.hasNext();) {
+                qName = (QName) iter.next();
                 paramElement.appendChild(generateParamComponent(doc,
                         this.mapper.getParameterName(qName),
                         this.mapper.getTypeMappingName(

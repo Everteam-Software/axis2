@@ -26,6 +26,7 @@ import org.apache.axiom.om.OMFactory;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.OMNode;
 import org.apache.axiom.soap.SOAP12Constants;
+import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingConstants;
@@ -231,6 +232,14 @@ public class AxisService2WSDL20 implements WSDL2Constants {
             disableREST = true;
         }
 
+        boolean disableSOAP11 = false;
+        Parameter disableSOAP11Parameter = axisService
+                .getParameter(org.apache.axis2.Constants.Configuration.DISABLE_SOAP11);
+        if (disableSOAP11Parameter != null
+                && JavaUtils.isTrueExplicitly(disableSOAP11Parameter.getValue())) {
+            disableSOAP11 = true;
+        }
+
         // axis2.xml indicated no SOAP 1.2 binding?
         boolean disableSOAP12 = false;
         Parameter disableSOAP12Parameter =
@@ -244,6 +253,11 @@ public class AxisService2WSDL20 implements WSDL2Constants {
         // generate default endpoint elements.
         Set bindings = new HashSet();
         Map endpointMap = axisService.getEndpoints();
+        Object value = axisService.getParameterValue("isCodegen");
+        boolean isCodegen = false;
+        if (JavaUtils.isTrueExplicitly(value)) {
+           isCodegen = true;
+        }
         if (endpointMap != null && endpointMap.size() > 0) {
 
             OMElement serviceElement = getServiceElement(wsdl, tns, omFactory, interfaceName);
@@ -258,7 +272,7 @@ public class AxisService2WSDL20 implements WSDL2Constants {
                 /*
 			    * Some transports might not be active at runtime.
 			    */
-                if (!axisEndpoint.isActive()) {
+                if (!isCodegen && !axisEndpoint.isActive()) {
                     continue;
                 }
                 AxisBinding axisBinding = axisEndpoint.getBinding();
@@ -280,6 +294,14 @@ public class AxisService2WSDL20 implements WSDL2Constants {
                     }
                 }
 
+                if (SOAP11Constants.SOAP_ENVELOPE_NAMESPACE_URI.equals(propertySOAPVersion)) {
+                    if (disableSOAP11) {
+                        continue;
+                    }
+                }
+
+
+
                 bindings.add(axisBinding);
                 OMElement endpointElement = axisEndpoint.toWSDL20(wsdl, tns, whttp);
                 boolean endpointAlreadyAdded = false;
@@ -300,7 +322,21 @@ public class AxisService2WSDL20 implements WSDL2Constants {
                 }
                 if (!endpointAlreadyAdded) {
 //                	addPolicyAsExtensibleElement(axisEndpoint, endpointElement);
-                    serviceElement.addChild(endpointElement);
+                	Parameter modifyAddressParam = axisService
+							.getParameter("modifyUserWSDLPortAddress");
+					if (modifyAddressParam != null) {
+						if (Boolean.parseBoolean((String) modifyAddressParam
+								.getValue())) {
+							String endpointURL = axisEndpoint
+									.calculateEndpointURL();
+							endpointElement
+									.getAttribute(
+											new QName(
+													WSDL2Constants.ATTRIBUTE_ADDRESS))
+									.setAttributeValue(endpointURL);
+						}
+					}
+                	serviceElement.addChild(endpointElement);
                 }
             }
             Iterator iter = bindings.iterator();
@@ -323,9 +359,14 @@ public class AxisService2WSDL20 implements WSDL2Constants {
                     WSDLSerializationUtil.generateSOAP11Binding(omFactory, axisService, wsdl, wsoap,
                                                                 tns, serviceName));
             if (!disableSOAP12) {
-            descriptionElement.addChild(
-                    WSDLSerializationUtil.generateSOAP12Binding(omFactory, axisService, wsdl, wsoap,
-                                                                tns, serviceName));
+                descriptionElement.addChild(
+                        WSDLSerializationUtil.generateSOAP12Binding(omFactory, axisService, wsdl, wsoap,
+                                tns, serviceName));
+            }
+            if (!disableSOAP11) {
+                descriptionElement.addChild(
+                        WSDLSerializationUtil.generateSOAP11Binding(omFactory, axisService, wsdl, wsoap,
+                                tns, serviceName));
             }
             if (!disableREST) {
                 descriptionElement.addChild(
@@ -336,7 +377,7 @@ public class AxisService2WSDL20 implements WSDL2Constants {
             descriptionElement
                     .addChild(WSDLSerializationUtil.generateServiceElement(omFactory, wsdl, tns,
                                                                            axisService, disableREST,
-                                                                           disableSOAP12, eprs,
+                                                                           disableSOAP12,disableSOAP11, eprs,
                                                                           serviceName));
         }
         

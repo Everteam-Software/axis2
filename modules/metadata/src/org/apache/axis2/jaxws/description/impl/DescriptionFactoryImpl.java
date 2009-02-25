@@ -33,6 +33,7 @@ import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.description.DescriptionFactory;
 import org.apache.axis2.jaxws.description.DescriptionKey;
 import org.apache.axis2.jaxws.description.EndpointDescription;
+import org.apache.axis2.jaxws.description.ResolvedHandlersDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
 import org.apache.axis2.jaxws.description.builder.converter.JavaClassToDBCConverter;
@@ -43,6 +44,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
+
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +52,7 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Creates the JAX-WS metadata descritpion hierachy from some combinations of WSDL, Java classes
@@ -97,10 +100,11 @@ public class DescriptionFactoryImpl {
         }
         ServiceDescription serviceDesc = null;
         synchronized(configContext) {
-            serviceDesc = cache.get(key);
             if (log.isDebugEnabled()) {
                 log.debug("Check to see if ServiceDescription is found in cache");
             }
+            serviceDesc = cache.get(key);
+
             if (serviceDesc != null) {
                 if (log.isDebugEnabled()) {
                     log.debug("ServiceDescription found in the cache");
@@ -146,6 +150,7 @@ public class DescriptionFactoryImpl {
                 ((ServiceDescriptionImpl) serviceDesc).getDescriptionBuilderComposite().
                     setSparseComposite(sparseCompositeKey, sparseComposite);
             }
+            ((ServiceDescriptionImpl) serviceDesc).registerUse();
         }
         return serviceDesc;
     }
@@ -237,25 +242,68 @@ public class DescriptionFactoryImpl {
             DescriptionBuilderComposite serviceImplComposite = nameIter.next();
             if (isImpl(serviceImplComposite)) {
                 // process this impl class
-                ServiceDescriptionImpl serviceDescription = new ServiceDescriptionImpl(
-                        dbcMap, serviceImplComposite, configContext);
-                ServiceDescriptionValidator validator =
-                        new ServiceDescriptionValidator(serviceDescription);
-                if (validator.validate()) {
-                    serviceDescriptionList.add(serviceDescription);
-                    if (log.isDebugEnabled()) {
-                        log.debug("Service Description created from DescriptionComposite: " +
-                                serviceDescription);
+                
+                // the implementation class represented by this DBC represents a single wsdl:service 
+                Set<QName> sQNames = serviceImplComposite.getServiceQNames();
+                if(sQNames == null
+                        ||
+                        sQNames.isEmpty()) {
+                    
+                    if(log.isDebugEnabled()) {
+                        log.debug("Adding ServiceDescription instances from composite");
                     }
-                } else {
+                    ServiceDescriptionImpl serviceDescription = new ServiceDescriptionImpl(
+                                                                                           dbcMap, serviceImplComposite, configContext);
+                    ServiceDescriptionValidator validator =
+                        new ServiceDescriptionValidator(serviceDescription);
+                    if (validator.validate()) {
+                        serviceDescriptionList.add(serviceDescription);
+                        if (log.isDebugEnabled()) {
+                            log.debug("Service Description created from DescriptionComposite: " +
+                                      serviceDescription);
+                        }
+                    } else {
 
-                    String msg = Messages.getMessage("createSrvcDescrDBCMapErr",
-                    		                         validator.toString(),
-                    		                         serviceImplComposite.toString(),
-                    		                         serviceDescription.toString());
-                    throw ExceptionFactory.makeWebServiceException(msg);
+                        String msg = Messages.getMessage("createSrvcDescrDBCMapErr",
+                                                         validator.toString(),
+                                                         serviceImplComposite.toString(),
+                                                         serviceDescription.toString());
+                        throw ExceptionFactory.makeWebServiceException(msg);
+                    }
                 }
-            } else {
+                
+                // the implementation class represented by this DBC represents multiple wsdl:services
+                else {
+                    Iterator<QName> sQNameIter = sQNames.iterator();
+                    while(sQNameIter.hasNext()) {
+                        QName sQName = sQNameIter.next();
+                        if(log.isDebugEnabled()) {
+                            log.debug("Adding ServiceDescription from service QName set for : " + sQName);
+                        }
+                        ServiceDescriptionImpl serviceDescription = new ServiceDescriptionImpl(dbcMap, 
+                                                                                               serviceImplComposite, 
+                                                                                               configContext,
+                                                                                               sQName);
+                        ServiceDescriptionValidator validator =
+                            new ServiceDescriptionValidator(serviceDescription);
+                        if (validator.validate()) {
+                            serviceDescriptionList.add(serviceDescription);
+                            if (log.isDebugEnabled()) {
+                                log.debug("Service Description created from DescriptionComposite: " +
+                                          serviceDescription);
+                            }
+                        } else {
+
+                            String msg = Messages.getMessage("createSrvcDescrDBCMapErr",
+                                                             validator.toString(),
+                                                             serviceImplComposite.toString(),
+                                                             serviceDescription.toString());
+                            throw ExceptionFactory.makeWebServiceException(msg);
+                        }
+                    }
+                }
+            } 
+            else {
                 if (log.isDebugEnabled()) {
                     log.debug("DBC is not a service impl: " + serviceImplComposite.toString());
                 }
@@ -276,8 +324,9 @@ public class DescriptionFactoryImpl {
      */
     public static EndpointDescription updateEndpoint(
             ServiceDescription serviceDescription, Class sei, QName portQName,
-            DescriptionFactory.UpdateType updateType) {
-        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, null);
+            DescriptionFactory.UpdateType updateType,
+            String bindingId, String endpointAddress) {
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, null, bindingId, endpointAddress);
     }
     
     /**
@@ -286,8 +335,8 @@ public class DescriptionFactoryImpl {
      */
     public static EndpointDescription updateEndpoint(
             ServiceDescription serviceDescription, Class sei, QName portQName,
-            DescriptionFactory.UpdateType updateType, Object serviceDelegateKey ) {
-        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, serviceDelegateKey);
+            DescriptionFactory.UpdateType updateType, Object serviceDelegateKey, String bindingId, String endpointAddress) {
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, null, serviceDelegateKey, bindingId, endpointAddress);
     }
     
     /**
@@ -297,12 +346,14 @@ public class DescriptionFactoryImpl {
             ServiceDescription serviceDescription, Class sei, QName portQName,
             DescriptionFactory.UpdateType updateType, 
             DescriptionBuilderComposite composite,
-            Object serviceDelegateKey) {
+            Object serviceDelegateKey,
+            String bindingId, 
+            String endpointAddress) {
         EndpointDescription endpointDesc = null;
         synchronized(serviceDescription) {
                 endpointDesc = 
                 ((ServiceDescriptionImpl)serviceDescription)
-                        .updateEndpointDescription(sei, portQName, updateType, composite, serviceDelegateKey);
+                        .updateEndpointDescription(sei, portQName, updateType, composite, serviceDelegateKey, bindingId, endpointAddress);
         }
         EndpointDescriptionValidator endpointValidator = new EndpointDescriptionValidator(endpointDesc);
         
@@ -329,8 +380,8 @@ public class DescriptionFactoryImpl {
     public static EndpointDescription updateEndpoint(
             ServiceDescription serviceDescription, Class sei, EndpointReference epr,
             String addressingNamespace,
-            DescriptionFactory.UpdateType updateType) {
-        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, null);
+            DescriptionFactory.UpdateType updateType, String bindingId, String endpointAddress) {
+        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, null, bindingId, endpointAddress);
     }
 
     /**
@@ -341,8 +392,8 @@ public class DescriptionFactoryImpl {
             ServiceDescription serviceDescription, Class sei, EndpointReference epr,
             String addressingNamespace,
             DescriptionFactory.UpdateType updateType,
-            Object sparseCompositeKey) {
-        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, sparseCompositeKey);
+            Object sparseCompositeKey, String bindingId, String endpointAddress) {
+        return updateEndpoint(serviceDescription, sei, epr, addressingNamespace, updateType, null, sparseCompositeKey, bindingId, endpointAddress);
     }
 
     /**
@@ -354,7 +405,7 @@ public class DescriptionFactoryImpl {
             String addressingNamespace,
             DescriptionFactory.UpdateType updateType,
             DescriptionBuilderComposite composite,
-            Object sparseCompositeKey) {
+            Object sparseCompositeKey, String bindingId, String endpointAddress) {
         QName portQName = null;
         
         try {
@@ -380,33 +431,11 @@ public class DescriptionFactoryImpl {
                  Messages.getMessage("updateEndpointError", e.getMessage()));
         }
         
-        return updateEndpoint(serviceDescription, sei, portQName, updateType, composite, sparseCompositeKey);
+        return updateEndpoint(serviceDescription, sei, portQName, updateType, composite, sparseCompositeKey, bindingId, endpointAddress);
     }
 
     public static ClientConfigurationFactory getClientConfigurationFactory() {
         return ClientConfigurationFactory.newInstance();
-    }
-
-    /**
-     * Builds a list of DescriptionBuilderComposite which is relevant to the particular class
-     *
-     * @param List<>          A list of DescriptionBuilderComposite objects
-     * @param serviceImplName
-     * @return List<>
-     */
-    private static List<DescriptionBuilderComposite> buildRelevantCompositeList(
-            List<DescriptionBuilderComposite> compositeList,
-            String serviceImplName) {
-
-        List<DescriptionBuilderComposite> relevantList = compositeList;
-
-        // TODO: Find the composite which represents this serviceImplName
-
-        // TODO: Go through input list to find composites relevant to this one
-        // and add
-        // to 'relevant list'
-
-        return relevantList;
     }
 
     /**
@@ -448,4 +477,49 @@ public class DescriptionFactoryImpl {
         }
     }
 
+    public static ResolvedHandlersDescription createResolvedHandlersDescription() {
+        return new ResolvedHandlersDescriptionImpl();
+    }
+
+    /**
+     * Remove the ServiceDescription instance from the client-side cache if there are no
+     * service delegates using it.  Note this must be done in a sync block so that a lookup 
+     * in createServiceDescription doesn't access the cache.
+     * 
+     * @param svcDesc The instance to be removed.
+     */
+    static boolean removeFromCache(ServiceDescriptionImpl svcDesc) {
+        boolean svcDescRemoved = false;
+        ConfigurationContext configContext = svcDesc.getAxisConfigContext();
+        synchronized(configContext) {
+            svcDesc.deregisterUse();
+            if (svcDesc.isInUse()) {
+                if (log.isDebugEnabled()) {
+                    log.debug("ServiceDescription still in use; not removed from cache");
+                }
+                svcDescRemoved = false;
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("ServiceDescription not in use; will be removed from cache");
+                }
+                svcDescRemoved = true;
+                Set<Map.Entry<DescriptionKey, ServiceDescription>> cacheEntrySet = 
+                    cache.entrySet();
+                Iterator<Map.Entry<DescriptionKey, ServiceDescription>> cacheEntryIterator =
+                    cacheEntrySet.iterator();
+                while (cacheEntryIterator.hasNext()) {
+                    Map.Entry<DescriptionKey, ServiceDescription> entry = 
+                        cacheEntryIterator.next();
+                    ServiceDescription entrySvcDescValue = entry.getValue();
+                    if (svcDesc == entrySvcDescValue) {
+                        cacheEntryIterator.remove();
+                        if (log.isDebugEnabled()) {
+                            log.debug("Removed service description from cache");
+                        }
+                    }
+                }
+            }
+        }
+        return svcDescRemoved;
+    }
 }

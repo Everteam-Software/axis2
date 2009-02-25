@@ -25,7 +25,11 @@ import org.apache.axis2.jaxws.TestLogger;
 import org.apache.axis2.jaxws.framework.AbstractTestCase;
 import org.apache.axis2.jaxws.message.databinding.JAXBUtilsMonitor;
 import org.apache.axis2.jaxws.proxy.gorilla_dlw.sei.GorillaInterface;
+import org.apache.xerces.jaxp.datatype.DatatypeFactoryImpl;
 
+import javax.xml.datatype.DatatypeFactory;
+import javax.xml.datatype.Duration;
+import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.namespace.QName;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.Dispatch;
@@ -34,6 +38,9 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 
 public class GorillaDLWProxyTests extends AbstractTestCase {
@@ -95,6 +102,11 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
             assertTrue(response != null);
             assertEquals(response, request);
             
+            // Try again to verify
+            response = proxy.echoString(request);
+            assertTrue(response != null);
+            assertEquals(response, request);
+            
         }catch(Exception e){ 
             e.printStackTrace(); 
             fail("Exception received" + e);
@@ -110,6 +122,10 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
             String request = null;  // Null is an appropriate input
            
             String response = proxy.echoString(request);
+            assertTrue(response == null);
+            
+            // Try again to verify
+            response = proxy.echoString(request);
             assertTrue(response == null);
         }catch(Exception e){ 
             e.printStackTrace(); 
@@ -145,6 +161,25 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
                 // Check for the package referenced only by an @XmlSeeAlso
                 assertTrue(observedKey.contains("org.test.stock2"));
             }
+            
+            
+            // Try again to verify
+            JAXBUtilsMonitor.clear();
+            response = proxy.echoString(request);
+            assertTrue(response != null);
+            assertEquals(response, request);
+            
+            // Now query the monitor
+            keys = JAXBUtilsMonitor.getPackageKeys();
+            assertTrue(keys != null && keys.size() > 0);
+            for (int i=0; i<keys.size(); i++) {
+                String observedKey = keys.get(i);
+                TestLogger.logger.debug("Observed Key =" + observedKey);
+                // Check for one of the expected (referenced) packages
+                assertTrue(observedKey.contains("org.apache.axis2.jaxws.proxy.gorilla_dlw.data"));
+                // Check for the package referenced only by an @XmlSeeAlso
+                assertTrue(observedKey.contains("org.test.stock2"));
+            }
         }catch(Exception e){ 
             e.printStackTrace(); 
             fail("Exception received" + e);
@@ -157,6 +192,12 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
      * Testing of StringList (xsd:list of string)
      */
     public void testEchoStringList() throws Exception {
+        // Run the test multiple times to verify correct behavior
+        _testEchoStringList();
+        _testEchoStringList();
+        _testEchoStringList();
+    }
+    public void _testEchoStringList() throws Exception {
         try{ 
             GorillaInterface proxy = getProxy();
             
@@ -210,6 +251,13 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
      * SEI is mapped to String[] instead of List<String>
      */
     public void testEchoStringListAlt() throws Exception {
+        
+        // Run the test multiple times to verify correct behavior
+        _testEchoStringListAlt();
+        _testEchoStringListAlt();
+        _testEchoStringListAlt();
+    }
+    public void _testEchoStringListAlt() throws Exception {
         try{ 
             GorillaInterface proxy = getProxy();
             
@@ -257,6 +305,12 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
      * @throws Exception
      */
     public void testEchoIndexedStringArray() throws Exception {
+        // Run the test multiple times to verify correct behavior
+        _testEchoIndexedStringArray();
+        _testEchoIndexedStringArray();
+        _testEchoIndexedStringArray();
+    }
+    public void _testEchoIndexedStringArray() throws Exception {
         try{ 
             GorillaInterface proxy = getProxy();
             
@@ -311,6 +365,13 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
      * @throws Exception
      */
     public void testEchoStringArray() throws Exception {
+        
+        // Run the test multiple times to verify correct behavior
+        _testEchoStringArray();
+        _testEchoStringArray();
+        _testEchoStringArray();
+    }
+    public void _testEchoStringArray() throws Exception {
         try{ 
             GorillaInterface proxy = getProxy();
             
@@ -365,6 +426,13 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
      * @throws Exception
      */
     public void testEchoStringArrayAlt() throws Exception {
+        
+        // Run the test multiple times to verify correct behavior
+        _testEchoStringArrayAlt();
+        _testEchoStringArrayAlt();
+        _testEchoStringArrayAlt();
+    }
+    public void _testEchoStringArrayAlt() throws Exception {
         try{ 
             GorillaInterface proxy = getProxy();
             
@@ -406,6 +474,39 @@ public class GorillaDLWProxyTests extends AbstractTestCase {
             e.printStackTrace(); 
             fail("Exception received" + e);
         }
+    }
+    
+    public void testEchoDate() throws Exception{
+    	try{
+    		System.out.println("TestEchoDate");
+	    	GorillaInterface proxy = getProxy();
+	    	GregorianCalendar cal = new GregorianCalendar(Calendar.YEAR, Calendar.MONTH, Calendar.DAY_OF_MONTH);
+	    	DatatypeFactory javaxtypeFactory = DatatypeFactory.newInstance();
+	    	DatatypeFactory xercesfactoryImpl = DatatypeFactoryImpl.newInstance();
+	    	XMLGregorianCalendar request=  javaxtypeFactory.newXMLGregorianCalendar(cal);
+	    	System.out.println("Javax Factory Clazz Name = "+request.getClass().getName());
+	    	Duration d = javaxtypeFactory.newDuration(System.currentTimeMillis());
+	    	XMLGregorianCalendar response = proxy.echoDate(request, d);
+	    	System.out.println(response.toString());
+	    	assertNotNull(response);
+    	}catch(Exception e){
+    		e.printStackTrace();
+    		fail("Exception in testEchoDate :"+e);
+    	}
+    }
+    
+    public void testPolymorphicDate() throws Exception{
+    	try{
+	    	GorillaInterface proxy = getProxy();
+	    	GregorianCalendar cal = new GregorianCalendar(Calendar.YEAR, Calendar.MONTH, Calendar.DAY_OF_MONTH);
+	    	DatatypeFactory typeFactory = DatatypeFactory.newInstance();
+	    	XMLGregorianCalendar request =  typeFactory.newXMLGregorianCalendar(cal);
+	        proxy.echoPolymorphicDate(request);
+	    	
+    	}catch(Exception e){
+    		e.printStackTrace();
+    		fail("Exception in testEchoDate :"+e);
+    	}
     }
     
     private boolean compareLists(List in, List out) {

@@ -20,10 +20,12 @@
 package org.apache.axis2.jaxws.description.impl;
 
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.Constants;
 import org.apache.axis2.Constants.Configuration;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
 import org.apache.axis2.description.OutInAxisOperation;
 import org.apache.axis2.description.OutOnlyAxisOperation;
 import org.apache.axis2.description.Parameter;
@@ -89,15 +91,18 @@ import java.util.TreeSet;
 
 /** @see ../EndpointDescription */
 /*
- * TODO: EndpointDescription should be created via AxisService objects and not directly from WSDL
  * IMPORTANT NOTE: Axis2 currently only supports 1 service and 1 port under that service.  When that is
  * fixed, that will probably have an impact on this class.  In particular, I think this should be created 
  * somehow from an AxisService/AxisPort combination, and not directly from the WSDL.
  */
 class EndpointDescriptionImpl
         implements EndpointDescription, EndpointDescriptionJava, EndpointDescriptionWSDL {
+
     private ServiceDescriptionImpl parentServiceDescription;
     private AxisService axisService;
+    // In some environments some of the resources on an AxisService can lead to OOMs.
+    // However, releasing these resources can have other implications.  
+    private boolean releaseAxisServiceResources = false;
 
     private QName portQName;
     private QName serviceQName;
@@ -176,6 +181,9 @@ class EndpointDescriptionImpl
     
     // ANNOTATION: @RespectBinding
     private Boolean respectBinding = false;
+    private List requiredBindings;
+    
+    private Integer portCompositeIndex = null;
     
     private List<CustomAnnotationInstance> customAnnotations;
     
@@ -211,14 +219,11 @@ class EndpointDescriptionImpl
                             ServiceDescriptionImpl parent) {
         this(theClass, portName, dynamicPort, parent, null, null);
     }
-
     EndpointDescriptionImpl(Class theClass, QName portName, boolean dynamicPort,
                             ServiceDescriptionImpl parent, 
                             DescriptionBuilderComposite sparseComposite,
                             Object sparseCompositeKey) {
 
-        // TODO: This and the other constructor will (eventually) take the same args, so the logic needs to be combined
-        // TODO: If there is WSDL, could compare the namespace of the defn against the portQName.namespace
         this.parentServiceDescription = parent;
         composite = new DescriptionBuilderComposite();
         composite.setSparseComposite(sparseCompositeKey, sparseComposite);
@@ -249,9 +254,9 @@ class EndpointDescriptionImpl
             throw ExceptionFactory.makeWebServiceException(msg);
         }
 
-        // TODO: Refactor this with the consideration of no WSDL/Generic Service/Annotated SEI
         setupAxisService();
         addToAxisService();
+        setupReleaseResources(getServiceDescription().getAxisConfigContext());
 
         buildDescriptionHierachy();
         addAnonymousAxisOperations();
@@ -265,11 +270,41 @@ class EndpointDescriptionImpl
         } catch (Exception e) {
             String msg = Messages.getMessage("endpointDescriptionErr2",e.getClass().getName(),parent.getClass().getName());
             throw ExceptionFactory.makeWebServiceException(msg, e);
+        } finally {
+            releaseAxisServiceResources();
         }
+        
     }
     
+    private void setupReleaseResources(ConfigurationContext configurationContext) {
+        if (configurationContext != null) {
+            AxisConfiguration axisConfiguration = configurationContext.getAxisConfiguration();
+            if (axisConfiguration != null) {
+                Parameter param = 
+                    axisConfiguration.getParameter(Constants.Configuration.REDUCE_WSDL_MEMORY_CACHE);
+                if (param != null) {
+                    releaseAxisServiceResources = ((String) param.getValue()).equalsIgnoreCase("true");
+                    if (log.isDebugEnabled()) {
+                        log.debug("EndpointDescription configured to release AxisService resources via "
+                                  + Constants.Configuration.REDUCE_WSDL_MEMORY_CACHE);
+                    }
+                }
+            }
+        }
+        else if(composite != null) {
+            Boolean reduceCache = (Boolean) composite.getProperties().get(Constants.Configuration.REDUCE_WSDL_MEMORY_CACHE);
+            if(reduceCache != null) {
+                if(log.isDebugEnabled()) {
+                    log.debug("Retrieved the following reduce WSDL cache value: " + reduceCache + 
+                              " from the composite: " + composite.getClassName());
+                }
+                releaseAxisServiceResources = reduceCache;
+            }
+        }
+        
+    }
     EndpointDescriptionImpl(ServiceDescriptionImpl parent, String serviceImplName) {
-        this(parent, serviceImplName, null);
+        this(parent, serviceImplName, null, null);
     }
 
     /**
@@ -282,22 +317,32 @@ class EndpointDescriptionImpl
      *                 don't use an SEI
      */
     EndpointDescriptionImpl(ServiceDescriptionImpl parent, String serviceImplName, Map<String, Object>
-        properties) {
+        properties, Integer portCompositeIndex) {
         
         // initialize CustomAnnotationIntance list and CustomAnnotationProcessor map
         customAnnotations = new ArrayList<CustomAnnotationInstance>();
         customAnnotationProcessors = new HashMap<String, CustomAnnotationProcessor>();
+        this.portCompositeIndex = portCompositeIndex;
         
         // set properties map
         this.properties = properties;
         
-
-        // TODO: This and the other constructor will (eventually) take the same args, so the logic needs to be combined
-        // TODO: If there is WSDL, could compare the namespace of the defn against the portQName.namespace
         this.parentServiceDescription = parent;
         this.serviceImplName = serviceImplName;
 
-        composite = getServiceDescriptionImpl().getDescriptionBuilderComposite();
+        // if the ServiceDescription's service QName is specified, let's use that to get the
+        // correct DescriptionBuilderComposite
+        if(parent.getServiceQName() != null) {
+            composite = getServiceDescriptionImpl().getDescriptionBuilderComposite(parent.getServiceQName(),
+                                                                                   portCompositeIndex); 
+        }
+        
+        // otherwise we will get the DescriptionBuilderComposite by the current index
+        else {
+            composite = getServiceDescriptionImpl().getDescriptionBuilderComposite(null,
+                                                                                   portCompositeIndex);
+        }
+        
         if (composite == null) {
             throw ExceptionFactory.makeWebServiceException(Messages.getMessage("endpointDescriptionErr3"));
         }
@@ -321,7 +366,6 @@ class EndpointDescriptionImpl
         customAnnotations.addAll(composite.getCustomAnnotationInstances());
         customAnnotationProcessors.putAll(composite.getCustomAnnotationProcessors());
         
-        // REVIEW: Maybe this should be an error if the name has already been set and it doesn't match
         // Note that on the client side, the service QN should be set; on the server side it will not be.
         if (DescriptionUtils.isEmpty(getServiceDescription().getServiceQName())) {
             getServiceDescriptionImpl().setServiceQName(getServiceQName());
@@ -329,15 +373,8 @@ class EndpointDescriptionImpl
         //Call the getter to insure the qualified port name is set. 
         getPortQName();
 
-        // TODO: Refactor this with the consideration of no WSDL/Generic Service/Annotated SEI
         setupAxisServiceFromDBL();
         addToAxisService();    //Add a reference to this EndpointDescription to the AxisService
-
-        //TODO: Need to remove operations from AxisService that have 'exclude = true
-        //      then call 'validateOperations' to verify that WSDL and AxisService match up,
-        //      Remember that this will only happen when we generate an AxisService from existing
-        //		WSDL and then need to perform further processing because we have annotations as well
-        //		If there is no WSDL, we would never process the Method to begin with.
 
         buildDescriptionHierachy();
 
@@ -356,8 +393,6 @@ class EndpointDescriptionImpl
         // generate WSDL if the binding type is not SOAP 1.1 based.
         // Then, assuming the composite does not contain a 
         // Wsdl Definition, go ahead and generate it
-        // REVIEW: I think this should this be isSOAP11 so the generators are only called for 
-        //         SOAP11; i.e. NOT for SOAP12 or XML/HTTP bindings.
         if (isSOAP11){
             if (
                     (isEndpointBased() &&
@@ -536,45 +571,10 @@ class EndpointDescriptionImpl
         
         // Configure any available WebServiceFeatures on the endpoint.
         configureWebServiceFeatures();
-    }
-
-    /**
-     * Create a service-provider side EndpointDescription from an annotated implementation class. Note this is
-     * currently used only on the server-side (this probably won't change).
-     * 
-     * @param theClass An implemntation or SEI class
-     * @param portName May be null; if so the annotation is used
-     * @param parent
-     * 
-     * @deprecated
-     */
-    EndpointDescriptionImpl(Class theClass, QName portName, AxisService axisService,
-                            ServiceDescriptionImpl parent) {
-        this.parentServiceDescription = parent;
-        composite = new DescriptionBuilderComposite();
-        composite.setIsDeprecatedServiceProviderConstruction(true);
-        composite.setIsServiceProvider(true);
-        this.portQName = portName;
-        composite.setCorrespondingClass(theClass);
-        ClassLoader loader = (ClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    public Object run() {
-                        return this.getClass().getClassLoader();
-                    }
-                }
-        );
-        composite.setClassLoader(loader);
-        this.axisService = axisService;
-
-        addToAxisService();
-
-        buildEndpointDescriptionFromAnnotations();
         
-        configureWebServiceFeatures();
-
-        // The anonymous AxisOperations are currently NOT added here.  The reason 
-        // is that (for now) this is a SERVER-SIDE code path, and the anonymous operations
-        // are only needed on the client side.
+        // REVIEW: there are some throws above that won't cause the release
+        setupReleaseResources(composite.getConfigurationContext());
+        releaseAxisServiceResources();
     }
 
     private void addToAxisService() {
@@ -583,7 +583,6 @@ class EndpointDescriptionImpl
             Parameter parameter = new Parameter();
             parameter.setName(EndpointDescription.AXIS_SERVICE_PARAMETER);
             parameter.setValue(this);
-            // TODO: What to do if AxisFault
             try {
                 axisService.addParameter(parameter);
             } catch (AxisFault e) {
@@ -610,24 +609,8 @@ class EndpointDescriptionImpl
         // - The @WebService and @WebServiceProvider annotations can not appear in the same class per 
         //   JAX-WS section 7.7 on page 82.
 
-        // Verify that one (and only one) of the required annotations is present.
-        // TODO: Add tests to verify this error checking
-
-        if (composite.isDeprecatedServiceProviderConstruction()) {
-
-            webServiceAnnotation = composite.getWebServiceAnnot();
-            webServiceProviderAnnotation = composite.getWebServiceProviderAnnot();
-
-            if (webServiceAnnotation == null && webServiceProviderAnnotation == null)
-                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("endpointDescriptionErr6",composite.getClassName()));
-            else if (webServiceAnnotation != null && webServiceProviderAnnotation != null)
-                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("endpointDescriptionErr7",composite.getClassName()));
-        }
         // If portName was specified, set it.  Otherwise, we will get it from the appropriate
         // annotation when the getter is called.
-        // TODO: If the portName is specified, should we verify it against the annotation?
-        // TODO: Add tests: null portName, !null portName, portName != annotation value
-        // TODO: Get portName from annotation if it is null.
 
         // If this is an Endpoint-based service implementation (i.e. not a 
         // Provider-based one), then create the EndpointInterfaceDescription to contain
@@ -635,42 +618,19 @@ class EndpointDescriptionImpl
         // associated with them, so they don't have an EndpointInterfaceDescription.
         if (webServiceAnnotation != null) {
             // If this impl class references an SEI, then use that SEI to create the EndpointInterfaceDesc.
-            // TODO: Add support for service impl endpoints that don't reference an SEI; remember
-            //       that this is also called with just an SEI interface from svcDesc.updateWithSEI()
             String seiClassName = getAnnoWebServiceEndpointInterface();
 
-            if (composite.isDeprecatedServiceProviderConstruction()
-                    || !composite.isServiceProvider()) {
-//            if (!getServiceDescriptionImpl().isDBCMap()) {
+            if (!composite.isServiceProvider()) {
                 Class seiClass = null;
                 if (DescriptionUtils.isEmpty(seiClassName)) {
                     // This is the client code path; the @WebServce will not have an endpointInterface member
                     // For now, just build the EndpointInterfaceDesc based on the class itself.
-                    // TODO: The EID ctor doesn't correctly handle anything but an SEI at this
-                    //       point; e.g. it doesn't publish the correct methods of just an impl.
                     seiClass = composite.getCorrespondingClass();
-                } else {
-                    //  This is the deprecated server-side introspection code for an impl that references an SEI
-                    try {
-                        // TODO: Using Class forName() is probably not the best long-term way to get the SEI class from the annotation
-                        seiClass = forName(seiClassName, false,
-                                                            getContextClassLoader(this.axisService != null ? this.axisService.getClassLoader() : null));
-                        // Catch Throwable as ClassLoader can throw an NoClassDefFoundError that
-                        // does not extend Exception, so lets catch everything that extends Throwable
-                        // rather than just Exception.
-                    } catch (Throwable e) {
-                    	throw ExceptionFactory.makeWebServiceException(Messages.getMessage("endpointDescriptionErr8"),e);
-
-                    }
                 }
                 endpointInterfaceDescription = new EndpointInterfaceDescriptionImpl(seiClass, this);
             } else {
-                //TODO: Determine if we need logic here to determine implied SEI or not. This logic
-                //		may be handled by EndpointInterfaceDescription
-
                 if (DescriptionUtils.isEmpty(getAnnoWebServiceEndpointInterface())) {
 
-                    //TODO: Build the EndpointInterfaceDesc based on the class itself
                     endpointInterfaceDescription =
                             new EndpointInterfaceDescriptionImpl(composite, true, this);
 
@@ -696,22 +656,19 @@ class EndpointDescriptionImpl
             String bindingType = getBindingType();
             if (javax.xml.ws.http.HTTPBinding.HTTP_BINDING.equals(bindingType)||
                     SOAPBinding.SOAP11HTTP_BINDING.equals(bindingType)||
-                    SOAPBinding.SOAP12HTTP_BINDING.equals(bindingType)) {
+                    SOAPBinding.SOAP12HTTP_BINDING.equals(bindingType)||
+                    MDQConstants.SOAP_HTTP_BINDING.equals(bindingType)) {
                 endpointInterfaceDescription = new EndpointInterfaceDescriptionImpl(composite, this);
             }
         }
     }
 
     public QName getPortQName() {
-        // REVIEW: Implement WSDL/Annotation merge? May be OK as is; not sure how would know WHICH port Qname to get out of the WSDL if 
-        //       we didn't use annotations.
         if (portQName == null) {
             // The name was not set by the constructors, so get it from the
             // appropriate annotation.
             String name = getAnnoWebServicePortName();
             String tns = getAnnoWebServiceTargetNamespace();
-
-            // TODO: Check for name &/| tns null or empty string and add tests for same
             portQName = new QName(tns, name);
         }
         return portQName;
@@ -779,7 +736,6 @@ class EndpointDescriptionImpl
     }
 
     private void setupAxisService() {
-        // TODO: Need to use MetaDataQuery validator to merge WSDL (if any) and annotations (if any)
         // Build up the AxisService.  Note that if this is a dynamic port, then we don't use the
         // WSDL to build up the AxisService since the port added to the Service by the client is not
         // one that will be present in the WSDL.  A null class passed in as the SEI indicates this 
@@ -840,7 +796,6 @@ class EndpointDescriptionImpl
      * 
      */
     private void setupAxisServiceFromDBL() {
-        // TODO: Need to use MetaDataQuery validator to merge WSDL (if any) and annotations (if any)
         // Build up the AxisService.  Note that if this is a dispatch client, then we don't use the
         // WSDL to build up the AxisService since the port added to the Service by the client is not
         // one that will be present in the WSDL.  A null class passed in as the SEI indicates this 
@@ -901,7 +856,6 @@ class EndpointDescriptionImpl
         boolean isBuiltFromWSDL = false;
         try {
 
-            // TODO: Change this to use WSDLToAxisServiceBuilder superclass
             // Note that the axis service builder takes only the localpart of the port qname.
             // TODO:: This should check that the namespace of the definition matches the namespace of the portQName per JAXRPC spec
 
@@ -919,8 +873,6 @@ class EndpointDescriptionImpl
             }
             
             if (composite.isServiceProvider()) {
-//            if (getServiceDescriptionImpl().isDBCMap()) {
-                //this.class.getClass().getClassLoader();
                 URIResolverImpl uriResolver =
                         new URIResolverImpl(composite.getClassLoader());
                 serviceBuilder.setCustomResolver(uriResolver);
@@ -935,9 +887,6 @@ class EndpointDescriptionImpl
                 serviceBuilder.setCustomResolver(uriResolver);
             }
 
-            // TODO: Currently this only builds the client-side AxisService;
-            // it needs to do client and server somehow.
-            // Patterned after AxisService.createClientSideAxisService
             if (getServiceDescriptionImpl().isServerSide())
                 serviceBuilder.setServerSide(true);
             else
@@ -983,8 +932,6 @@ class EndpointDescriptionImpl
             isBuiltFromWSDL = true;
 
         } catch (AxisFault e) {
-            // REVIEW: If we couldn't use the WSDL, should we fail instead of continuing to process using annotations?
-            //         Note that if we choose to fail, we need to distinguish the partial WSDL case (which can not fail)
             String wsdlLocation = (getServiceDescriptionImpl().getWSDLLocation() != null) ?
                     getServiceDescriptionImpl().getWSDLLocation().toString() : null;
             String implClassName = composite.getClassName();
@@ -997,19 +944,22 @@ class EndpointDescriptionImpl
     }
 
     private void buildAxisServiceFromAnnotations() {
-        // TODO: Refactor this to create from annotations.
         String serviceName = null;
         if (portQName != null) {
             serviceName = createAxisServiceName();
         } else {
-            // REVIEW: Can the portQName ever be null?
             // Make this service name unique.  The Axis2 engine assumes that a service it can not find is a client-side service.
             serviceName = ServiceClient.ANON_SERVICE + this.hashCode() + System.currentTimeMillis();
         }
         axisService = new AxisService(serviceName);
 
-        //TODO: Set other things on AxisService here, this function may have to be
-        //      moved to after we create all the AxisOperations
+    }
+
+    private void releaseAxisServiceResources() {
+        // release the schema list in the AxisService
+        if (releaseAxisServiceResources && axisService != null) {
+            axisService.releaseSchemaList();
+        }
     }
 
     private void buildDescriptionHierachy() {
@@ -1128,7 +1078,7 @@ class EndpointDescriptionImpl
                 AxisService axisSvc = getAxisService();
                 AxisConfiguration axisCfg = configCtx.getAxisConfiguration();
                 if (axisCfg.getService(axisSvc.getName()) != null) {
-                    axisSvc.setName(axisSvc.getName() + this.hashCode());
+                    axisSvc.setName(axisSvc.getName() + uniqueID());
                 }
                 serviceClient = new ServiceClient(configCtx, axisSvc);
             }
@@ -1174,7 +1124,7 @@ class EndpointDescriptionImpl
                 annotation_WsdlLocation = getAnnoWebService().wsdlLocation();
 
                 //If this is not an implicit SEI, then make sure that its not on the SEI
-                if (composite.isServiceProvider() && !composite.isDeprecatedServiceProviderConstruction()) {
+                if (composite.isServiceProvider()) {
                     if (!DescriptionUtils.isEmpty(getAnnoWebServiceEndpointInterface())) {
 
                         DescriptionBuilderComposite seic =
@@ -1256,7 +1206,6 @@ class EndpointDescriptionImpl
             } else {
                 // Default value per JSR-181 MR Sec 4.1 pg 15 defers to "Implementation defined, 
                 // as described in JAX-WS 2.0, section 3.2" which is JAX-WS 2.0 Sec 3.2, pg 29.
-                // FIXME: Hardcoded protocol for namespace
                 annotation_TargetNamespace =
                     DescriptionUtils.makeNamespaceFromPackageName(
                             DescriptionUtils.getJavaPackageName(composite.getClassName()),
@@ -1290,8 +1239,6 @@ class EndpointDescriptionImpl
                 webService_EndpointInterface = getAnnoWebService().endpointInterface();
             } else {
                 // This element is not valid on a WebServiceProvider annotation
-                // REVIEW: Is this a correct thing to return if this is called against a WebServiceProvier
-                //         which does not support this element?
                 webService_EndpointInterface = "";
             }
         }
@@ -1320,8 +1267,6 @@ class EndpointDescriptionImpl
                 }
             } else {
                 // This element is not valid on a WebServiceProvider annotation
-                // REVIEW: Is this a correct thing to return if this is called against a WebServiceProvier
-                //         which does not support this element?
                 webService_Name = "";
             }
         }
@@ -1340,7 +1285,6 @@ class EndpointDescriptionImpl
     }
 
     public Service.Mode getServiceMode() {
-        // REVIEW: WSDL/Anno Merge
         return getAnnoServiceModeValue();
     }
 
@@ -1368,7 +1312,6 @@ class EndpointDescriptionImpl
     }
 
     public String getBindingType() {
-        // REVIEW: Implement WSDL/Anno merge?
         return getAnnoBindingTypeValue();
     }
 
@@ -1409,19 +1352,23 @@ class EndpointDescriptionImpl
      * 
      */
     public HandlerChainsType getHandlerChain(Object sparseCompositeKey) {
+        
+        DescriptionBuilderComposite sparseComposite = null;
+        
         // If there is a HandlerChainsType in the sparse composite for this ServiceDelegate
         // (i.e. this sparseCompositeKey), then return that.
         if (sparseCompositeKey != null) {
-            DescriptionBuilderComposite sparseComposite = composite.getSparseComposite(sparseCompositeKey);
+            sparseComposite = composite.getSparseComposite(sparseCompositeKey);
             if (sparseComposite != null && sparseComposite.getHandlerChainsType() != null) {
-                return sparseComposite.getHandlerChainsType();
+                HandlerChainsType hct = sparseComposite.getHandlerChainsType();
+                return hct;
             }
         }
         
         // If there is no HandlerChainsType in the composite, then read in the file specified
         // on the HandlerChain annotation if it is present.
         if (handlerChainsType == null) {
-            getAnnoHandlerChainAnnotation();
+            getAnnoHandlerChainAnnotation(sparseCompositeKey);
             if (handlerChainAnnotation != null) {
                 String handlerFileName = handlerChainAnnotation.file();
 
@@ -1432,7 +1379,7 @@ class EndpointDescriptionImpl
                 String className = composite.getClassName();
 
                 // REVIEW: This is using the classloader for EndpointDescriptionImpl; is that OK?
-                ClassLoader classLoader = (composite.isServiceProvider() && !composite.isDeprecatedServiceProviderConstruction()) ?
+                ClassLoader classLoader = (composite.isServiceProvider()) ?
                         composite.getClassLoader() :
                         (ClassLoader) AccessController.doPrivileged(
                                 new PrivilegedAction() {
@@ -1442,13 +1389,30 @@ class EndpointDescriptionImpl
                                 }
                         );
 
+                if(log.isDebugEnabled()){
+                    log.debug("Trying to load file " + handlerFileName + " relative to " + className);
+                }
                 InputStream is = DescriptionUtils.openHandlerConfigStream(
                         handlerFileName,
                         className,
                         classLoader);
+                if (is == null) {
+                    // config stream is still null.  This may mean the @HandlerChain annotation is on a *driver* class
+                    // next to a @WebServiceRef annotation, so the path is relative to the class declaring @HandlerChain
+                    // and NOT relative to the Service or Endpoint class, which also means we should use the sparseComposite
+                    // since that is where the @HandlerChain annotation info would have been loaded.
+                    if (sparseComposite != null) {
+                        String handlerChainDeclaringClass = (String)sparseComposite.getProperties().get(MDQConstants.HANDLER_CHAIN_DECLARING_CLASS);
+                        if (handlerChainDeclaringClass != null) {
+                            className = handlerChainDeclaringClass;
+                            is = DescriptionUtils.openHandlerConfigStream(handlerFileName, className, classLoader);
+                        }
+                    }
+                }
 
                 if(is == null) {
-                    log.warn("Unable to load handlers from file: " + handlerFileName);                    
+                    throw ExceptionFactory.makeWebServiceException(Messages.getMessage("handlerChainNS",
+                            handlerFileName, className));
                 } else {
                     ClassLoader classLoader1 = (ClassLoader) AccessController.doPrivileged(
                             new PrivilegedAction() {
@@ -1465,9 +1429,9 @@ class EndpointDescriptionImpl
         return handlerChainsType;
     }
   
-    public HandlerChain getAnnoHandlerChainAnnotation() {
+    public HandlerChain getAnnoHandlerChainAnnotation(Object sparseCompositeKey) {
         if (this.handlerChainAnnotation == null) {
-            if (composite.isServiceProvider() && !composite.isDeprecatedServiceProviderConstruction()) {
+            if (composite.isServiceProvider()) {
                 /*
                  * Per JSR-181 The @HandlerChain annotation MAY be present on
                  * the endpoint interface and service implementation bean. The
@@ -1490,11 +1454,18 @@ class EndpointDescriptionImpl
                         if (seic != null) {
                             handlerChainAnnotation = seic.getHandlerChainAnnot();
                         }
-                        //TODO else clause for if to throw exception when seic == null
                     }
                 }
             } else {
                 handlerChainAnnotation = composite.getHandlerChainAnnot();
+            }
+        }
+        if (handlerChainAnnotation == null) {
+            if (sparseCompositeKey != null) {
+                DescriptionBuilderComposite sparseComposite = composite.getSparseComposite(sparseCompositeKey);
+                if (sparseComposite != null && sparseComposite.getHandlerChainAnnot() != null) {
+                    handlerChainAnnotation = sparseComposite.getHandlerChainAnnot();
+                }
             }
         }
 
@@ -1552,7 +1523,21 @@ class EndpointDescriptionImpl
     public void setRespectBinding(boolean r) {
         respectBinding = r;
     }
-    
+
+
+    public boolean addRequiredBinding(QName name) {
+        if (requiredBindings == null)
+            requiredBindings = new ArrayList();
+
+        return requiredBindings.add(name);
+    }
+
+    public List getRequiredBindings() {
+        if (requiredBindings == null)
+            requiredBindings = new ArrayList();
+        return requiredBindings;
+    }
+
     /*
      * (non-Javadoc)
      * @see org.apache.axis2.jaxws.description.EndpointDescription#getMTOMThreshold()
@@ -1651,8 +1636,8 @@ class EndpointDescriptionImpl
         	
             // If a WSDL binding was found, we need to find the proper extensibility
             // element and return the namespace.  The namespace for the binding element will 
-        	// determine whether it is SOAP 1.1 vs. SOAP 1.2 vs. HTTP (or other). If the namespace 
-        	// indicates SOAP we then need to determine what the transport is (HTTP vs. JMS)
+            // determine whether it is SOAP 1.1 vs. SOAP 1.2 vs. HTTP (or other). If the namespace 
+            // indicates SOAP we then need to determine what the transport is (HTTP vs. JMS)
             // TODO: What do we do if no extensibility element exists?
             List<ExtensibilityElement> elements = wsdlBinding.getExtensibilityElements();
             Iterator<ExtensibilityElement> itr = elements.iterator();
@@ -1879,8 +1864,6 @@ class EndpointDescriptionImpl
         // 1) Find the subset of all ports under the service that use the PortType represented by the SEI
         // 2) From the subset in (1) find all those ports that specify a SOAP Address
         // 3) Use the first port from (2)
-        // REVIEW: Should we be looking at the binding type or something else to determin which subset of ports to use;
-        //         i.e. instead of just finding ports that specify a SOAP Address?
 
         // Per JSR-181, 
         // - The portType name corresponds to the WebService.name annotation value, which is
@@ -1915,7 +1898,10 @@ class EndpointDescriptionImpl
     private WsdlComposite generateWSDL(DescriptionBuilderComposite dbc) {
 
         WsdlComposite wsdlComposite = null;
-        Definition defn = dbc.getWsdlDefinition();
+        Definition defn = dbc.getWsdlDefinition(getServiceQName());
+        if(defn == null) {
+            defn = dbc.getWsdlDefinition();
+        }
         if (defn == null || !isAxisServiceBuiltFromWSDL) {
 
             //Invoke the callback for generating the wsdl
@@ -1930,9 +1916,13 @@ class EndpointDescriptionImpl
                         dbc.getCustomWsdlGenerator().generateWsdl(implName, this);
 
                 if (wsdlComposite != null) {
-                    wsdlComposite.setWsdlFileName(
-                            (this.getAnnoWebServiceServiceName() + ".wsdl").toLowerCase());
-
+                    if(wsdlComposite.getWsdlFileName() == null
+                            ||
+                            "".equals(wsdlComposite.getWsdlFileName())) {
+                        wsdlComposite.setWsdlFileName(
+                                                      (this.getAnnoWebServiceServiceName() + ".wsdl").toLowerCase()); 
+                    }
+                    
                     Definition wsdlDef = wsdlComposite.getRootWsdlDefinition();
 
                     try {
@@ -2118,6 +2108,36 @@ class EndpointDescriptionImpl
             }
             catch (AxisFault e) {
                 throw ExceptionFactory.makeWebServiceException(Messages.getMessage("setupAxisServiceErr2"),e);
+            }
+        }
+    }
+    
+    private static long currentUniqueID = 0;
+    private long uniqueID() {
+        if (currentUniqueID == 0) {
+            currentUniqueID = System.currentTimeMillis();
+        }
+        return currentUniqueID++;
+    }
+        
+    /**
+     * Release the AxisService objects associated with this EndpointDescription.  Note that
+     * this should only be called by the ServiceDescription that owns this EndpointDescrition.
+     * 
+     * @param configurationContext  The Axis2 ConfigurationContext holding the AxisConfiguration
+     * from which the AxisServices should be removed.
+     */
+    void releaseResources(ConfigurationContext configurationContext) {
+        if (configurationContext != null) {
+            AxisConfiguration axisConfig = configurationContext.getAxisConfiguration();
+            AxisService axisService = getAxisService();
+            AxisServiceGroup axisServiceGroup = axisService.getAxisServiceGroup();
+            try {
+                axisConfig.removeServiceGroup(axisServiceGroup.getServiceGroupName());
+            } catch (AxisFault e) {
+                if (log.isDebugEnabled()) {
+                    log.debug("EndpointDescriptionImpl release resources caught exception which it is ignoring", e);
+                }
             }
         }
     }

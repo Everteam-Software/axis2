@@ -31,6 +31,7 @@ import org.apache.axis2.registry.Handler3;
 
 import javax.xml.stream.XMLStreamException;
 import java.util.ArrayList;
+import java.util.List;
 
 public class DeploymentTotalTest extends TestCase {
     AxisConfiguration axisConfig;
@@ -51,26 +52,33 @@ public class DeploymentTotalTest extends TestCase {
     }
 
     public void testDynamicPhase() {
-        ArrayList inFlow = axisConfig.getInFlowPhases();
+        List inFlow = axisConfig.getInFlowPhases();
         for (int i = 0; i < inFlow.size(); i++) {
             Phase phase = (Phase) inFlow.get(i);
             if (phase.getName().equals("NewPhase")) {
                 assertEquals("Wrong index for NewPhase!", 3, i);
-                assertEquals("Wrong # of handlers in NewPhase", 1, phase.getHandlerCount());
+                assertEquals("Wrong # of handlers in NewPhase", 3, phase.getHandlerCount());
                 Handler h6 = (Handler)phase.getHandlers().get(0);
                 assertTrue("Wrong type for handler", h6 instanceof Handler3);
             }
         }
 
         inFlow = axisConfig.getInFaultFlowPhases();
+        assertTrue("NewPhase wasn't found in InFaultFlow", isPhaseInFlow(inFlow, "NewPhase"));
+
+        List outFlow = axisConfig.getInFaultFlowPhases();
+        assertTrue("NewPhase wasn't found in OutFlow", isPhaseInFlow(outFlow, "NewPhase"));        
+    }
+
+    private boolean isPhaseInFlow(List inFlow, String phaseName) {
         boolean found = false;
-        for (int i = 0; i < inFlow.size(); i++) {
-            Phase phase = (Phase) inFlow.get(i);
-            if (phase.getName().equals("NewPhase")) {
+        for (Object anInFlow : inFlow) {
+            Phase phase = (Phase)anInFlow;
+            if (phase.getName().equals(phaseName)) {
                 found = true;
             }
         }
-        assertTrue("NewPhase wasn't found in InFaultFlow", found);
+        return found;
     }
 
 }

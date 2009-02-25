@@ -48,16 +48,9 @@ import org.apache.axis2.addressing.RelatesTo;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
-import org.apache.axis2.description.AxisBindingMessage;
-import org.apache.axis2.description.AxisBindingOperation;
-import org.apache.axis2.description.AxisOperation;
-import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.Parameter;
-import org.apache.axis2.description.TransportOutDescription;
-import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.description.*;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.http.HTTPConstants;
-import org.apache.axis2.transport.jms.JMSConstants;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -186,22 +179,24 @@ public class MessageContextBuilder {
             newmsgCtx.setWSAAction(inMessageContext.getWSAAction());
         }
 
-        if (ao != null) {
-            newmsgCtx.setAxisMessage(ao.getMessage(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        if (ao != null){
+           newmsgCtx.setAxisMessage(ao.getMessage(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
         }
-        
+
         // setting the out bound binding message
         AxisBindingMessage inboundAxisBindingMessage
                 = (AxisBindingMessage)inMessageContext.getProperty(Constants.AXIS_BINDING_MESSAGE);
         if (inboundAxisBindingMessage != null){
-                AxisBindingOperation axisBindingOperation = inboundAxisBindingMessage.getAxisBindingOperation();
-                newmsgCtx.setProperty(Constants.AXIS_BINDING_MESSAGE,
-                        axisBindingOperation.getChild(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+            AxisBindingOperation axisBindingOperation = inboundAxisBindingMessage.getAxisBindingOperation();
+            newmsgCtx.setProperty(Constants.AXIS_BINDING_MESSAGE,
+                    axisBindingOperation.getChild(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
         }
 
         newmsgCtx.setDoingMTOM(inMessageContext.isDoingMTOM());
         newmsgCtx.setDoingSwA(inMessageContext.isDoingSwA());
         newmsgCtx.setServiceGroupContextId(inMessageContext.getServiceGroupContextId());
+
+
 
         // Ensure transport settings match the scheme for the To EPR
         setupCorrectTransportOut(newmsgCtx);
@@ -222,10 +217,10 @@ public class MessageContextBuilder {
     		log.debug("Incoming Transport is JMS, lets check for JMS correlation id");
     		
 	    	String correlationId =
-	            (String) inMessageContext.getProperty(JMSConstants.JMS_COORELATION_ID);
+	            (String) inMessageContext.getProperty(Constants.JMS_COORELATION_ID);
 	    	log.debug("Correlation id is " + correlationId);
 	        if (correlationId != null && correlationId.length() > 0) {
-	        	outMessageContext.setProperty(JMSConstants.JMS_COORELATION_ID, correlationId);
+	        	outMessageContext.setProperty(Constants.JMS_COORELATION_ID, correlationId);
 	        }
     	}
     }
@@ -350,8 +345,8 @@ public class MessageContextBuilder {
                 (List) processingContext.getProperty(SOAPConstants.HEADER_LOCAL_NAME);
         if (soapHeadersList != null) {
             SOAPHeader soapHeaderElement = envelope.getHeader();
-            for (int i = 0; i < soapHeadersList.size(); i++) {
-                OMElement soapHeaderBlock = (OMElement) soapHeadersList.get(i);
+            for (Object aSoapHeadersList : soapHeadersList) {
+                OMElement soapHeaderBlock = (OMElement)aSoapHeadersList;
                 soapHeaderElement.addChild(soapHeaderBlock);
             }
         }
@@ -378,7 +373,7 @@ public class MessageContextBuilder {
                 if (!responseEPR.hasAnonymousAddress() && !responseEPR.hasNoneAddress()) {
                     URI uri = new URI(responseEPR.getAddress());
                     String scheme = uri.getScheme();
-                    if (!transportOut.getName().equals(scheme)) {
+                    if ((transportOut == null) || !transportOut.getName().equals(scheme)) {
                         ConfigurationContext configurationContext =
                                 context.getConfigurationContext();
                         transportOut = configurationContext.getAxisConfiguration()
@@ -524,11 +519,11 @@ public class MessageContextBuilder {
                 List faultSubCodes = axisFault.getFaultSubCodes();
                 
                 QName faultSubCodeQName;
-                
-                for (Iterator subCodeiter = faultSubCodes.iterator(); subCodeiter.hasNext(); ) {
-                    
-                    faultSubCodeQName = (QName) subCodeiter.next();
-                                        
+
+                for (Object faultSubCode : faultSubCodes) {
+
+                    faultSubCodeQName = (QName)faultSubCode;
+
                     SOAPFactory sf = (SOAPFactory)envelope.getOMFactory();
                     SOAPFaultSubCode soapFaultSubCode = sf.createSOAPFaultSubCode(fault.getCode());
                     SOAPFaultValue saopFaultValue = sf.createSOAPFaultValue(fault.getCode());

@@ -37,6 +37,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * This class can be subclassed to produce different implementations of {@link HandlerResolver}
@@ -114,34 +116,63 @@ public abstract class BaseHandlerResolver implements HandlerResolver {
         }
     }
     
-    /*
-     * A comparison routing to check service-name-pattern and port-name-pattern.  These patterns may be of
-     * the form:
-     * 
-     * 1)  namespace:localpart
-     * 2)  namespace:localpart*
-     * 3)  namespace:*    (not sure about this one)
-     * 4)  *   (which is equivalent to not specifying a pattern, therefore always matching)
-     * 
-     * I've not seen any examples where the wildcard may be placed mid-string or on the namespace, such as:
-     * 
-     * namespace:local*part
-     * *:localpart
-     * 
-     */
     private static boolean doesPatternMatch(QName portInfoQName, QName pattern) {
         if (pattern == null)
             return true;
-        String portInfoString = portInfoQName.toString();
-        String patternString = pattern.toString();
-        if (patternString.equals("*"))
-            return true;
-        if (patternString.contains("*")) {
-            patternString = patternString.substring(0, patternString.length() - 1);
-            return portInfoString.startsWith(patternString);
-        }
-        return portInfoString.equals(patternString);
+        validatePattern(pattern);
+        // build up the strings according to the regular expression defined at http://java.sun.com/xml/ns/javaee/javaee_web_services_1_2.xsd
+        // use the prefix, not the literal namespace
+        String portInfoPrefix = portInfoQName.getNamespaceURI(); //Prefix();
+        String portInfoLocalPart = portInfoQName.getLocalPart();
+        String portInfoString = ((portInfoPrefix == null) || (portInfoPrefix.equals(""))) ? "" : portInfoPrefix + ":";
+        portInfoString += portInfoLocalPart;
         
+        String patternStringPrefix = pattern.getNamespaceURI(); //Prefix();
+        String patternInfoLocalPart = pattern.getLocalPart();
+        String patternString = ((patternStringPrefix == null) || (patternStringPrefix.equals(""))) ? "" : patternStringPrefix + ":";
+        patternString += patternInfoLocalPart;
+        
+        // now match the portInfoQName to the user pattern
+        // But first, convert the user pattern to a regular expression.  Remember, the only non-QName character allowed is "*", which
+        // is a wildcard, with obvious restrictions on what characters can match (for example, a .java filename cannot contain perentheses).
+        // We'll just use part of the above reg ex to form the appropriate restrictions on the user-specified "*" character:
+        Pattern userp = Pattern.compile(patternString.replace("*", "(\\w|\\.|-|_)*"));
+        Matcher userm = userp.matcher(portInfoString);
+        boolean match = userm.matches();
+        if (log.isDebugEnabled()) {
+            if (!match) {
+                log.debug("Pattern match failed: \"" + portInfoString + "\" does not match \"" + patternString + "\"");
+            } else {
+                log.debug("Pattern match succeeded: \"" + portInfoString + "\" matches \"" + patternString + "\"");
+            }
+        }
+        return match;
+        
+    }
+    
+    
+    private static void validatePattern(QName pattern) {
+        String patternStringPrefix = pattern.getPrefix();
+        String patternInfoLocalPart = pattern.getLocalPart();
+        String patternString = ((patternStringPrefix == null) || (patternStringPrefix.equals(""))) ? "" : patternStringPrefix + ":";
+        patternString += patternInfoLocalPart;
+
+        /*
+         * Below pattern is ported from:  http://java.sun.com/xml/ns/javaee/javaee_web_services_1_2.xsd
+         * Schema regular expressions are defined differently from Java regular expressions which are different from Perl regular
+         * expressions.  I've converted the pattern defined in the above linked schema to its Java equivalent, as best as I can.
+         * 
+         * Schema reg ex:  "\*|([\i-[:]][\c-[:]]*:)?[\i-[:]][\c-[:]]*\*?"
+         * Java reg ex:  "\\*|((\\w|_)(\\w|\\.|-|_)*:)?(\\w|_)(\\w|\\.|-|_)*\\*?"
+         */
+
+        // first, confirm the defined pattern is legal
+        Pattern p = Pattern.compile("\\*|((\\w|_)(\\w|\\.|-|_)*:)?(\\w|_)(\\w|\\.|-|_)*\\*?");
+        Matcher m = p.matcher(patternString);
+        if (!m.matches()) {
+            // pattern defined by user in handler chain xml file is illegal -- report it but continue
+            log.warn("Pattern defined by user is illegal:  \"" + patternString + "\" does not match regular expression in schema http://java.sun.com/xml/ns/javaee/javaee_web_services_1_2.xsd.  Pattern matching should now be considered \"best-effort.\"");
+        }
     }
 
     /**

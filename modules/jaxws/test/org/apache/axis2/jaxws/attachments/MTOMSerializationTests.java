@@ -30,7 +30,6 @@ import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axiom.soap.impl.llom.soap11.SOAP11Factory;
-import org.apache.axis2.jaxws.TestLogger;
 import org.apache.axis2.jaxws.message.Block;
 import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
@@ -38,8 +37,9 @@ import org.apache.axis2.jaxws.message.databinding.JAXBBlockContext;
 import org.apache.axis2.jaxws.message.factory.BlockFactory;
 import org.apache.axis2.jaxws.message.factory.JAXBBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
-import org.apache.axis2.jaxws.provider.DataSourceImpl;
+import org.apache.axis2.jaxws.providerapi.DataSourceImpl;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.unitTest.TestLogger;
 import org.test.mtom.ImageDepot;
 import org.test.mtom.ObjectFactory;
 import org.test.mtom.SendImage;
@@ -159,9 +159,63 @@ public class MTOMSerializationTests extends TestCase {
                
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         soapOM.serializeAndConsume(baos, format);
+        String outputText = baos.toString();
+        // Make sure the attachment is serialized
+        assertTrue(outputText.indexOf("Content-Type: image/jpeg") > 0);
 
         TestLogger.logger.debug("==================================");
-        TestLogger.logger.debug(baos.toString());
+        TestLogger.logger.debug(outputText);
+        TestLogger.logger.debug("==================================");
+    }
+    
+    public void testMTOMAttachmentWriter2() throws Exception {
+        TestLogger.logger.debug("---------------------------------------");
+        TestLogger.logger.debug("test: " + getName());
+        
+        //Create a DataHandler with the String DataSource object
+        DataHandler dataHandler = new DataHandler(imageDS);
+                        
+        //Store the data handler in ImageDepot bean
+        ImageDepot imageDepot = new ObjectFactory().createImageDepot();
+        imageDepot.setImageData(dataHandler);
+        
+        //JAXBContext jbc = JAXBContext.newInstance("org.test.mtom");
+        JAXBBlockContext context = new JAXBBlockContext(SendImage.class.getPackage().getName());
+        
+        //Create a request bean with imagedepot bean as value
+        ObjectFactory factory = new ObjectFactory();
+        SendImage request = factory.createSendImage();
+        request.setInput(imageDepot);
+        
+        BlockFactory blkFactory = (JAXBBlockFactory) FactoryRegistry.getFactory(JAXBBlockFactory.class);
+        Block block = blkFactory.createFrom(request, context, null);
+        
+        MessageFactory msgFactory = (MessageFactory) FactoryRegistry.getFactory(MessageFactory.class);
+        Message msg = msgFactory.create(Protocol.soap11);
+        
+        msg.setBodyBlock(block);
+        
+        msg.setMTOMEnabled(true);
+        
+        // Convert message to SAAJ to simulate an outbound handler
+        msg.getAsSOAPMessage();
+        
+        // Now convert it back to AXIOM
+        
+        SOAPEnvelope soapOM = (SOAPEnvelope) msg.getAsOMElement();
+        
+        OMOutputFormat format = new OMOutputFormat();
+        format.setDoOptimize(true);
+        format.setSOAP11(true);
+               
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        soapOM.serializeAndConsume(baos, format);
+        String outputText = baos.toString();
+        // Make sure the attachment is serialized
+        assertTrue(outputText.indexOf("Content-Type: image/jpeg") > 0);
+
+        TestLogger.logger.debug("==================================");
+        TestLogger.logger.debug(outputText);
         TestLogger.logger.debug("==================================");
     }
     

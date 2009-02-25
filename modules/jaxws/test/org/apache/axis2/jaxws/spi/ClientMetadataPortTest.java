@@ -20,17 +20,21 @@
 package org.apache.axis2.jaxws.spi;
 
 import junit.framework.TestCase;
+
 import org.apache.axis2.jaxws.description.DescriptionTestUtils2;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
+import org.apache.axis2.jaxws.description.builder.MDQConstants;
 
 import javax.jws.WebService;
 import javax.xml.namespace.QName;
+import javax.xml.ws.BindingProvider;
 import javax.xml.ws.Service;
 import javax.xml.ws.WebServiceClient;
 import javax.xml.ws.soap.SOAPBinding;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -422,6 +426,71 @@ public class ClientMetadataPortTest extends TestCase {
     }
     
     /**
+     * Validate enabling MTOM when creating the service results ports created under that service
+     * have MTOM enabled.
+     */
+    public void testEnableMTOMFromServiceDBC() {
+        QName serviceQName = new QName(namespaceURI, svcLocalPart);
+        URL wsdlUrl = ClientMetadataTest.getWsdlURL(multiPortWsdl);
+        DescriptionBuilderComposite sparseComposite = new DescriptionBuilderComposite();
+        Map<String, Boolean> seiToMTOM = new HashMap<String, Boolean>();
+        seiToMTOM.put(ClientMetadataPortSEI.class.getName(), true);
+        sparseComposite.getProperties().put(MDQConstants.SEI_MTOM_ENABLEMENT_MAP, seiToMTOM);
+        ServiceDelegate.setServiceMetadata(sparseComposite);
+        Service service = Service.create(wsdlUrl, serviceQName);
+        ClientMetadataPortSEI port = service.getPort(ClientMetadataPortSEI.class);
+        assertNotNull(port);
+        // Verify that MTOM is enabled on this port.
+        BindingProvider bindingProvider = (BindingProvider) port;
+        SOAPBinding binding = (SOAPBinding) bindingProvider.getBinding();
+        assertTrue(binding.isMTOMEnabled());
+        
+        // Verify that specific ports under this service also have MTOM enabled
+        QName port1QN = new QName(namespaceURI, multiPortWsdl_portLocalPart1);
+        ClientMetadataPortSEI port1 = service.getPort(port1QN, ClientMetadataPortSEI.class);
+        SOAPBinding binding1 = ((SOAPBinding) ((BindingProvider) port1).getBinding());
+        assertTrue(binding1.isMTOMEnabled());
+        
+        QName port2QN = new QName(namespaceURI, multiPortWsdl_portLocalPart2);
+        ClientMetadataPortSEI port2 = service.getPort(port2QN, ClientMetadataPortSEI.class);
+        SOAPBinding binding2 = ((SOAPBinding) ((BindingProvider) port2).getBinding());
+        assertTrue(binding2.isMTOMEnabled());
+    }
+    
+    /**
+     * Validate enabling MTOM when creating the service results ports created under that service
+     * have MTOM enabled.
+     */
+    public void testDisableMTOMFromServiceDBC() {
+        QName serviceQName = new QName(namespaceURI, svcLocalPart);
+        URL wsdlUrl = ClientMetadataTest.getWsdlURL(multiPortWsdl);
+        DescriptionBuilderComposite sparseComposite = new DescriptionBuilderComposite();
+        Map<String, Boolean> seiToMTOM = new HashMap<String, Boolean>();
+        seiToMTOM.put(ClientMetadataPortSEI.class.getName(), false);
+        sparseComposite.getProperties().put(MDQConstants.SEI_MTOM_ENABLEMENT_MAP, seiToMTOM);
+        ServiceDelegate.setServiceMetadata(sparseComposite);
+        Service service = Service.create(wsdlUrl, serviceQName);
+        ClientMetadataPortSEI port = service.getPort(ClientMetadataPortSEI.class);
+        assertNotNull(port);
+        // Verify that MTOM is enabled on this port.
+        BindingProvider bindingProvider = (BindingProvider) port;
+        SOAPBinding binding = (SOAPBinding) bindingProvider.getBinding();
+        assertTrue(!binding.isMTOMEnabled());
+        
+        // Verify that specific ports under this service also have MTOM enabled
+        QName port1QN = new QName(namespaceURI, multiPortWsdl_portLocalPart1);
+        ClientMetadataPortSEI port1 = service.getPort(port1QN, ClientMetadataPortSEI.class);
+        SOAPBinding binding1 = ((SOAPBinding) ((BindingProvider) port1).getBinding());
+        assertTrue(!binding1.isMTOMEnabled());
+        
+        QName port2QN = new QName(namespaceURI, multiPortWsdl_portLocalPart2);
+        ClientMetadataPortSEI port2 = service.getPort(port2QN, ClientMetadataPortSEI.class);
+        SOAPBinding binding2 = ((SOAPBinding) ((BindingProvider) port2).getBinding());
+        assertTrue(!binding2.isMTOMEnabled());
+    }
+    
+    
+    /**
      * Validate enabling MTOM when creating the service results in enablement only
      * for that service delegate, and not a different service delegate referencing
      * the same service.
@@ -449,6 +518,72 @@ public class ClientMetadataPortTest extends TestCase {
             
             SOAPBinding binding2 = ((SOAPBinding) ((BindingProvider) port2).getBinding());
             assertFalse(binding2.isMTOMEnabled());
+
+        } finally {
+            ClientMetadataTest.restoreOriginalFactory();
+        }
+    }
+        
+    /**
+     * Validate enabling the setting of properties on the BindingProvider based
+     * on a map of properties supplied to the sparse composite.
+     */
+    public void testSetBindingProperties() {
+        try {
+            ClientMetadataTest.installCachingFactory();
+
+            QName serviceQName = new QName(namespaceURI, svcLocalPart);
+            URL wsdlUrl = ClientMetadataTest.getWsdlURL(multiPortWsdl);
+            QName portQN = new QName(namespaceURI, multiPortWsdl_portLocalPart1);
+
+            DescriptionBuilderComposite sparseComposite = new DescriptionBuilderComposite();
+            sparseComposite.setIsMTOMEnabled(true);
+            Map<String, Map<String, Object>> allBindingProps = new HashMap<String, Map<String,Object>>();
+            String key = ClientMetadataPortSEI.class.getName() + ":" + portQN.toString();
+            Map<String, Object> bindingProps = new HashMap<String, Object>();
+            bindingProps.put("customProperty", "someValue");
+            allBindingProps.put(key, bindingProps);
+            sparseComposite.getProperties().put(MDQConstants.BINDING_PROPS_MAP, allBindingProps);
+
+            ServiceDelegate.setServiceMetadata(sparseComposite);
+            Service service1 = Service.create(wsdlUrl, serviceQName);
+            ClientMetadataPortSEI port1 = service1.getPort(portQN, ClientMetadataPortSEI.class);
+            BindingProvider bp = (BindingProvider) port1;
+            assertNotNull(bp.getRequestContext().get("customProperty"));
+            assertEquals(bp.getRequestContext().get("customProperty"), "someValue");
+
+        } finally {
+            ClientMetadataTest.restoreOriginalFactory();
+        }
+    }
+
+    /**
+     * This will validate that the properties to be set on the BindingProvider, via
+     * the sparse composite, can be correctly scoped at the port level.
+     */
+    public void testNoSetBindingProperties() {
+        try {
+            ClientMetadataTest.installCachingFactory();
+
+            QName serviceQName = new QName(namespaceURI, svcLocalPart);
+            URL wsdlUrl = ClientMetadataTest.getWsdlURL(multiPortWsdl);
+            QName portQN = new QName(namespaceURI, multiPortWsdl_portLocalPart2);
+
+            DescriptionBuilderComposite sparseComposite = new DescriptionBuilderComposite();
+            sparseComposite.setIsMTOMEnabled(true);
+            Map<String, Map<String, Object>> allBindingProps = new HashMap<String, Map<String,Object>>();
+            String key = ClientMetadataPortSEI.class.getName() + ":" + portQN.toString();
+            Map<String, Object> bindingProps = new HashMap<String, Object>();
+            bindingProps.put("customProperty", "someValue");
+            allBindingProps.put(key, bindingProps);
+            sparseComposite.getProperties().put(MDQConstants.BINDING_PROPS_MAP, allBindingProps);
+
+            ServiceDelegate.setServiceMetadata(sparseComposite);
+            Service service1 = Service.create(wsdlUrl, serviceQName);
+            ClientMetadataPortSEI port1 = service1.getPort(new QName(namespaceURI, multiPortWsdl_portLocalPart1), 
+                                                           ClientMetadataPortSEI.class);
+            BindingProvider bp = (BindingProvider) port1;
+            assertNull(bp.getRequestContext().get("customProperty"));
 
         } finally {
             ClientMetadataTest.restoreOriginalFactory();

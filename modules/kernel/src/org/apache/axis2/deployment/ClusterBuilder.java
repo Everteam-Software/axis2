@@ -23,39 +23,49 @@ package org.apache.axis2.deployment;
 import org.apache.axiom.om.OMAttribute;
 import org.apache.axiom.om.OMElement;
 import org.apache.axis2.clustering.ClusterManager;
+import org.apache.axis2.clustering.ClusteringConstants;
+import org.apache.axis2.clustering.Member;
+import org.apache.axis2.clustering.LoadBalanceEventHandler;
 import org.apache.axis2.clustering.configuration.ConfigurationManager;
 import org.apache.axis2.clustering.configuration.ConfigurationManagerListener;
 import org.apache.axis2.clustering.context.ContextManager;
 import org.apache.axis2.clustering.context.ContextManagerListener;
+import org.apache.axis2.description.Parameter;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.i18n.Messages;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 
 /**
- * Builds a service description from OM
+ * Builds the cluster configuration from the axis2.xml file
  */
 public class ClusterBuilder extends DescriptionBuilder {
 
-//	private static final Log log = LogFactory.getLog(ClusterBuilder.class);
+    private static final Log log = LogFactory.getLog(ClusterBuilder.class);
 
     public ClusterBuilder(AxisConfiguration axisConfig) {
         this.axisConfig = axisConfig;
     }
 
-    public ClusterBuilder(InputStream serviceInputStream, AxisConfiguration axisConfig) {
-        super(serviceInputStream, axisConfig);
-    }
-
     /**
-     * Populates service from corresponding OM.
+     * Build the cluster configuration
+     *
+     * @param clusterElement Cluster element
+     * @throws DeploymentException If an error occurs while building the cluster configuration
      */
     public void buildCluster(OMElement clusterElement) throws DeploymentException {
+
+        if (!isEnabled(clusterElement)) {
+            log.info("Clustering has been disabled");
+            return;
+        }
+        log.info("Clustering has been enabled");
 
         OMAttribute classNameAttr = clusterElement.getAttribute(new QName(TAG_CLASS_NAME));
         if (classNameAttr == null) {
@@ -82,6 +92,12 @@ public class ClusterBuilder extends DescriptionBuilder {
                               clusterManager,
                               null);
 
+            // loading the application domains
+            loadApplicationDomains(clusterManager, clusterElement);
+
+            // loading the members
+            loadWellKnownMembers(clusterManager, clusterElement);
+
             //loading the ConfigurationManager
             loadConfigManager(clusterElement, clusterManager);
 
@@ -96,6 +112,94 @@ public class ClusterBuilder extends DescriptionBuilder {
         }
     }
 
+    private boolean isEnabled(OMElement element) {
+        boolean enabled = true;
+        OMAttribute enableAttr = element.getAttribute(new QName("enable"));
+        if (enableAttr != null) {
+            enabled = Boolean.parseBoolean(enableAttr.getAttributeValue().trim());
+        }
+        return enabled;
+    }
+
+    private void loadApplicationDomains(ClusterManager clusterManager,
+                                        OMElement clusterElement) throws DeploymentException {
+        OMElement lbEle = clusterElement.getFirstChildWithName(new QName("loadBalancer"));
+        if (lbEle != null) {
+            if (isEnabled(lbEle)) {
+                log.info("Running in load balance mode");
+            } else {
+                log.info("Running in application mode");
+                return;
+            }
+
+            for (Iterator iter = lbEle.getChildrenWithName(new QName("applicationDomain"));
+                 iter.hasNext();) {
+                OMElement omElement = (OMElement) iter.next();
+                String domainName = omElement.getAttributeValue(new QName("name")).trim();
+                String handlerClass = omElement.getAttributeValue(new QName("handler")).trim();
+                LoadBalanceEventHandler eventHandler;
+                try {
+                    eventHandler = (LoadBalanceEventHandler) Class.forName(handlerClass).newInstance();
+                } catch (Exception e) {
+                    String msg = "Could not instantiate LoadBalanceEventHandler " + handlerClass +
+                                 " for domain " + domainName;
+                    log.error(msg, e);
+                    throw new DeploymentException(msg, e);
+                }
+                clusterManager.addLoadBalanceEventHandler(eventHandler, domainName);
+            }
+        }
+    }
+
+    private void loadWellKnownMembers(ClusterManager clusterManager, OMElement clusterElement) {
+        clusterManager.setMembers(new ArrayList<Member>());
+        Parameter membershipSchemeParam = clusterManager.getParameter("membershipScheme");
+        if (membershipSchemeParam != null) {
+            String membershipScheme = ((String) membershipSchemeParam.getValue()).trim();
+            if (membershipScheme.equals(ClusteringConstants.MembershipScheme.WKA_BASED)) {
+                List<Member> members = new ArrayList<Member>();
+                OMElement membersEle =
+                        clusterElement.getFirstChildWithName(new QName("members"));
+                if (membersEle != null) {
+                    for (Iterator iter = membersEle.getChildrenWithLocalName("member"); iter.hasNext();) {
+                        OMElement memberEle = (OMElement) iter.next();
+                        String hostName =
+                                memberEle.getFirstChildWithName(new QName("hostName")).getText().trim();
+                        String port =
+                                memberEle.getFirstChildWithName(new QName("port")).getText().trim();
+                        members.add(new Member(replaceVariables(hostName),
+                                               Integer.parseInt(replaceVariables(port))));
+                    }
+                }
+                clusterManager.setMembers(members);
+            }
+        }
+    }
+
+    private String replaceVariables(String text) {
+        int indexOfStartingChars;
+        int indexOfClosingBrace;
+
+        // The following condition deals with properties.
+        // Properties are specified as ${system.property},
+        // and are assumed to be System properties
+        if ((indexOfStartingChars = text.indexOf("${")) != -1 &&
+            (indexOfClosingBrace = text.indexOf("}")) != -1) { // Is a property used?
+            String var = text.substring(indexOfStartingChars + 2,
+                                        indexOfClosingBrace);
+
+            String propValue = System.getProperty(var);
+            if (propValue == null) {
+                propValue = System.getenv(var);
+            }
+            if (propValue != null) {
+                text = text.substring(0, indexOfStartingChars) + propValue +
+                       text.substring(indexOfClosingBrace + 1);
+            }
+        }
+        return text;
+    }
+
     private void loadContextManager(OMElement clusterElement,
                                     ClusterManager clusterManager) throws DeploymentException,
                                                                           InstantiationException,
@@ -103,6 +207,11 @@ public class ClusterBuilder extends DescriptionBuilder {
         OMElement contextManagerEle =
                 clusterElement.getFirstChildWithName(new QName(TAG_CONTEXT_MANAGER));
         if (contextManagerEle != null) {
+            if (!isEnabled(contextManagerEle)) {
+                log.info("Clustering context management has been disabled");
+                return;
+            }
+            log.info("Clustering context management has been enabled");
 
             // Load & set the ContextManager class
             OMAttribute classNameAttr =
@@ -209,6 +318,12 @@ public class ClusterBuilder extends DescriptionBuilder {
         OMElement configManagerEle =
                 clusterElement.getFirstChildWithName(new QName(TAG_CONFIGURATION_MANAGER));
         if (configManagerEle != null) {
+            if (!isEnabled(configManagerEle)) {
+                log.info("Clustering configuration management has been disabled");
+                return;
+            }
+            log.info("Clustering configuration management has been enabled");
+
             OMAttribute classNameAttr = configManagerEle.getAttribute(new QName(ATTRIBUTE_CLASS));
             if (classNameAttr == null) {
                 throw new DeploymentException(Messages.getMessage("classAttributeNotFound",

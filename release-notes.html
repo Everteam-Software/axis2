@@ -28,7 +28,8 @@
 
 <h3>@TODAY@</h3>
 
-<pre>Axis2 1.4.1 release mainly fixes a security vulnerability in Axis2 1.4.  
+<pre>Four months after the 1.4.1 release, we are pleased to
+announce the release of Apache Axis2 version @axisVersion@.
 
 Downloads are available at:
     http://ws.apache.org/axis2/download.cgi
@@ -41,8 +42,13 @@ functionality for features such as security and reliability.
 
 Modules supporting WS-Security/Secure-Conversation (Apache Rampart),
 WS-Trust (Apache Rahas), WS-Reliable Messaging (Apache Sandesha) and
-WS-Eventing (Apache Savan) will be available soon after the Apache Axis2
-@axisVersion@ release. Please see these projects' own sites for further information.
+WS-Eventing (Apache Savan) are available via the Apache Web Services
+project. Please see the individual subproject sites for further information.
+
+Major Changes Since 1.4.1:
+- Refactored, pluggable transports (separate jars, with deployer)
+- Clustering improvements (works with EC2)
+- Over 100 JIRA issues resolved
 
 Known Issues and Limitations in @axisVersion@ Release:
 - Please see JIRA
@@ -73,6 +79,7 @@ Programming Model
    - Archived module deployment model supporting controlled
      extensibility with versioning support
    - Hot deployment
+   - Pluggable extensions and transports
    - WS-Policy driven code generation extensions
    - Flexible service life cycle model
    - Automatic support for POX (REST) style invocation of services
@@ -108,34 +115,8 @@ Tools
    - IntelliJ Idea Plugins
    - Maven2 Plugins
    - Web application for administering Apache Axis2
-   
-Bugs marked as Resolved/Fixed after 1.4 Release:
 
-AXIS2-3821 JMS binding details are not included in the generated wsdl (?wsdl)
-AXIS2-3529 Axis2 server responds with Http 200 instead of 202 for the request of a dual channel invocation
-AXIS2-3916 ADB does not handles the daylight saving times
-AXIS2-3917 Out bound binding message is not set correctly
-AXIS2-3958 ConcurrentModificationException in AxisConfiguration
-AXIS2-3942 Binding operations are not added for Modules having module operations
-AXIS2-3935 Faults in the binding section od WSDL2 should be fault and not outfault
-AXIS2-3859 If a service is deployed using WSDL 2.0 the genarated ?wsdl2 does not show the endpoints
-AXIS2-3870 Memory Leak using ServiceClient
-AXIS2-3950 Message level policies not picked up by Codegen
-AXIS2-3907 Message level policy not serialized correctly in wsdl 1.1
-AXIS2-3930 Missing policy reference serialization in AxisService2WSDL11
-AXIS2-3913 Multiple policies not serialized correctly at service level (as portType PolicyURIs attribute)
-AXIS2-3819 Parameter ordering screws up in the genarated WSDL when the original WSDL has multiple message parts
-AXIS2-3915 Policies attached using the wsp:PolicyURIs attribute are not included in the code generated Stub
-AXIS2-3936 Private assertions are not filtered in WSDL 2.0
-AXIS2-3914 Remove servlet-api-2.3.jar from axis2.war
-AXIS2-3905 Requests coming through the old EPR are not dispatched to a binding
-AXIS2-3961 The endpoint address for a JMS endpoint appears as null in the WSDL
-AXIS2-3887 The servlet transport does not set the HTTP response code to 500 when a SOAP fault is returned (unless an exception was thrown)
-AXIS2-3903 rfc-2822 issues with Mail transport
-AXIS2-3877 whttp:locations do not take into the account correct endpoint urls of the form service.endpoint name
-AXIS2-3908 Prevent StackOverFlowError in AxisServlet
-AXIS2-3920 Allow to disable HTTP binding at service level using a parameter in services.xml
-AXIS2-3909 icu4j.jar packaged in the axis2.war contains a corrupt class file
+<a href="http://issues.apache.org/jira/sr/jira.issueviews:searchrequest-printable/temp/SearchRequest.html?&pid=10611&updated%3Aafter=24%2FAug%2F08&status=5&status=6&resolution=1&sorter/field=issuekey&sorter/order=DESC&tempMax=1000">Bugs marked as Resolved/Fixed after 1.4.1 Release</a> (link to JIRA)
 
     </pre>
 </body>

@@ -21,8 +21,17 @@ package org.apache.axis2.clustering.tribes;
 
 import org.apache.catalina.tribes.Channel;
 import org.apache.catalina.tribes.Member;
+import org.apache.catalina.tribes.util.Arrays;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.axis2.clustering.ClusteringConstants;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.util.Utils;
+
+import java.util.Properties;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.SocketException;
 
 public class TribesUtil {
 
@@ -35,12 +44,16 @@ public class TribesUtil {
             if (length > 0) {
                 log.info("Members of current cluster");
                 for (int i = 0; i < length; i++) {
-                    log.info("Member" + (i + 1) + " " + getHost(members[i]));
+                    log.info("Member" + (i + 1) + " " + getName(members[i]));
                 }
             } else {
                 log.info("No members in current cluster");
             }
         }
+    }
+
+    public static String getName(Member member) {
+        return getHost(member) + ":" + member.getPort() + "(" + new String(member.getDomain()) + ")";
     }
 
     public static String getHost(Member member) {
@@ -55,10 +68,82 @@ public class TribesUtil {
                 }
             }
         }
-        return host.append(":").append(member.getPort()).toString();
+        return host.toString();
     }
 
     public static String getLocalHost(Channel channel) {
-        return getHost(channel.getLocalMember(true));
+        return getName(channel.getLocalMember(true));
+    }
+
+    public static String getLocalHost(Parameter tcpListenHost){
+        String host = null;
+        if (tcpListenHost != null) {
+            host = ((String) tcpListenHost.getValue()).trim();
+        } else {
+            try {
+                host = Utils.getIpAddress();
+            } catch (SocketException e) {
+                String msg = "Could not get local IP address";
+                log.error(msg, e);
+            }
+        }
+        if (System.getProperty(ClusteringConstants.LOCAL_IP_ADDRESS) != null) {
+            host = System.getProperty(ClusteringConstants.LOCAL_IP_ADDRESS);
+        }
+        return host;
+    }
+
+    public static byte[] getRpcMembershipChannelId(byte[] domain) {
+        return (new String(domain) + ":" + TribesConstants.RPC_MEMBERSHIP_CHANNEL).getBytes();
+    }
+
+    public static byte[] getRpcInitChannelId(byte[] domain) {
+        return (new String(domain) + ":" + TribesConstants.RPC_INIT_CHANNEL).getBytes();
+    }
+
+    public static boolean isInDomain(Member member, byte[] domain) {
+        return Arrays.equals(domain, member.getDomain());
+    }
+
+    public static boolean areInSameDomain(Member member1, Member member2) {
+        return Arrays.equals(member1.getDomain(), member2.getDomain());
+    }
+
+    public static org.apache.axis2.clustering.Member toAxis2Member(Member member) {
+        org.apache.axis2.clustering.Member axis2Member =
+                new org.apache.axis2.clustering.Member(TribesUtil.getHost(member),
+                                                       member.getPort());
+        Properties props = getProperties(member.getPayload());
+
+        String httpPort = props.getProperty("httpPort");
+        if (httpPort != null && httpPort.trim().length() != 0) {
+            axis2Member.setHttpPort(Integer.parseInt(httpPort));
+        }
+
+        String httpsPort = props.getProperty("httpsPort");
+        if (httpsPort != null && httpsPort.trim().length() != 0) {
+            axis2Member.setHttpsPort(Integer.parseInt(httpsPort));
+        }
+
+        String isActive = props.getProperty(ClusteringConstants.Parameters.IS_ACTIVE);
+        if (isActive != null && isActive.trim().length() != 0) {
+            axis2Member.setActive(Boolean.valueOf(isActive));
+        }
+
+        axis2Member.setDomain(new String(member.getDomain()));
+        axis2Member.setProperties(props);
+        return axis2Member;
+    }
+
+    private static Properties getProperties(byte[] payload) {
+        Properties props = null;
+        try {
+            ByteArrayInputStream bin = new ByteArrayInputStream(payload);
+            props = new Properties();
+            props.load(bin);
+        } catch (IOException ignored) {
+            // This error will never occur
+        }
+        return props;
     }
 }

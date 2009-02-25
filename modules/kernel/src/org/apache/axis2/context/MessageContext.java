@@ -21,6 +21,7 @@ package org.apache.axis2.context;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.OMOutputFormat;
+import org.apache.axiom.om.util.DetachableInputStream;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
@@ -37,7 +38,10 @@ import org.apache.axis2.context.externalize.MessageExternalizeUtils;
 import org.apache.axis2.context.externalize.SafeObjectInputStream;
 import org.apache.axis2.context.externalize.SafeObjectOutputStream;
 import org.apache.axis2.context.externalize.SafeSerializable;
+import org.apache.axis2.description.AxisBinding;
 import org.apache.axis2.description.AxisBindingMessage;
+import org.apache.axis2.description.AxisBindingOperation;
+import org.apache.axis2.description.AxisEndpoint;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisModule;
 import org.apache.axis2.description.AxisOperation;
@@ -56,6 +60,8 @@ import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.axis2.util.MetaDataEntry;
 import org.apache.axis2.util.SelfManagedDataHolder;
+import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.axis2.wsdl.WSDLUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.neethi.Policy;
@@ -146,7 +152,7 @@ public class MessageContext extends AbstractContext
     /**
      * A place to store the current MessageContext
      */
-    public static ThreadLocal currentMessageContext = new ThreadLocal();
+    public static ThreadLocal<MessageContext> currentMessageContext = new ThreadLocal<MessageContext>();
 
     public static MessageContext getCurrentMessageContext() {
         return (MessageContext) currentMessageContext.get();
@@ -270,12 +276,12 @@ public class MessageContext extends AbstractContext
     /**
      * @serial The chain of Handlers/Phases for processing this message
      */
-    private ArrayList executionChain;
+    private ArrayList<Handler> executionChain;
 
     /**
      * @serial The chain of executed Handlers/Phases from processing
      */
-    private LinkedList executedPhases;
+    private LinkedList<Handler> executedPhases;
 
     /**
      * @serial Flag to indicate if we are doing REST
@@ -406,7 +412,7 @@ public class MessageContext extends AbstractContext
      * Note that this list is not explicitly saved by the MessageContext, but
      * rather through the SelfManagedDataManager interface implemented by handlers
      */
-    private transient LinkedHashMap selfManagedDataMap = null;
+    private transient LinkedHashMap<String, Object> selfManagedDataMap = null;
 
     //-------------------------------------------------------------------------
     // MetaData for data to be restored in activate() after readExternal()
@@ -429,19 +435,19 @@ public class MessageContext extends AbstractContext
      * is available, so we have to hold the data from readExternal until
      * activate is called.
      */
-    private transient ArrayList selfManagedDataListHolder = null;
+    private transient ArrayList<SelfManagedDataHolder> selfManagedDataListHolder = null;
 
     /**
      * The ordered list of metadata for handlers/phases
      * used during re-constitution of the message context
      */
-    private transient ArrayList metaExecutionChain = null;
+    private transient ArrayList<MetaDataEntry> metaExecutionChain = null;
 
     /**
      * The ordered list of metadata for executed phases
      * used during re-constitution of the message context
      */
-    private transient LinkedList metaExecuted = null;
+    private transient LinkedList<MetaDataEntry> metaExecuted = null;
 
     /**
      * Index into the executuion chain of the currently executing handler
@@ -615,7 +621,7 @@ public class MessageContext extends AbstractContext
         return envelope;
     }
 
-    public ArrayList getExecutionChain() {
+    public ArrayList<Handler> getExecutionChain() {
         if (LoggingControl.debugLoggingAllowed) {
             checkActivateWarning("getExecutionChain");
         }
@@ -630,7 +636,7 @@ public class MessageContext extends AbstractContext
      */
     public void addExecutedPhase(Handler phase) {
         if (executedPhases == null) {
-            executedPhases = new LinkedList();
+            executedPhases = new LinkedList<Handler>();
         }
         executedPhases.addFirst(phase);
     }
@@ -649,12 +655,12 @@ public class MessageContext extends AbstractContext
      *
      * @return An Iterator over the LIFO data structure.
      */
-    public Iterator getExecutedPhases() {
+    public Iterator<Handler> getExecutedPhases() {
         if (LoggingControl.debugLoggingAllowed) {
             checkActivateWarning("getExecutedPhases");
         }
         if (executedPhases == null) {
-            executedPhases = new LinkedList();
+            executedPhases = new LinkedList<Handler>();
         }
         return executedPhases.iterator();
     }
@@ -667,7 +673,7 @@ public class MessageContext extends AbstractContext
      */
     public void resetExecutedPhases() {
         executedPhasesReset = true;
-        executedPhases = new LinkedList();
+        executedPhases = new LinkedList<Handler>();
     }
 
     /**
@@ -830,7 +836,9 @@ public class MessageContext extends AbstractContext
      * Retrieves configuration descriptor parameters at any level. The order of
      * search is as follows:
      * <ol>
-     * <li> Search in operation description if it exists </li>
+     * <li> Search in message description if it exists </li>
+     * <li> If parameter is not found or if axisMessage is null, search in
+     * AxisOperation </li>
      * <li> If parameter is not found or if operationContext is null, search in
      * AxisService </li>
      * <li> If parameter is not found or if axisService is null, search in
@@ -841,6 +849,11 @@ public class MessageContext extends AbstractContext
      * @return Parameter <code>Parameter</code>
      */
     public Parameter getParameter(String key) {
+        
+        if( axisMessage != null ) {
+            return axisMessage.getParameter(key);
+        }
+        
         if (axisOperation != null) {
             return axisOperation.getParameter(key);
         }
@@ -981,8 +994,8 @@ public class MessageContext extends AbstractContext
      * @return An unmodifiable map containing the combination of all available
      *         properties or an empty map.
      */
-    public Map getProperties() {
-        final Map resultMap = new HashMap();
+    public Map<String, Object> getProperties() {
+        final Map<String, Object> resultMap = new HashMap<String, Object>();
 
         // My own context hierarchy may not all be present. So look for whatever
         // nearest level is present and add the properties
@@ -1180,6 +1193,24 @@ public class MessageContext extends AbstractContext
     }
 
     /**
+     * @return inbound content length of 0
+     */
+    public long getInboundContentLength() throws IOException {
+        // If there is an attachment map, the Attachments keep track
+        // of the inbound content length.
+        if (attachments != null) {
+//            return attachments.getContentLength();
+        } 
+        
+        // Otherwise the length is accumulated by the DetachableInputStream.
+        DetachableInputStream dis = 
+            (DetachableInputStream) getProperty(Constants.DETACHABLE_INPUT_STREAM);
+        if (dis != null) {
+            return dis.length();
+        }
+        return 0;
+    }
+    /**
      * @return Returns boolean.
      */
     public boolean isServerSide() {
@@ -1294,7 +1325,7 @@ public class MessageContext extends AbstractContext
      *
      * @param executionChain
      */
-    public void setExecutionChain(ArrayList executionChain) {
+    public void setExecutionChain(ArrayList<Handler> executionChain) {
         this.executionChain = executionChain;
         currentHandlerIndex = -1;
         currentPhaseIndex = 0;
@@ -1545,15 +1576,61 @@ public class MessageContext extends AbstractContext
         AxisBindingMessage bindingMessage = 
         	(AxisBindingMessage) getProperty(Constants.AXIS_BINDING_MESSAGE);
         
-        if (bindingMessage != null) {
-        	return bindingMessage.getEffectivePolicy();
-        } else {
-        	if (axisMessage != null) {
-        		return axisMessage.getEffectivePolicy();        		
-        	} else {
-        		return null;
-        	}
+        // If AxisBindingMessage is not set, try to find the binding message from the AxisService
+        if (bindingMessage == null) {
+        	bindingMessage = findBindingMessage();
         }
+        
+        if (bindingMessage != null) {
+            return bindingMessage.getEffectivePolicy();
+        // If we can't find the AxisBindingMessage, then try the AxisMessage   
+        } else if (axisMessage != null) {
+        		return axisMessage.getEffectivePolicy();        		
+        } else {
+        		return null;
+        }
+    }
+ 
+    private AxisBindingMessage findBindingMessage() {
+    	if (axisService != null && axisOperation != null ) {
+			if (axisService.getEndpointName() != null) {
+				AxisEndpoint axisEndpoint = axisService
+						.getEndpoint(axisService.getEndpointName());
+				if (axisEndpoint != null) {
+					AxisBinding axisBinding = axisEndpoint.getBinding();
+                    AxisBindingOperation axisBindingOperation = (AxisBindingOperation) axisBinding
+							.getChild(axisOperation.getName());
+
+                    //If Binding Operation is not found, just return null
+                    if (axisBindingOperation == null) {
+                       return null;
+                    }
+
+                    String direction = axisMessage.getDirection();
+					AxisBindingMessage axisBindingMessage = null;
+					if (WSDLConstants.WSDL_MESSAGE_DIRECTION_IN
+							.equals(direction)
+							&& WSDLUtil
+									.isInputPresentForMEP(axisOperation
+											.getMessageExchangePattern())) {
+						axisBindingMessage = (AxisBindingMessage) axisBindingOperation
+								.getChild(WSDLConstants.MESSAGE_LABEL_IN_VALUE);
+						return axisBindingMessage;
+						
+					} else if (WSDLConstants.WSDL_MESSAGE_DIRECTION_OUT
+							.equals(direction)
+							&& WSDLUtil
+									.isOutputPresentForMEP(axisOperation
+											.getMessageExchangePattern())) {
+						axisBindingMessage = (AxisBindingMessage) axisBindingOperation
+								.getChild(WSDLConstants.MESSAGE_LABEL_OUT_VALUE);
+						return axisBindingMessage;
+					}
+				}
+
+			}
+		}
+    	return null;
     }
 
 
@@ -1737,7 +1814,7 @@ public class MessageContext extends AbstractContext
      */
     public void setSelfManagedData(Class clazz, Object key, Object value) {
         if (selfManagedDataMap == null) {
-            selfManagedDataMap = new LinkedHashMap();
+            selfManagedDataMap = new LinkedHashMap<String, Object>();
         }
 
         // make sure we have a unique key and a delimiter so we can
@@ -1793,13 +1870,13 @@ public class MessageContext extends AbstractContext
      * @param map  users should pass null as this is just a holder for the recursion
      * @return a list of unigue object instances
      */
-    private ArrayList flattenPhaseListToHandlers(ArrayList list, LinkedHashMap map) {
+    private ArrayList<Handler> flattenPhaseListToHandlers(ArrayList<Handler> list, LinkedHashMap<String, Handler> map) {
 
         if (map == null) {
-            map = new LinkedHashMap();
+            map = new LinkedHashMap<String, Handler>();
         }
 
-        Iterator it = list.iterator();
+        Iterator<Handler> it = list.iterator();
         while (it.hasNext()) {
             Handler handler = (Handler) it.next();
 
@@ -1819,7 +1896,7 @@ public class MessageContext extends AbstractContext
         }
 
         if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
-            Iterator it2 = map.keySet().iterator();
+            Iterator<String> it2 = map.keySet().iterator();
             while (it2.hasNext()) {
                 Object key = it2.next();
                 Handler value = (Handler) map.get(key);
@@ -1830,7 +1907,7 @@ public class MessageContext extends AbstractContext
         }
 
 
-        return new ArrayList(map.values());
+        return new ArrayList<Handler>(map.values());
     }
 
 
@@ -1842,13 +1919,13 @@ public class MessageContext extends AbstractContext
      * @param map  users should pass null as this is just a holder for the recursion
      * @return a list of unigue object instances
      */
-    private ArrayList flattenHandlerList(List list, LinkedHashMap map) {
+    private ArrayList<Handler> flattenHandlerList(List<Handler> list, LinkedHashMap<String, Handler> map) {
 
         if (map == null) {
-            map = new LinkedHashMap();
+            map = new LinkedHashMap<String, Handler>();
         }
 
-        Iterator it = list.iterator();
+        Iterator<Handler> it = list.iterator();
         while (it.hasNext()) {
             Handler handler = (Handler) it.next();
 
@@ -1870,7 +1947,7 @@ public class MessageContext extends AbstractContext
             }
         }
 
-        return new ArrayList(map.values());
+        return new ArrayList<Handler>(map.values());
     }
 
 
@@ -1900,10 +1977,10 @@ public class MessageContext extends AbstractContext
             }
 
             // let's create a temporary list with the handlers
-            ArrayList flatExecChain = flattenPhaseListToHandlers(executionChain, null);
+            ArrayList<Handler> flatExecChain = flattenPhaseListToHandlers(executionChain, null);
 
             //ArrayList selfManagedDataHolderList = serializeSelfManagedDataHelper(flatExecChain.iterator(), new ArrayList());
-            ArrayList selfManagedDataHolderList = serializeSelfManagedDataHelper(flatExecChain);
+            ArrayList<SelfManagedDataHolder> selfManagedDataHolderList = serializeSelfManagedDataHelper(flatExecChain);
 
             if (selfManagedDataHolderList.size() == 0) {
                 out.writeBoolean(ExternalizeConstants.EMPTY_OBJECT);
@@ -1945,9 +2022,9 @@ public class MessageContext extends AbstractContext
      * @param handlers
      * @return ArrayList
      */
-    private ArrayList serializeSelfManagedDataHelper(ArrayList handlers) {
-        ArrayList selfManagedDataHolderList = new ArrayList();
-        Iterator it = handlers.iterator();
+    private ArrayList<SelfManagedDataHolder> serializeSelfManagedDataHelper(ArrayList<Handler> handlers) {
+        ArrayList<SelfManagedDataHolder> selfManagedDataHolderList = new ArrayList<SelfManagedDataHolder>();
+        Iterator<Handler> it = handlers.iterator();
 
         try {
             while (it.hasNext()) {
@@ -2019,7 +2096,7 @@ public class MessageContext extends AbstractContext
      * @param qNameAsString The QName in string form
      * @return SelfManagedDataManager handler
      */
-    private SelfManagedDataManager deserialize_getHandlerFromExecutionChain(Iterator it,
+    private SelfManagedDataManager deserialize_getHandlerFromExecutionChain(Iterator<Handler> it,
                                                                             String classname,
                                                                             String qNameAsString) {
         SelfManagedDataManager handler_toreturn = null;
@@ -2238,7 +2315,7 @@ public class MessageContext extends AbstractContext
             // match the current index with the actual saved list
             int nextIndex = 0;
 
-            Iterator i = executionChain.iterator();
+            Iterator<Handler> i = executionChain.iterator();
 
             while (i.hasNext()) {
                 Object obj = i.next();
@@ -2345,7 +2422,7 @@ public class MessageContext extends AbstractContext
 
             int execNextIndex = 0;
 
-            Iterator iterator = executedPhases.iterator();
+            Iterator<Handler> iterator = executedPhases.iterator();
 
             while (iterator.hasNext()) {
                 Object obj = iterator.next();
@@ -2820,7 +2897,11 @@ public class MessageContext extends AbstractContext
         currentPhaseIndex = 0;
         metaExecutionChain = null;
 
-        in.readUTF();
+        String marker = in.readUTF();
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read executionChain, marker is: " + marker);
+        }
         boolean gotChain = in.readBoolean();
 
         if (gotChain == ExternalizeConstants.ACTIVE_OBJECT) {
@@ -2836,7 +2917,7 @@ public class MessageContext extends AbstractContext
             }
 
             // setup the list
-            metaExecutionChain = new ArrayList();
+            metaExecutionChain = new ArrayList<MetaDataEntry>();
 
             // process the objects
             boolean keepGoing = true;
@@ -2904,6 +2985,14 @@ public class MessageContext extends AbstractContext
 
         //---------------------------------------------------------
         // LinkedList executedPhases
+        //
+        // Note that in previous versions of Axis2, this was
+        // represented by two lists: "inboundExecutedPhases", "outboundExecutedPhases",
+        // however since the message context itself represents a flow
+        // direction, one of these lists was always null.  This was changed
+        // around 2007-06-08 revision r545615.  For backward compatability
+        // with streams saved in previous versions of Axis2, we need
+        // to be able to process both the old style and new style.
         //---------------------------------------------------------
         // Restore the metadata about each member of the list
         // and the order of the list.
@@ -2931,9 +3020,40 @@ public class MessageContext extends AbstractContext
         executedPhases = null;
         metaExecuted = null;
 
-        in.readUTF();
+        marker = in.readUTF();
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read executedPhases, marker is: " + marker);
+        }
+        
+        // Previous versions of Axis2 saved two phases in the stream, although one should 
+        // always have been null.  The two phases and their associated markers are, in this order:
+        // "inboundExecutedPhases", "outboundExecutedPhases".
         boolean gotInExecList = in.readBoolean();
-
+        boolean oldStyleExecutedPhases = false;
+        if (marker.equals("inboundExecutedPhases")) {
+            oldStyleExecutedPhases = true;
+        }
+        
+        if (oldStyleExecutedPhases && (gotInExecList == ExternalizeConstants.EMPTY_OBJECT)) {
+            // There are an inboundExecutedPhases and an outboundExecutedPhases and this one
+            // is empty, so skip over it and read the next one
+            marker = in.readUTF();
+            if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+                log.trace(getLogIDString() + 
+                          ": readExternal(): Skipping over oldStyle empty inboundExecutedPhases");
+                log.trace(getLogIDString() + 
+                          ": readExternal(): About to read executedPhases, marker is: " + marker);
+            }
+            gotInExecList = in.readBoolean();
+        }
+        
+        /*
+         * At this point, the stream should point to either "executedPhases" if this is the 
+         * new style of serialization.  If it is the oldStyle, it should point to whichever 
+         * of "inbound" or "outbound" executed phases contains an active object, since only one
+         * should
+         */
         if (gotInExecList == ExternalizeConstants.ACTIVE_OBJECT) {
             int expectedNumberInExecList = in.readInt();
 
@@ -2944,7 +3064,7 @@ public class MessageContext extends AbstractContext
             }
 
             // setup the list
-            metaExecuted = new LinkedList();
+            metaExecuted = new LinkedList<MetaDataEntry>();
 
             // process the objects
             boolean keepGoing = true;
@@ -3003,18 +3123,44 @@ public class MessageContext extends AbstractContext
                         adjustedNumberInExecList + "]    ");
             }
         }
-
+        
         if ((metaExecuted == null) || (metaExecuted.isEmpty())) {
             if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
                 log.trace(getLogIDString() +
                         ":readExternal(): meta data for executedPhases list is NULL");
             }
         }
+        
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): After reading executedPhases, marker is: " + marker);
+        }
+
+        // If this is an oldStyle that contained both an inbound and outbound executed phases, 
+        // and the outbound phases wasn't read above, then we need to skip over it
+        if (marker.equals("outboundExecutedPhases")) {
+            Boolean gotOutExecList = in.readBoolean();
+            if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+                log.trace(getLogIDString() + 
+                          ": readExternal(): Skipping over outboundExecutedPhases, marker is: " + marker + 
+                          ", is list an active object: " + gotOutExecList);
+            }
+            if (gotOutExecList != ExternalizeConstants.EMPTY_OBJECT) {
+                throw new IOException("Both inboundExecutedPhases and outboundExecutedPhases had active objects");
+            }
+            
+            marker = in.readUTF();
+            if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+                log.trace(getLogIDString() + 
+                          ": readExternal(): After skipping ooutboundExecutePhases, marker is: " + marker);
+            }
+        }
 
         //---------------------------------------------------------
         // options
         //---------------------------------------------------------
-        in.readUTF(); // Read marker
+        
         options = (Options) in.readObject();
 
         if (options != null) {
@@ -3030,12 +3176,20 @@ public class MessageContext extends AbstractContext
 
         // axisOperation is not usable until the meta data has been reconciled
         axisOperation = null;
-        in.readUTF();  // Read Marker
+        marker = in.readUTF();  // Read Marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read axisOperation, marker is: " + marker);
+        }
         metaAxisOperation = (MetaDataEntry) in.readObject();
 
         // operation context is not usable until it has been activated
         // NOTE: expect this to be the parent
-        in.readUTF();  // Read marker
+        marker = in.readUTF();  // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read operationContext, marker is: " + marker);
+        }
         operationContext = (OperationContext) in.readObject();
 
         if (operationContext != null) {
@@ -3051,7 +3205,11 @@ public class MessageContext extends AbstractContext
 
         // axisService is not usable until the meta data has been reconciled
         axisService = null;
-        in.readUTF(); // Read marker
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read axisService, marker is: " + marker);
+        }
         metaAxisService = (MetaDataEntry) in.readObject();
 
         //-------------------------
@@ -3062,7 +3220,11 @@ public class MessageContext extends AbstractContext
         //-------------------------
         // serviceContext
         //-------------------------
-        in.readUTF(); // Read marker
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read serviceContext, marker is: " + marker);
+        }
 
         boolean servCtxActive = in.readBoolean();
 
@@ -3091,7 +3253,11 @@ public class MessageContext extends AbstractContext
 
         // axisServiceGroup is not usable until the meta data has been reconciled
         axisServiceGroup = null;
-        in.readUTF(); // Read marker
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read AxisServiceGroup, marker is: " + marker);
+        }
         metaAxisServiceGroup = (MetaDataEntry) in.readObject();
 
         //-----------------------------
@@ -3102,7 +3268,11 @@ public class MessageContext extends AbstractContext
         //-----------------------------
         // serviceGroupContext
         //-----------------------------
-        in.readUTF();
+        marker = in.readUTF();
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read ServiceGroupContext, marker is: " + marker);
+        }
 
         boolean servGrpCtxActive = in.readBoolean();
 
@@ -3131,7 +3301,11 @@ public class MessageContext extends AbstractContext
 
         // axisMessage is not usable until the meta data has been reconciled
         axisMessage = null;
-        in.readUTF();  // Read marker
+        marker = in.readUTF();  // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read AxisMessage, marker is: " + marker);
+        }
         metaAxisMessage = (MetaDataEntry) in.readObject();
         reconcileAxisMessage = (metaAxisMessage != null);
 
@@ -3174,14 +3348,22 @@ public class MessageContext extends AbstractContext
         // properties
         //---------------------------------------------------------
         // read local properties
-        in.readUTF(); // Read marker
-        properties  = in.readHashMap();
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read properties, marker is: " + marker);
+        }
+        properties = in.readMap(new HashMapUpdateLockable());
 
 
         //---------------------------------------------------------
         // special data
         //---------------------------------------------------------
-        in.readUTF(); // Read marker
+        marker = in.readUTF(); // Read marker
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(getLogIDString() + 
+                      ": readExternal(): About to read SpecialData, marker is: " + marker);
+        }
 
         boolean gotSelfManagedData = in.readBoolean();
 
@@ -3189,13 +3371,13 @@ public class MessageContext extends AbstractContext
             selfManagedDataHandlerCount = in.readInt();
 
             if (selfManagedDataListHolder == null) {
-                selfManagedDataListHolder = new ArrayList();
+                selfManagedDataListHolder = new ArrayList<SelfManagedDataHolder>();
             } else {
                 selfManagedDataListHolder.clear();
             }
 
             for (int i = 0; i < selfManagedDataHandlerCount; i++) {
-                selfManagedDataListHolder.add(in.readObject());
+                selfManagedDataListHolder.add((SelfManagedDataHolder) in.readObject());
             }
         }
 
@@ -3447,7 +3629,7 @@ public class MessageContext extends AbstractContext
         }
 
         if (executedPhases == null) {
-            executedPhases = new LinkedList();
+            executedPhases = new LinkedList<Handler>();
         }
 
 
@@ -3675,7 +3857,7 @@ public class MessageContext extends AbstractContext
         }
 
         if (executedPhases == null) {
-            executedPhases = new LinkedList();
+            executedPhases = new LinkedList<Handler>();
         }
 
         //-------------------------------------------------------
@@ -3693,34 +3875,34 @@ public class MessageContext extends AbstractContext
      * @param metaDataEntries ArrayList of MetaDataEntry objects
      * @return ArrayList of Handlers based on our list of handlers from the reconstituted deserialized list, and the existing handlers in the AxisConfiguration object.  May return null.
      */
-    private ArrayList restoreHandlerList(ArrayList metaDataEntries) {
+    private ArrayList<Handler> restoreHandlerList(ArrayList<MetaDataEntry> metaDataEntries) {
         AxisConfiguration axisConfig = configurationContext.getAxisConfiguration();
 
-        ArrayList existingHandlers = null;
+        List<Handler> existingHandlers = new ArrayList<Handler>();
 
         // TODO: I'm using clone for the ArrayList returned from axisConfig object.
         //     Does it do a deep clone of the Handlers held there?  Does it matter?
         switch (FLOW) {
             case IN_FLOW:
-                existingHandlers = (ArrayList) axisConfig.getInFlowPhases().clone();
+                existingHandlers.addAll(axisConfig.getInFlowPhases());
                 break;
 
             case OUT_FLOW:
-                existingHandlers = (ArrayList) axisConfig.getOutFlowPhases().clone();
+            	existingHandlers.addAll(axisConfig.getOutFlowPhases());
                 break;
 
             case IN_FAULT_FLOW:
-                existingHandlers = (ArrayList) axisConfig.getInFaultFlowPhases().clone();
+            	existingHandlers.addAll(axisConfig.getInFaultFlowPhases());
                 break;
 
             case OUT_FAULT_FLOW:
-                existingHandlers = (ArrayList) axisConfig.getOutFaultFlowPhases().clone();
+            	existingHandlers.addAll(axisConfig.getOutFaultFlowPhases());
                 break;
         }
 
         existingHandlers = flattenHandlerList(existingHandlers, null);
 
-        ArrayList handlerListToReturn = new ArrayList();
+        ArrayList<Handler> handlerListToReturn = new ArrayList<Handler>();
 
         for (int i = 0; i < metaDataEntries.size(); i++) {
             Handler handler = (Handler) ActivateUtils
@@ -3745,16 +3927,16 @@ public class MessageContext extends AbstractContext
      * @param metaDataEntries Linked list of MetaDataEntry objects
      * @return LinkedList of objects or NULL if none available
      */
-    private LinkedList restoreExecutedList(LinkedList base, LinkedList metaDataEntries) {
+    private LinkedList<Handler> restoreExecutedList(LinkedList<Handler> base, LinkedList<MetaDataEntry> metaDataEntries) {
         if (metaDataEntries == null) {
             return base;
         }
 
         // get a list of existing handler/phase objects for the restored objects
 
-        ArrayList tmpMetaDataList = new ArrayList(metaDataEntries);
+        ArrayList<MetaDataEntry> tmpMetaDataList = new ArrayList<MetaDataEntry>(metaDataEntries);
 
-        ArrayList existingList = restoreHandlerList(tmpMetaDataList);
+        ArrayList<Handler> existingList = restoreHandlerList(tmpMetaDataList);
 
         if ((existingList == null) || (existingList.isEmpty())) {
             return base;
@@ -3762,7 +3944,7 @@ public class MessageContext extends AbstractContext
 
         // set up a list to return
 
-        LinkedList returnedList = new LinkedList();
+        LinkedList<Handler> returnedList = new LinkedList<Handler>();
 
         if (base != null) {
             returnedList.addAll(base);
@@ -3783,7 +3965,7 @@ public class MessageContext extends AbstractContext
      */
     private void setupPhaseList(Phase phase, MetaDataEntry mdPhase) {
         // get the list from the phase object
-        List handlers = phase.getHandlers();
+        List<Handler> handlers = phase.getHandlers();
 
         if (handlers.isEmpty()) {
             // done, make sure there is no list in the given meta data
@@ -3797,7 +3979,7 @@ public class MessageContext extends AbstractContext
 
         if (listSize > 0) {
 
-            Iterator i = handlers.iterator();
+            Iterator<Handler> i = handlers.iterator();
 
             while (i.hasNext()) {
                 Object obj = i.next();
@@ -4013,11 +4195,11 @@ public class MessageContext extends AbstractContext
         isSOAP11 = t;
     }
 
-    public void setExecutedPhasesExplicit(LinkedList inb) {
+    public void setExecutedPhasesExplicit(LinkedList<Handler> inb) {
         executedPhases = inb;
     }
 
-    public void setSelfManagedDataMapExplicit(LinkedHashMap map) {
+    public void setSelfManagedDataMapExplicit(LinkedHashMap<String, Object> map) {
         selfManagedDataMap = map;
     }
 

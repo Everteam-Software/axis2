@@ -53,8 +53,8 @@ public class ParameterIncludeImpl
      * setup for logging
      */
     private static final Log log = LogFactory.getLog(ParameterIncludeImpl.class);
-    private static boolean DEBUG_ENABLED = log.isDebugEnabled();
-    private static boolean DEBUG_CALLSTACK_ON_SET = log.isDebugEnabled();
+    private static boolean DEBUG_ENABLED = log.isTraceEnabled();
+    private static boolean DEBUG_PROPERTY_SET = log.isDebugEnabled();
 
     private static final String myClassName = "ParameterIncludeImpl";
 
@@ -85,13 +85,13 @@ public class ParameterIncludeImpl
     /**
      * Field parmeters
      */
-    protected final HashMap parameters;
+    protected final HashMap<String, Parameter> parameters;
 
     /**
      * Constructor ParameterIncludeImpl.
      */
     public ParameterIncludeImpl() {
-        parameters = new HashMap();
+        parameters = new HashMap<String, Parameter>();
     }
 
     /**
@@ -179,11 +179,11 @@ public class ParameterIncludeImpl
         return (Parameter) parameters.get(name);
     }
 
-    public ArrayList getParameters() {
-        Collection col = parameters.values();
-        ArrayList para_list = new ArrayList();
+    public ArrayList<Parameter> getParameters() {
+        Collection<Parameter> col = parameters.values();
+        ArrayList<Parameter> para_list = new ArrayList<Parameter>();
 
-        for (Iterator iterator = col.iterator(); iterator.hasNext();) {
+        for (Iterator<Parameter> iterator = col.iterator(); iterator.hasNext();) {
             Parameter parameter = (Parameter) iterator.next();
 
             para_list.add(parameter);
@@ -289,7 +289,7 @@ public class ParameterIncludeImpl
      * @param value
      */
     private void debugParameterAdd(Parameter parameter) {
-        if (DEBUG_ENABLED) {
+        if (DEBUG_PROPERTY_SET) {
             String key = parameter.getName();
             Object value = parameter.getValue();
             String className = (value == null) ? "null" : value.getClass().getName();
@@ -312,9 +312,7 @@ public class ParameterIncludeImpl
             }
             log.debug("  Value Class = " + className);
             log.debug("  Value Classloader = " + classloader);
-            if (this.DEBUG_CALLSTACK_ON_SET) {
-                log.debug(  "Call Stack = " + JavaUtils.callStackToString());
-            }
+            log.debug(  "Call Stack = " + JavaUtils.callStackToString());
             log.debug("==================");
         }
     }

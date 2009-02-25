@@ -46,7 +46,7 @@
         {
         #endif
 
-        #define ADB_DEFAULT_DIGIT_LIMIT 64
+        #define ADB_DEFAULT_DIGIT_LIMIT 1024
         #define ADB_DEFAULT_NAMESPACE_PREFIX_LIMIT 64
         <xsl:if test="itemtype">
         #define ADB_DEFAULT_LIST_SEPERATOR " "
@@ -90,11 +90,10 @@
        /**
         *  <xsl:value-of select="$axis2_name"/> class
         */
-        typedef struct <xsl:value-of select="$axis2_name"/><xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t;
 
         <xsl:for-each select="property">
           <xsl:if test="@ours">
-          <xsl:variable name="propertyType"><xsl:if test="@ours">adb_</xsl:if><xsl:value-of select="@type"></xsl:value-of></xsl:variable>
+          <xsl:variable name="propertyType" select="substring-before(@type, '_t*')"/>
           #include "<xsl:value-of select="$propertyType"/>.h"
           </xsl:if>
         </xsl:for-each>
@@ -126,10 +125,32 @@
         {
         #endif
 
-        #define ADB_DEFAULT_DIGIT_LIMIT 64
+        #define ADB_DEFAULT_DIGIT_LIMIT 1024
         #define ADB_DEFAULT_NAMESPACE_PREFIX_LIMIT 64
         <xsl:if test="itemtype">
         #define ADB_DEFAULT_LIST_SEPERATOR " "
+        </xsl:if>
+
+        typedef struct <xsl:value-of select="$axis2_name"/><xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t;
+
+        <!-- Check if this type is a supported enum -->
+        <xsl:variable name="isEnum">
+          <xsl:choose>
+            <xsl:when test="count(property)=1 and property/enumFacet and property/@type='axis2_char_t*'">1</xsl:when>
+            <xsl:otherwise>0</xsl:otherwise>
+          </xsl:choose>
+        </xsl:variable>
+
+        <xsl:if test="$isEnum=1">
+          <xsl:variable name="enum">adb_<xsl:value-of select="property/@name"/>_enum_t</xsl:variable>
+          <xsl:variable name="propertyCapsCName" select="property/@caps-cname"/>
+        /* Enumeration for this type */
+        typedef enum {
+            <xsl:for-each select="property/enumFacet">
+                <xsl:text/><xsl:value-of select="$propertyCapsCName"/>_<xsl:value-of select="@id"/>
+                <xsl:if test="position()!=last()">,
+            </xsl:if>
+          </xsl:for-each> } <xsl:value-of select="$enum"/>;
         </xsl:if>
 
         /******************************* Create and Free functions *********************************/
@@ -166,7 +187,6 @@
             <xsl:choose>
                 <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
             </xsl:choose>
             </xsl:variable>
@@ -176,14 +196,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -250,14 +268,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -340,7 +356,6 @@
             <xsl:choose>
                 <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
             </xsl:choose>
             </xsl:variable>
@@ -350,14 +365,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -452,14 +465,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -537,6 +548,48 @@
    
         </xsl:for-each>
 
+        <xsl:if test="$isEnum=1">
+          <xsl:for-each select="property">
+            <xsl:variable name="propertyName"><xsl:value-of select="@name"></xsl:value-of></xsl:variable>
+            <xsl:variable name="CName"><xsl:value-of select="@cname"></xsl:value-of></xsl:variable>
+            <xsl:variable name="enum">adb_<xsl:value-of select="@name"/>_enum_t</xsl:variable>
+            <xsl:variable name="constValue">
+              <xsl:choose>
+                <xsl:when test="@isarray"></xsl:when>
+                <xsl:when test="@type='axis2_char_t*' or @type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'">const </xsl:when>
+              </xsl:choose>
+            </xsl:variable>
+            
+            /************************** Getters and Setters For Enumerations ********************************/
+            /********************* Enumeration Specific Operations: get_enum, set_enum **********************/
+            
+            /**
+            * Enum getter for <xsl:value-of select="$propertyName"/>.
+            * @param <xsl:text> _</xsl:text><xsl:value-of select="$name"/> <xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t object
+            * @param env pointer to environment struct
+            * @return <xsl:value-of select="$enum"/>; -1 on failure
+            */
+            <xsl:value-of select="$enum"/> AXIS2_CALL
+            <xsl:value-of select="$axis2_name"/>_get_<xsl:value-of select="$CName"/>_enum(
+            <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
+            const axutil_env_t *env);
+            
+            /**
+            * Enum setter for <xsl:value-of select="$propertyName"/>.
+            * @param <xsl:text> _</xsl:text><xsl:value-of select="$name"/> <xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t object
+            * @param env pointer to environment struct
+            * @param arg_<xsl:value-of select="$CName"/><xsl:text> </xsl:text> <xsl:value-of select="$enum"/>
+            * @return AXIS2_SUCCESS on success, else AXIS2_FAILURE
+            */
+            axis2_status_t AXIS2_CALL
+            <xsl:value-of select="$axis2_name"/>_set_<xsl:value-of select="$CName"/>_enum(
+            <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
+            const axutil_env_t *env,
+            <xsl:value-of select="$constValue"/><xsl:value-of select="$enum"/><xsl:text> </xsl:text>arg_<xsl:value-of select="$CName"/>);
+            
+          </xsl:for-each>
+        </xsl:if>
+
 
         /******************************* Checking and Setting NIL values *********************************/
         <xsl:if test="count(property[@array])!=0">/* Use 'Checking and Setting NIL values for Arrays' to check and set nil for individual elements */</xsl:if>
@@ -550,7 +603,6 @@
             <xsl:choose>
                 <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
             </xsl:choose>
             </xsl:variable>
@@ -560,14 +612,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -620,7 +670,6 @@
             <xsl:choose>
                 <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
             </xsl:choose>
             </xsl:variable>
@@ -630,14 +679,12 @@
             <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
                <xsl:choose>
                  <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                 <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                  <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                </xsl:choose>
             </xsl:variable>
               <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
                  <xsl:choose>
                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
-                   <xsl:when test="@ours">adb_<xsl:value-of select="@type"/>_t*</xsl:when>
                    <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
                  </xsl:choose>
@@ -693,7 +740,7 @@
             <xsl:value-of select="$axis2_name"/>_deserialize_from_string(
                             <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
                                             const axutil_env_t *env,
-                                            axis2_char_t *node_value,
+                                            const axis2_char_t *node_value,
                                             axiom_node_t *parent);
         </xsl:if>
         /**
@@ -768,6 +815,136 @@
         axis2_bool_t AXIS2_CALL
         <xsl:value-of select="$axis2_name"/>_is_particle();
 
+        /******************************* Alternatives for Create and Free functions *********************************/
+
+        <xsl:variable name="arg_list">
+            <xsl:for-each select="property">
+                <xsl:variable name="propertyType">
+                <xsl:choose>
+                    <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
+                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
+                </xsl:choose>
+                </xsl:variable>
+                <xsl:variable name="CName">_<xsl:value-of select="@cname"></xsl:value-of></xsl:variable>
+                <xsl:text>,
+                </xsl:text><xsl:value-of select="$propertyType"/><xsl:text> </xsl:text><xsl:value-of select="$CName"/>
+            </xsl:for-each>
+        </xsl:variable>
+        <xsl:variable name="arg_list_comment">
+            <xsl:for-each select="property">
+                <xsl:variable name="propertyType">
+                <xsl:choose>
+                    <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
+                    <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                    <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
+                </xsl:choose>
+                </xsl:variable>
+                <xsl:variable name="CName">_<xsl:value-of select="@cname"></xsl:value-of></xsl:variable>
+                <xsl:text>
+         * @param </xsl:text><xsl:value-of select="$CName"/><xsl:text> </xsl:text><xsl:value-of select="$propertyType"/> 
+            </xsl:for-each>
+        </xsl:variable>
+
+        /**
+         * Constructor for creating <xsl:value-of select="$axis2_name"/>_t
+         * @param env pointer to environment struct<xsl:value-of select="$arg_list_comment"/>
+         * @return newly created <xsl:value-of select="$axis2_name"/>_t object
+         */
+        <xsl:value-of select="$axis2_name"/>_t* AXIS2_CALL
+        <xsl:value-of select="$axis2_name"/>_create_with_values(
+            const axutil_env_t *env<xsl:value-of select="$arg_list"/>);
+
+        <xsl:choose>
+            <xsl:when test="count(property)">
+                <xsl:variable name="firstProperty" select="property[1]"/>
+                <xsl:variable name="propertyType">
+                <xsl:choose>
+                    <xsl:when test="$firstProperty/@isarray">axutil_array_list_t*</xsl:when>
+                    <xsl:when test="not($firstProperty/@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                    <xsl:otherwise><xsl:value-of select="$firstProperty/@type"/></xsl:otherwise>
+                </xsl:choose>
+                </xsl:variable>
+                <xsl:variable name="CName">_<xsl:value-of select="$firstProperty/@cname"></xsl:value-of></xsl:variable>
+
+
+                /**
+                 * Free <xsl:value-of select="$axis2_name"/>_t object and return the property value.
+                 * You can use this to free the adb object as returning the property value. If there are
+                 * many properties, it will only return the first property. Other properties will get freed with the adb object.
+                 * @param <xsl:text> _</xsl:text><xsl:value-of select="$name"/> <xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t object to free
+                 * @param env pointer to environment struct
+                 * @return the property value holded by the ADB object, if there are many properties only returns the first.
+                 */
+                <xsl:value-of select="$propertyType"/> AXIS2_CALL
+                <xsl:value-of select="$axis2_name"/>_free_popping_value(
+                        <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
+                        const axutil_env_t *env);
+            </xsl:when>
+            <xsl:otherwise>
+
+                /**
+                 * Free <xsl:value-of select="$axis2_name"/>_t object and return the property value.
+                 * You can use this to free the adb object as returning the property value. If there are
+                 * many properties, it will only return the first property. Other properties will get freed with the adb object.
+                 * @param <xsl:text> _</xsl:text><xsl:value-of select="$name"/> <xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t object to free
+                 * @param env pointer to environment struct
+                 * @return the property value holded by the ADB object, if there are many properties only returns the first.
+                 */
+                void* AXIS2_CALL
+                <xsl:value-of select="$axis2_name"/>_free_popping_value(
+                        <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
+                        const axutil_env_t *env);
+            </xsl:otherwise>
+        </xsl:choose>
+
+        /******************************* get the value by the property number  *********************************/
+        /************NOTE: This method is introduced to resolve a problem in unwrapping mode *******************/
+
+        <xsl:for-each select="property">
+            <xsl:variable name="propertyType">
+            <xsl:choose>
+                <xsl:when test="@isarray">axutil_array_list_t*</xsl:when>
+                <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
+            </xsl:choose>
+            </xsl:variable>
+            <xsl:variable name="propertyName"><xsl:value-of select="@name"></xsl:value-of></xsl:variable>
+            <xsl:variable name="CName"><xsl:value-of select="@cname"></xsl:value-of></xsl:variable>
+
+            <xsl:variable name="nativePropertyType"> <!--these are used in arrays to take the native type-->
+               <xsl:choose>
+                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
+               </xsl:choose>
+            </xsl:variable>
+            <xsl:variable name="PropertyTypeArrayParam"> <!--these are used in arrays to take the type stored in the arraylist-->
+               <xsl:choose>
+                 <xsl:when test="not(@type)">axiom_node_t*</xsl:when> <!-- these are anonymous -->
+                 <xsl:when test="@type='unsigned short' or @type='uint64_t' or @type='unsigned int' or @type='unsigned char' or @type='short' or @type='char' or @type='int' or @type='float' or @type='double' or @type='int64_t'"><xsl:value-of select="@type"/><xsl:text>*</xsl:text></xsl:when>
+                 <xsl:otherwise><xsl:value-of select="@type"/></xsl:otherwise>
+               </xsl:choose>
+            </xsl:variable>
+            <xsl:variable name="paramComment">
+                <xsl:choose>
+                    <xsl:when test="@isarray"><xsl:text>Array of </xsl:text><xsl:value-of select="$PropertyTypeArrayParam"/><xsl:text>s.</xsl:text></xsl:when>
+                    <xsl:otherwise><xsl:value-of select="$nativePropertyType"/></xsl:otherwise>
+                </xsl:choose>
+            </xsl:variable>
+        
+
+        /**
+         * Getter for <xsl:value-of select="$propertyName"/> by property number (<xsl:value-of select="position()"/>)
+         * @param <xsl:text> _</xsl:text><xsl:value-of select="$name"/> <xsl:text> </xsl:text><xsl:value-of select="$axis2_name"/>_t object
+         * @param env pointer to environment struct
+         * @return <xsl:value-of select="$paramComment"/>
+         */
+        <xsl:value-of select="$propertyType"/> AXIS2_CALL
+        <xsl:value-of select="$axis2_name"/>_get_property<xsl:value-of select="position()"/>(
+            <xsl:value-of select="$axis2_name"/>_t*<xsl:text> _</xsl:text><xsl:value-of select="$name"/>,
+            const axutil_env_t *env);
+
+    </xsl:for-each>
 
      #ifdef __cplusplus
      }

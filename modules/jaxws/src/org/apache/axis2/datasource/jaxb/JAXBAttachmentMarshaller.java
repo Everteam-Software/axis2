@@ -83,8 +83,7 @@ public class JAXBAttachmentMarshaller extends AttachmentMarshaller {
         if (log.isDebugEnabled()){ 
             log.debug("isXOPPackage returns " + value);
         }
-        return value;
-
+        return value;        
     }
 
     
@@ -126,10 +125,10 @@ public class JAXBAttachmentMarshaller extends AttachmentMarshaller {
                     value = (Integer) msgContext.getProperty(Constants.Configuration.MTOM_THRESHOLD);
                 }
                 int optimizedThreshold = (value != null) ? value.intValue() : 0;
-                
+
                 if(optimizedThreshold==0 || dataLength > optimizedThreshold){
-                DataHandler dataHandler = new DataHandler(mpds);
-                cid = addDataHandler(dataHandler);
+                	DataHandler dataHandler = new DataHandler(mpds);
+                	cid = addDataHandler(dataHandler);
                 }
                 
                 // Add the content id to the mime body part
@@ -183,10 +182,10 @@ public class JAXBAttachmentMarshaller extends AttachmentMarshaller {
         if (writer instanceof MTOMXMLStreamWriter) {
             textNode = new OMTextImpl(dh, null);
         	if(((MTOMXMLStreamWriter) writer).isOptimizedThreshold(textNode)){
-            cid = textNode.getContentID();
-            ((MTOMXMLStreamWriter) writer).writeOptimized(textNode);
-            // Remember the attachment on the message.
-            addDataHandler(dh, cid);
+        		cid = textNode.getContentID();
+        		((MTOMXMLStreamWriter) writer).writeOptimized(textNode);
+        		// Remember the attachment on the message.
+        		addDataHandler(dh, cid);
         	}        	
         }
         

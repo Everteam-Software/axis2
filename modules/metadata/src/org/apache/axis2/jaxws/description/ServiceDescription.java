@@ -28,6 +28,7 @@ import javax.xml.namespace.QName;
 import javax.xml.ws.handler.PortInfo;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A ServiceDescription corresponds to a Service under which there can be a collection of enpdoints.
@@ -144,11 +145,76 @@ public interface ServiceDescription {
      */
     public boolean isMTOMEnabled(Object key);
     
+    /**
+     * Answer if MTOM is enabled for the service represented by this Service Description  
+     * and the service-endpoint-interface indicated. This is currently only supported on the 
+     * service-requester side; it is not supported on the service-provider side.  If the key is 
+     * non-null, it is used to look up an sparse metadata that may have been specified when the 
+     * Service Description was created. If the seiClass is non-null it is used to further scope
+     * the enablement of MTOM to a specific SEI.
+     *  
+     * @param key If non-null, used to look up any sparse metadata that may have been specified
+     *     when the service was created.
+     * @param seiClass Represents client service-endpoint-interface class.
+     * 
+     * @return TRUE if mtom was enabled either in the sparse metadata or in the composite; FALSE
+     *     othewise.
+     */
+    public boolean isMTOMEnabled(Object key, Class seiClass);
+    
     public QName getPreferredPort(Object key);
     
     public JAXWSCatalogManager getCatalogManager();
 
-    public List<Class> getHandlerChainClasses(PortInfo portinfo);
+    /**
+     * Answer information for resolved handlers for the given port.  This information is set
+     * when the handler resolver initially resolves the handlers based on the handler 
+     * configuration information.  It is cached on the service description for performance 
+     * so that subsequent queries by other handler resolvers for the same port do not have to
+     * re-resolve the information from the handler configuration information.  
+     * 
+     * @param portInfo Port for which the handler information is desired
+     * @return An object containing information for the resolved handlers, or null if no 
+     *     information is found in the cache.
+     */
+    public ResolvedHandlersDescription getResolvedHandlersDescription(PortInfo portInfo);
 
-    public void setHandlerChainClasses(PortInfo portinfo, List<Class> handlerClasses);
+    /**
+     * Cache information for handlers which have been resolved for this port. This information is set
+     * when the handler resolver initially resolves the handlers based on the handler 
+     * configuration information.  It is cached on the service description for performance 
+     * so that subsequent queries by other handler resolvers for the same port do not have to
+     * re-resolve the information from the handler configuration information.
+     *   
+     * @param portInfo Port for which the handler information should be cached
+     * @param resolvedHandlersInfo An object containing information for the resolved handlers
+     */
+    public void setResolvedHandlersDescription(PortInfo portInfo, ResolvedHandlersDescription resolvedHandlersInfo);
+    
+    /**
+     * Check into releasing resources related to this ServiceDescription.  Those resources include
+     * this ServiceDescription instance, the EndpointDescription instances it owns and their
+     * associated AxisService and related objects.  
+     * 
+     * NOTE: This should only be called on ServiceDescrpition instances that are owned by
+     * client ServiceDelegate instances; it SHOULD NOT be called on server-side 
+     * ServiceDescriptions since those are built during server start and their life-cycle is
+     * the life-cycle of the server.
+     * 
+     * @param delegate The ServiceDelegate instance that owns this ServiceDescription.
+     */
+    public void releaseResources(Object delegate);
+        
+    /**
+     * This method is responsible for querying the metadata for properties associated with
+     * a given BindingProvider instance. This is only applicable for the requestor-side, and
+     * the properties are scoped at the port level.
+     * @param serviceDelegateKey This should always be non-null when called via ServiceDelegate and is
+     *                            used to help retrieve dynamic ports per client
+     * @param key This should always be non-null and is used to retrieve properties for a given
+     *            client-side port
+     * @return 
+     */
+    public Map<String, Object> getBindingProperties(Object serviceDelegateKey, String key);
+
 }

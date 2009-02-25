@@ -20,7 +20,6 @@
 
 package org.apache.axis2.engine;
 
-import edu.emory.mathcs.backport.java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.HandlerDescription;
@@ -33,6 +32,7 @@ import org.apache.commons.logging.LogFactory;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A Phase is an ordered collection of Handlers.
@@ -45,11 +45,12 @@ public class Phase implements Handler {
      * Field log
      */
     private static final Log log = LogFactory.getLog(Phase.class);
+    private static boolean isDebugEnabled = LoggingControl.debugLoggingAllowed && log.isDebugEnabled();
 
     /**
      * Field handlers
      */
-    private List handlers;
+    private List<Handler> handlers;
 
     /**
      * A handler has been marked as present in both the first phase and the last phase
@@ -84,7 +85,7 @@ public class Phase implements Handler {
      * @param phaseName the name for this Phase
      */
     public Phase(String phaseName) {
-        handlers = new CopyOnWriteArrayList();
+        handlers = new CopyOnWriteArrayList<Handler>();
         this.phaseName = phaseName;
     }
 
@@ -115,7 +116,7 @@ public class Phase implements Handler {
      * @throws PhaseException if there is a problem
      */
     public void addHandler(HandlerDescription handlerDesc) throws PhaseException {
-        Iterator handlers_itr = getHandlers().iterator();
+        Iterator<Handler> handlers_itr = getHandlers().iterator();
 
         while (handlers_itr.hasNext()) {
             Handler hand = (Handler) handlers_itr.next();
@@ -272,8 +273,8 @@ public class Phase implements Handler {
                 }  else {
                     handlers.add(handlers.size() -2,handler);
                 }
-        } else {
-            handlers.add(handler);
+            }    else {
+                handlers.add(handler);
             }
         }
     }
@@ -287,7 +288,7 @@ public class Phase implements Handler {
      * @throws org.apache.axis2.AxisFault
      */
     public final InvocationResponse invoke(MessageContext msgctx) throws AxisFault {
-        boolean isDebugEnabled = LoggingControl.debugLoggingAllowed && log.isDebugEnabled();
+        
         if (isDebugEnabled) {
             log.debug(msgctx.getLogIDString() + " Checking pre-condition for Phase \"" + phaseName +
                     "\"");
@@ -335,7 +336,6 @@ public class Phase implements Handler {
     }
 
     public void flowComplete(MessageContext msgContext) {
-        boolean isDebugEnabled = LoggingControl.debugLoggingAllowed && log.isDebugEnabled();
         if (isDebugEnabled) {
             log.debug(msgContext.getLogIDString() + " Invoking flowComplete() in Phase \"" +
                     phaseName + "\"");
@@ -381,7 +381,7 @@ public class Phase implements Handler {
      *
      * @return Returns an ArrayList of Handlers
      */
-    public List getHandlers() {
+    public List<Handler> getHandlers() {
         return handlers;
     }
 

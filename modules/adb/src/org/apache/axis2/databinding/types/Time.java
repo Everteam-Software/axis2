@@ -100,10 +100,12 @@ public class Time implements java.io.Serializable {
 
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
+        calendar.setLenient(false);
         int hour = 0;
         int minite = 0;
         int second = 0;
-        int miliSecond = 0;
+        long miliSecond = 0;
+
         int timeZoneOffSet = TimeZone.getDefault().getRawOffset();
          int milliSecondPartLength = 0;
         if (source.length() >= 8) {
@@ -193,7 +195,7 @@ public class Time implements java.io.Serializable {
                 miliSecond = miliSecond / 10;
             }
         }
-        calendar.set(Calendar.MILLISECOND, miliSecond);
+        calendar.set(Calendar.MILLISECOND, (int)miliSecond);
         calendar.set(Calendar.ZONE_OFFSET, timeZoneOffSet);
         calendar.set(Calendar.DST_OFFSET, 0);
 

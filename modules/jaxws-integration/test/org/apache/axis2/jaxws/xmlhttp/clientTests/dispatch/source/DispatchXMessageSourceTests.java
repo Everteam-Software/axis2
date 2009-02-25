@@ -31,6 +31,8 @@ import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.ws.Dispatch;
 import javax.xml.ws.Service;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.handler.MessageContext;
 import javax.xml.ws.http.HTTPBinding;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -47,6 +49,8 @@ public class DispatchXMessageSourceTests extends AbstractTestCase {
  
     private static String XML_TEXT = "<p:echo xmlns:p=\"http://sample\">hello world</p:echo>";
     private static String XML_TEXT_NPE = "<p:echo xmlns:p=\"http://sample\">NPE</p:echo>";
+    
+    private static String GET_RESPONSE = "<response>GET</response>";
     
     public static Test suite() {
         return getTestSetup(new TestSuite(DispatchXMessageSourceTests.class));
@@ -78,8 +82,51 @@ public class DispatchXMessageSourceTests extends AbstractTestCase {
         
         assertTrue(response != null);
         assertTrue(request.equals(response));
+        
+        // Test a second time to verify
+        stream = new ByteArrayInputStream(request.getBytes());
+        inSource = new StreamSource((InputStream) stream);
+        
+        outSource = dispatch.invoke(inSource);
+        
+        // Prepare the response content for checking
+        reader = inputFactory.createXMLStreamReader(outSource);
+        r2w = new Reader2Writer(reader);
+        response = r2w.getAsString();
+        
+        assertTrue(response != null);
+        assertTrue(request.equals(response));
     }
     
+    public void testGetRequest() throws Exception {
+        Dispatch<Source> dispatch = getDispatch();
+
+        // this should fail
+        try {
+            dispatch.invoke(null);
+            fail("Did not throw WebServiceException");
+        } catch (WebServiceException e) {
+            // that's what we expect
+        }
+        
+        // this should work ok
+        dispatch.getRequestContext().put(MessageContext.HTTP_REQUEST_METHOD, "GET"); 
+        Source outSource = dispatch.invoke(null);
+        
+        XMLStreamReader reader = inputFactory.createXMLStreamReader(outSource);
+        Reader2Writer r2w = new Reader2Writer(reader);
+        String response = r2w.getAsString();        
+        assertEquals(GET_RESPONSE, response);     
+        
+        // this should fail again
+        dispatch.getRequestContext().remove(MessageContext.HTTP_REQUEST_METHOD);
+        try {
+            dispatch.invoke(null);
+            fail("Did not throw WebServiceException");
+        } catch (WebServiceException e) {
+            // that's what we expect
+        }
+    }
    
 }
 

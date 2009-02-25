@@ -105,13 +105,8 @@ Guide</a></li>
 <ul>
 <li>18.1 <a href="http-transport.html" target="mainFrame">HTTP
 Transport</a></li>
-<li>18.2 <a href="jms-transport.html" target="mainFrame">JMS
-Transport</a></li>
 <li>18.3 <a href="tcp-transport.html" target="mainFrame">TCP
 Transport</a></li>
-<li>18.4 <a href="mail-transport.html" target="mainFrame">Mail
-Transport</a> / <a href="mail-configuration.html" target=
-"mainFrame">(Configuration)</a></li>
 <li>18.5 <a href="transport_howto.html" target="mainFrame">Custom
 Transport</a></li>
 </ul>
@@ -121,6 +116,7 @@ Support</a></li>
 <li><a href="rest-ws.html" target="mainFrame">REST Support</a></li>
 <li><a href="json_support.html" target="mainFrame">JSON
 Support</a></li>
+<li><a href="corba-deployer.html" target="mainFrame">Exposing CORBA Services as Web Services</a></li>
 <li><a href="ejb-provider.html" target="mainFrame">Guide to using
 EJB Provider in Axis2</a></li>
 <li><a href="soapmonitor-module.html" target="mainFrame">SOAP

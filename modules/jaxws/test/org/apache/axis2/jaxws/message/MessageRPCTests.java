@@ -24,13 +24,13 @@ import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axiom.om.impl.llom.OMSourcedElementImpl;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
-import org.apache.axis2.jaxws.TestLogger;
 import org.apache.axis2.jaxws.message.databinding.JAXBBlockContext;
 import org.apache.axis2.jaxws.message.factory.JAXBBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.message.headers.ConfigBody;
 import org.apache.axis2.jaxws.message.headers.ConfigHeader;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
+import org.apache.axis2.jaxws.unitTest.TestLogger;
 import org.test.stock1.ObjectFactory;
 import org.test.stock1.StockPrice;
 
@@ -251,12 +251,12 @@ public class MessageRPCTests extends TestCase {
     }
     
     public void testJAXBInflow_soap11() throws Exception {
-		_testJAXBInflow(sampleEnvelope11);
-	}
-	public void testJAXBInflow_soap12() throws Exception {
-		_testJAXBInflow(sampleEnvelope12);
-	}
-	public void _testJAXBInflow(String sampleJAXBEnvelope) throws Exception {
+        _testJAXBInflow(sampleEnvelope11);
+    }
+    public void testJAXBInflow_soap12() throws Exception {
+        _testJAXBInflow(sampleEnvelope12);
+    }
+    public void _testJAXBInflow(String sampleJAXBEnvelope) throws Exception {
         // Create a SOAP OM out of the sample incoming XML.  This
         // simulates what Axis2 will be doing with the inbound message. 
         StringReader sr = new StringReader(sampleJAXBEnvelope);

@@ -29,6 +29,7 @@ import org.apache.axis2.corba.deployer.CorbaConstants;
 import org.apache.axis2.corba.exceptions.CorbaException;
 import org.apache.axis2.corba.exceptions.CorbaInvocationException;
 import org.apache.axis2.corba.idl.IDLProcessor;
+import org.apache.axis2.corba.idl.PreProcessorInputStream;
 import org.apache.axis2.corba.idl.types.AbstractCollectionType;
 import org.apache.axis2.corba.idl.types.ArrayType;
 import org.apache.axis2.corba.idl.types.CompositeDataType;
@@ -73,7 +74,7 @@ import org.omg.CosNaming.NamingContextPackage.NotFound;
 
 import javax.xml.namespace.QName;
 import java.io.File;
-import java.io.FileInputStream;
+//import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -85,8 +86,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+//import java.util.zip.ZipEntry;
+//import java.util.zip.ZipInputStream;
 
 public class CorbaUtil implements CorbaConstants {
     private static Map IDL_CACHE = new HashMap();
@@ -98,12 +99,12 @@ public class CorbaUtil implements CorbaConstants {
         Properties props = System.getProperties();
 
         if (orbClass!=null)
-            props.put(ORG_OMG_CORBA_ORBCLASS, orbClass.getValue());
+            props.put(ORG_OMG_CORBA_ORBCLASS, ((String) orbClass.getValue()).trim());
         else
             props.put(ORG_OMG_CORBA_ORBCLASS, DEFAULR_ORB_CLASS);
 
         if (orbSingletonClass!=null)
-            props.put(ORG_OMG_CORBA_ORBSINGLETON_CLASS, orbSingletonClass.getValue());
+            props.put(ORG_OMG_CORBA_ORBSINGLETON_CLASS, ((String) orbSingletonClass.getValue()).trim());
         else
             props.put(ORG_OMG_CORBA_ORBSINGLETON_CLASS, DEFAULT_ORBSINGLETON_CLASS);
 
@@ -119,16 +120,16 @@ public class CorbaUtil implements CorbaConstants {
             Parameter iorString = service.getParameter(IOR_STRING);
 
             if (namingServiceUrl!=null && objectName!=null) {
-                obj = orb.string_to_object((String) namingServiceUrl.getValue());
+                obj = orb.string_to_object(((String) namingServiceUrl.getValue()).trim());
                 NamingContextExt nc = NamingContextExtHelper.narrow(obj);
-                obj = nc.resolve(nc.to_name((String) objectName.getValue()));
+                obj = nc.resolve(nc.to_name(((String) objectName.getValue()).trim()));
             } else if (iorFilePath!=null) {
-                FileReader fileReader = new FileReader((String) iorFilePath.getValue());
+                FileReader fileReader = new FileReader(((String) iorFilePath.getValue()).trim());
                 char[] buf = new char[1000];
                 fileReader.read(buf);
                 obj = orb.string_to_object((new String(buf)).trim());
             } else if (iorString!=null) {
-                obj = orb.string_to_object((String) iorString.getValue());
+                obj = orb.string_to_object(((String) iorString.getValue()).trim());
             } else {
                 throw new CorbaInvocationException("cannot resolve object");
             }
@@ -147,12 +148,17 @@ public class CorbaUtil implements CorbaConstants {
 
     public static IDL getIDL(AxisService service, ORB orb, String dirName) throws CorbaException {
         Parameter idlFile = service.getParameter(IDL_FILE);
-        String idlFileName = (String) idlFile.getValue();
+
+        if (idlFile == null) {
+            throw new CorbaInvocationException("Please specify the IDL file");    
+        }
+
+        String idlFileName = ((String) idlFile.getValue()).trim();
         String cacheKey = dirName + File.separator + idlFileName;
         IDL idl = (IDL) IDL_CACHE.get(cacheKey);
         if (idl==null) {
             try {
-                File file = new File(dirName);
+                /*File file = new File(dirName);
                 InputStream stream;
                 if (file.isDirectory()) {
                     stream = new FileInputStream(cacheKey);
@@ -172,7 +178,9 @@ public class CorbaUtil implements CorbaConstants {
                         new CorbaInvocationException("cannot find " + idlFileName + " in " + file.getPath());
 
                     stream = zin;
-                }
+                }*/
+                InputStream stream = new PreProcessorInputStream(dirName, idlFileName);
+                //TODO: Set pre-processor system and user input paths
                 IDLProcessor idlProcessor = new IDLProcessor(stream);
                 idl = idlProcessor.process();
                 stream.close();
@@ -200,7 +208,7 @@ public class CorbaUtil implements CorbaConstants {
         Parameter interfaceName = service.getParameter(INTERFACE_NAME);
         if (interfaceName==null)
             throw new CorbaInvocationException("interfaceName cannot be null");
-        return invokerFactory.newInvoker((String) interfaceName.getValue(), methodName, obj);
+        return invokerFactory.newInvoker(((String) interfaceName.getValue()).trim(), methodName, obj);
     }
 
     public static Object[] extractParameters(OMElement methodElement, Member[] parameterMembers) throws CorbaInvocationException {
@@ -670,12 +678,45 @@ public class CorbaUtil implements CorbaConstants {
             //case TCKind._tk_any: return new Any();
             case TCKind._tk_value: return "";
             //case TCKind._tk_objref: return new org.omg.CORBA.Object();
-            case TCKind._tk_struct: return new StructValue((Struct) type);
+            case TCKind._tk_struct:
+                Struct struct = (Struct) type;
+                StructValue value = new StructValue(struct);
+                Member[] members = struct.getMembers();
+                Object[] memberValues = new Object[members.length];
+                for (int i = 0; i < members.length; i++) {
+                    memberValues[i] = getEmptyValue(members[i].getDataType());
+                }
+                value.setMemberValues(memberValues);
+                return value;
             case TCKind._tk_enum: return new EnumValue((EnumType) type);
-            case TCKind._tk_union: return new UnionValue((UnionType) type);
-            case TCKind._tk_alias: return new AliasValue((Typedef) type);
-            case TCKind._tk_sequence: return new SequenceValue((SequenceType) type);
-            case TCKind._tk_array:  return new ArrayValue((ArrayType) type);
+            case TCKind._tk_union:
+                UnionType unionType = (UnionType) type;
+                UnionValue unionValue = new UnionValue(unionType);
+                members = unionType.getMembers();
+                unionValue.setMemberName(members[0].getName());
+                unionValue.setMemberType(members[0].getDataType());
+                unionValue.setMemberValue(getEmptyValue(members[0].getDataType()));
+                return unionValue;
+            case TCKind._tk_alias:
+                Typedef typedef = (Typedef) type;
+                AliasValue aliasValue = new AliasValue(typedef);
+                aliasValue.setValue(getEmptyValue(typedef.getDataType()));
+                return aliasValue;
+            case TCKind._tk_sequence:
+                SequenceType sequenceType = (SequenceType) type;
+                SequenceValue sequenceValue = new SequenceValue(sequenceType);
+                sequenceValue.setValues(new Object[0]);
+                return sequenceValue;
+            case TCKind._tk_array:
+                ArrayType arrayType = (ArrayType) type;
+                ArrayValue arrayValue = new ArrayValue(arrayType);
+                Object[] objects = new Object[arrayType.getElementCount()];
+                DataType arrayDataType = arrayType.getDataType();
+                for (int i = 0; i < objects.length; i++) {
+                    objects[i] = getEmptyValue(arrayDataType);
+                }
+                arrayValue.setValues(objects);
+                return arrayValue;
             default:
                 log.error("ERROR! Invalid dataType");
         }

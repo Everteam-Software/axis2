@@ -290,6 +290,12 @@ class CodegenConfigLoader implements CommandLineOptionConstants {
             config.setSkeltonClassName(commandLineOption.getOptionValue());
         }
 
+        commandLineOption = loadOption(WSDL2JavaConstants.EXCEPTION_BASE_CLASS_OPTION,
+                WSDL2JavaConstants.EXCEPTION_BASE_CLASS_OPTION_LONG, optionMap);
+        if (commandLineOption != null){
+            config.setExceptionBaseClassName(commandLineOption.getOptionValue());
+        }
+
         // setting the overrid and all ports options
         config.setAllPorts(loadOption(WSDL2JavaConstants.All_PORTS_OPTION,
                                       WSDL2JavaConstants.All_PORTS_OPTION_LONG,
@@ -297,6 +303,10 @@ class CodegenConfigLoader implements CommandLineOptionConstants {
 
         config.setOverride(loadOption(WSDL2JavaConstants.OVERRIDE_OPTION,
                                       WSDL2JavaConstants.OVERRIDE_OPTION_LONG,
+                                      optionMap) != null);
+
+        config.setOverrideAbsoluteAddress(loadOption(WSDL2JavaConstants.OVERRIDE_ABSOLUTE_ADDRESS_OPTION,
+                                      WSDL2JavaConstants.OVERRIDE_ABSOLUTE_ADDRESS_OPTION_LONG,
                                       optionMap) != null);
 
         // loop through the map and find parameters having the extra prefix.

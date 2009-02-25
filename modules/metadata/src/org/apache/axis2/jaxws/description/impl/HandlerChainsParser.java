@@ -40,6 +40,8 @@ import org.w3c.dom.Node;
 public class HandlerChainsParser {
 
     private static final String JAVA_EE_NS = "http://java.sun.com/xml/ns/javaee";
+    private static final QName QNAME_HANDLER_CHAINS = new QName(JAVA_EE_NS, "handler-chains");
+    private static final QName QNAME_HANDLER_CHAIN = new QName(JAVA_EE_NS, "handler-chain");
     private static JAXBContext context;
     
     public HandlerChainsType loadHandlerChains(InputStream in) throws Exception {       
@@ -47,7 +49,7 @@ public class HandlerChainsParser {
         Element el = document.getDocumentElement();
         if (!JAVA_EE_NS.equals(el.getNamespaceURI()) ||
             !"handler-chains".equals(el.getLocalName())) {
-                throw new WebServiceException("Unexpected element. Expected handler-chains element");
+                throw new WebServiceException("Unexpected element {" + el.getNamespaceURI() + "}" + el.getLocalName() + ". Expected " + QNAME_HANDLER_CHAINS + " element");
         }
 
         HandlerChainsType handlerChains = new HandlerChainsType();
@@ -57,7 +59,7 @@ public class HandlerChainsParser {
                 el = (Element)node;
                 if (!JAVA_EE_NS.equals(el.getNamespaceURI()) ||
                     !el.getLocalName().equals("handler-chain")) {                
-                    throw new WebServiceException("Unexpected element. Expected handler-chain element.");
+                    throw new WebServiceException("Unexpected element {" + el.getNamespaceURI() + "}" + el.getLocalName() + ". Expected " + QNAME_HANDLER_CHAIN + " element");
                 }
                 handlerChains.getHandlerChain().add(processHandlerChainElement(el));
             }
@@ -101,13 +103,17 @@ public class HandlerChainsParser {
     
     private QName processPatternElement(Element el) throws Exception {
         String namePattern = el.getTextContent().trim();
+        
+        // see BaseHandlerResolver.validatePattern for valid strings
+        
         if ("*".equals(namePattern)) {
             return new QName("*");
         }
         
         if (!namePattern.contains(":")) {
-            throw new WebServiceException("Not a qname pattern");
+            return new QName("", namePattern, "");
         }
+        
         String localPart = namePattern.substring(namePattern.indexOf(':') + 1,
                                                  namePattern.length());
         String pfx = namePattern.substring(0, namePattern.indexOf(':'));
@@ -115,7 +121,9 @@ public class HandlerChainsParser {
         if (ns == null) {
             ns = pfx;
         }
-        return new QName(ns, localPart);
+        // populate prefix so BaseHandlerResolver.validatePattern can validate it
+        // QName ctor is QName(namespace, localpart, prefix)
+        return new QName(ns, localPart, pfx);
     }
     
     private HandlerType processHandlerElement(Element el) throws Exception {      

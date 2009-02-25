@@ -40,9 +40,12 @@ import java.net.URL;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAnnotationComposite {
@@ -89,7 +92,19 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     private List<WebServiceRefAnnot> webServiceRefAnnotList;
     private BindingTypeAnnot bindingTypeAnnot;
     
+    // Collection of PortComposite objects which were created from
+    // this DescriptionBuilderComposite instance
+    private List<PortComposite> portCompositeList = new ArrayList<PortComposite>();
+    
     private List<Annotation> features;
+    
+    private Map<QName, Definition> wsdlDefs = new HashMap<QName, Definition>();
+    
+    private Map<QName, URL> wsdlURLs = new HashMap<QName, URL>();
+    
+    private Set<QName> serviceQNames = new HashSet<QName>();
+    
+    private Map<QName, List<PortComposite>> sQNameToPC = new HashMap<QName, List<PortComposite>>();
     
     // Class information
     private String className;
@@ -734,37 +749,55 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     	return catalogManager;
     }
     
-    /**
-     * @deprecated
-     */
-    private boolean isDeprecatedServiceProviderConstruction = false;
-    /**
-     * Answer if this composite represents a service provider that was constructed using the
-     * deprecated path (used for testing only and being removed).  Once that deprecated path
-     * is removed, this method and all code blocks referencing it can be removed.
-     * 
-     * @see org.apache.axis2.jaxws.description.DescriptionFactory.createServiceDescriptionFromServiceImpl
-     * 
-     * @deprecated
-     * @return true if the this was constructed with the deprecated logic
-     */
-    public boolean isDeprecatedServiceProviderConstruction() {
-        return isDeprecatedServiceProviderConstruction;        
-    }
-    /**
-     * @deprecated
-     * @param value
-     */
-    public void setIsDeprecatedServiceProviderConstruction(boolean value) {
-        isDeprecatedServiceProviderConstruction = value;
-    }
-
     public void setProperties(Map<String, Object> properties) {
         this.properties = properties;
     }
     
     public Map<String, Object> getProperties() {
         return properties;
+    }
+
+    /**
+     * Store a WSDL Definition keyed by a service QName
+     */
+    public void setWsdlDefinition(QName serviceQName, Definition definition) {
+        this.wsdlDefs.put(serviceQName, definition);
+    }
+    
+    /**
+     * Retrive a WSDL Definition by a service QName
+     */
+    public Definition getWsdlDefinition(QName serviceQName) {
+        return wsdlDefs.get(serviceQName);
+    }
+    
+    /**
+     * Store a WSDL URL keyed by a service QName
+     */
+    public void setwsdlURL(QName serviceQName, URL url) {
+        wsdlURLs.put(serviceQName, url);
+    }
+    
+    /**
+     * Retrive a WSDL URL by a service QName
+     */
+    public URL getWsdlURL(QName serviceQName) {
+        return wsdlURLs.get(serviceQName);
+    }
+    
+    /**
+     * Add the set of wsdl:service QNames that are represented by this DBC's metadata
+     */
+    public void setServiceQNames(Set<QName> serviceQNames) {
+        this.serviceQNames = serviceQNames;
+    }
+    
+    /**
+     * Get the set of wsdl:service QNames represented by this DBC's metadata
+     * @return
+     */
+    public Set<QName> getServiceQNames() {
+        return serviceQNames;
     }
     
 
@@ -891,8 +924,24 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
             FieldDescriptionComposite fdc = fdcIter.next();
 			sb.append(fdc.toString());
 		}
+        
+        if(portCompositeList != null
+                &&
+                !portCompositeList.isEmpty()) {
+            sb.append(newLine);
+            sb.append(newLine);
+            sb.append("** PortComposite Objects**");
+            sb.append(newLine);
+            for(PortComposite pc : portCompositeList) {
+                sb.append("PortComposite");
+                sb.append(newLine);
+                sb.append(pc.toString());
+                sb.append(newLine);
+            }
+        }
+        
 		return sb.toString();
-	}
+    }
 
 
     /**
@@ -933,4 +982,40 @@ public class DescriptionBuilderComposite implements TMAnnotationComposite, TMFAn
     public ConfigurationContext getConfigurationContext() {
         return myConfigContext;
     }
+    
+    /**
+     * Adds a PortComposite to the generic list. This list of PortComposite objects
+     * is not keyed by wsdl:service QName.
+     */
+    public void addPortComposite(PortComposite portDBC) {
+        portCompositeList.add(portDBC);
+    }
+    
+    /**
+     * Adds a PortComposite to a list that is keyed by a wsdl:service QName.
+     */
+    public void addPortComposite(QName serviceQName, PortComposite portDBC) {
+        List<PortComposite> pcList = sQNameToPC.get(serviceQName);
+        if(pcList == null) {
+            pcList = new LinkedList<PortComposite>();
+            sQNameToPC.put(serviceQName, pcList);
+        }
+        pcList.add(portDBC);
+    }
+    
+    /**
+     * Gets the generic PortComposite instances.
+     */
+    public List<PortComposite> getPortComposites() {
+        return portCompositeList;
+    }
+    
+    /**
+     * Gets all the PortComposite instances associated with a particular wsdl:service QName.
+     * @return
+     */
+    public List<PortComposite> getPortComposites(QName serviceQName) {
+        return sQNameToPC.get(serviceQName);
+    }
+    
 }

@@ -263,6 +263,15 @@ public class Constants extends org.apache.axis2.namespace.Constants {
      * from SOAPFault to AxisFault
      */
     public static final String INBOUND_FAULT_OVERRIDE = "inboundFaultOverride";
+    
+    
+    /**
+     * On inbound requests, the detachable input stream can be queried to get
+     * the inbound length.  It can also be "detached" from the inbound http stream
+     * to allow resources to be freed.
+     */
+    public static final String DETACHABLE_INPUT_STREAM = 
+        "org.apache.axiom.om.util.DetachableInputStream";
 
     /** SOAP Role Configuration */
     public static final String SOAP_ROLE_CONFIGURATION_ELEMENT = "SOAPRoleConfiguration";
@@ -277,6 +286,26 @@ public class Constants extends org.apache.axis2.namespace.Constants {
     // Keys to access JAXWS Request and Response SOAP Headers
     public static final String JAXWS_OUTBOUND_SOAP_HEADERS  = "jaxws.binding.soap.headers.outbound";
     public static final String JAXWS_INBOUND_SOAP_HEADERS = "jaxws.binding.soap.headers.inbound";
+    
+    // If the JAXWS WebMethod throws an exception on the server, the exception is
+    // stored on the server outbound MessageContext.  This is the key to access that Throwable object.
+    public static final String JAXWS_WEBMETHOD_EXCEPTION = 
+        "jaxws.outbound.response.webmethod.exception";
+
+    /**
+     * A MessageContext property or client Option stating the JMS correlation id
+     */
+    public static final String JMS_COORELATION_ID = "JMS_COORELATION_ID";
+
+    public static final String MODULE_VERSION ="version";
+
+    /**
+     * Following constant are used for JTA transaction supporyt in Axis2
+     */
+    public static final String USER_TRANSACTION = "UserTransaction";
+    public static final String TRANSACTION_MANAGER = "TransactionManager";
+    public static final String SUSPENDED_TRANSACTION = "SuspendedTransaction";
+
     
     public static interface Configuration {
         public static final String ENABLE_REST = "enableREST";
@@ -309,6 +338,9 @@ public class Constants extends org.apache.axis2.namespace.Constants {
 
         public static final String CONTENT_TYPE = "ContentType";
 
+        public static final String CONFIG_CONTEXT_TIMEOUT_INTERVAL = "ConfigContextTimeoutInterval";
+
+        /** @deprecated MISSPELLING */
         public static final String CONFIG_CONTEXT_TIMOUT_INTERVAL = "ConfigContextTimeoutInterval";
 
         public static final String TRANSPORT_IN_URL = "TransportInURL";
@@ -323,6 +355,7 @@ public class Constants extends org.apache.axis2.namespace.Constants {
                 "drillDownToRootCauseForFaultReason";
 
         public static final String DISABLE_REST   = "disableREST";
+        public static final String DISABLE_SOAP11   = "disableSOAP11";
         public static final String DISABLE_SOAP12 = "disableSOAP12";
 
         // this will contain the keys of all the properties that will be in the message context
@@ -336,7 +369,7 @@ public class Constants extends org.apache.axis2.namespace.Constants {
 
         // if this property is set to Boolean.TRUE then the SOAPAction header, if present,
         // will NOT be set to the value of Options.getAction(). The empty value, "", will
-        // be used instead.
+        // be used instead.                            L
         public static final String DISABLE_SOAP_ACTION = "disableSoapAction";
 
         /**
@@ -364,6 +397,15 @@ public class Constants extends org.apache.axis2.namespace.Constants {
          */
         public static final String MESSAGE_TYPE = "messageType";
         
+        public static final String MESSAGE_FORMATTER = "messageFormatter";
+        
+        /**
+         * This is used to enable/disable Axis2 default fall back builder. When enabled Axis2 
+         * will build any message that has a content type which is not supported by the configured
+         * Axis2 builder will be built using this builder.
+         */
+        public static final String USE_DEFAULT_FALLBACK_BUILDER = "useDefaultFallbackBuilder";
+
         public static final String SOAP_RESPONSE_MEP = "soapResponseMEP";
         
         /**
@@ -377,6 +419,16 @@ public class Constants extends org.apache.axis2.namespace.Constants {
          * send extra messages in the backchannel.
          */
         public static final String DISABLE_RESPONSE_ACK = "DisableResponseAck";
-        
+
+        /**
+         * This constant is used to add an deployment life cycle listner to Axis2
+         */
+
+        public static final String DEPLOYMENT_LIFE_CYCLE_LISTENER = "deploymentLifeCycleListener";
+
+        public static final String GENERATE_ABSOLUTE_LOCATION_URIS = "generateAbsoluteLocationURIs";
+
+
+
     }
 }

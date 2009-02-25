@@ -77,8 +77,8 @@ public class MTOMConfigurator implements ClientConfigurator {
             }else{
                 if(log.isDebugEnabled()){
                 	log.debug("MTOM Threshold Value ="+threshold);
-            }
-            	
+                }
+                
                 //set MTOM threshold value on message context.
                 //Once MTOM threshold is set on message context it will be
                 //read by SOAPMessageFormatter.writeTo() while writing the attachment

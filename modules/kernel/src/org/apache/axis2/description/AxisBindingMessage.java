@@ -42,7 +42,7 @@ public class AxisBindingMessage extends AxisDescription {
 
 	private String direction;
 
-	private Map options;
+	private Map<String, Object> options;
 
 	private AxisMessage axisMessage;
 
@@ -51,7 +51,6 @@ public class AxisBindingMessage extends AxisDescription {
 	private boolean fault = false;
 
 	private Policy effectivePolicy = null;
-	
 	private Date lastPolicyCalcuatedTime = null;
 
 	public boolean isFault() {
@@ -87,7 +86,7 @@ public class AxisBindingMessage extends AxisDescription {
 	}
 
 	public AxisBindingMessage() {
-		options = new HashMap();
+		options = new HashMap<String, Object>();
 	}
 
 	public void setProperty(String name, Object value) {
@@ -138,7 +137,7 @@ public class AxisBindingMessage extends AxisDescription {
 	 * @return The generated bindingMessage element
 	 */
 	public OMElement toWSDL20(OMNamespace wsdl, OMNamespace tns,
-			OMNamespace wsoap, OMNamespace whttp, Map nameSpaceMap) {
+			OMNamespace wsoap, OMNamespace whttp, Map<String, String> nameSpaceMap) {
 		String property;
 		ArrayList list;
 		OMFactory omFactory = OMAbstractFactory.getOMFactory();
@@ -220,10 +219,10 @@ public class AxisBindingMessage extends AxisDescription {
 	}
 
 	public Policy getEffectivePolicy() {
-            if (lastPolicyCalcuatedTime == null || isPolicyUpdated()) {
-                effectivePolicy = calculateEffectivePolicy();
-            }
-            return effectivePolicy;
+	       if (lastPolicyCalcuatedTime == null || isPolicyUpdated()) {
+			effectivePolicy = calculateEffectivePolicy();
+		}
+		return effectivePolicy;
 	}
 
 	public Policy calculateEffectivePolicy() {
@@ -287,76 +286,68 @@ public class AxisBindingMessage extends AxisDescription {
 					.getAttachedPolicyComponents());
 		}
 
+		lastPolicyCalcuatedTime = new Date();
 		return PolicyUtil.getMergedPolicy(policyList, axisService);
 	}
 	
 	private boolean isPolicyUpdated() {
-	    
-	    if (getPolicySubject().getLastUpdatedTime().after(lastPolicyCalcuatedTime)) {
-	            return true;
-	    }
-	    
-	    // AxisBindingOperation
-	    AxisBindingOperation axisBindingOperation = getAxisBindingOperation();
-	    if (axisBindingOperation != null
-	            && axisBindingOperation.getPolicySubject().getLastUpdatedTime()
-	                                                .after(lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    // AxisBinding
-	    AxisBinding axisBinding = (axisBindingOperation == null) ? null
-	            : axisBindingOperation.getAxisBinding();
-	    if (axisBinding != null
-	            && axisBinding.getPolicySubject().getLastUpdatedTime().after(
-	                                                   lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    // AxisEndpoint
-	    AxisEndpoint axisEndpoint = (axisBinding == null) ? null : axisBinding
-	                                                                .getAxisEndpoint();
-	    if (axisEndpoint != null
-	            && axisEndpoint.getPolicySubject().getLastUpdatedTime().after(
-	                    lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    // AxisMessage
-	    if (axisMessage != null
-	            && axisMessage.getPolicySubject().getLastUpdatedTime().after(
-	                                                lastPolicyCalcuatedTime)) {
-	            return true;
-	    }
-	                
-	    // AxisOperation
-	    AxisOperation axisOperation = (axisMessage == null) ? null
-	                                : axisMessage.getAxisOperation();
-	    if (axisOperation != null
-	            && axisOperation.getPolicySubject().getLastUpdatedTime().after(
-	                                                lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    // AxisService
-	    AxisService axisService = (axisOperation == null) ? null
-	                                : axisOperation.getAxisService();
-	    if (axisService != null
-	            && axisService.getPolicySubject().getLastUpdatedTime().after(
-	                                                lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    // AxisConfiguration
-	    AxisConfiguration axisConfiguration = (axisService == null) ? null
-	                                : axisService.getAxisConfiguration();
-	    if (axisConfiguration != null
-	            && axisConfiguration.getPolicySubject().getLastUpdatedTime()
-	                                                .after(lastPolicyCalcuatedTime)) {
-	        return true;
-	    }
-	                
-	    return false;
-	        
+		if (getPolicySubject().getLastUpdatedTime().after(
+				lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisBindingOperation
+		AxisBindingOperation axisBindingOperation = getAxisBindingOperation();
+		if (axisBindingOperation != null
+				&& axisBindingOperation.getPolicySubject().getLastUpdatedTime()
+						.after(lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisBinding
+		AxisBinding axisBinding = (axisBindingOperation == null) ? null
+				: axisBindingOperation.getAxisBinding();
+		if (axisBinding != null
+				&& axisBinding.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisEndpoint
+		AxisEndpoint axisEndpoint = (axisBinding == null) ? null : axisBinding
+				.getAxisEndpoint();
+		if (axisEndpoint != null
+				&& axisEndpoint.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisMessage
+		if (axisMessage != null
+				&& axisMessage.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisOperation
+		AxisOperation axisOperation = (axisMessage == null) ? null
+				: axisMessage.getAxisOperation();
+		if (axisOperation != null
+				&& axisOperation.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisService
+		AxisService axisService = (axisOperation == null) ? null
+				: axisOperation.getAxisService();
+		if (axisService != null
+				&& axisService.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisConfiguration
+		AxisConfiguration axisConfiguration = (axisService == null) ? null
+				: axisService.getAxisConfiguration();
+		if (axisConfiguration != null
+				&& axisConfiguration.getPolicySubject().getLastUpdatedTime()
+						.after(lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		return false;
 	}
 }

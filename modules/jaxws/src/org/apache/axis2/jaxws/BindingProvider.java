@@ -19,6 +19,7 @@
 
 package org.apache.axis2.jaxws;
 
+import org.apache.axis2.addressing.AddressingConstants;
 import org.apache.axis2.jaxws.addressing.util.EndpointReferenceUtils;
 import org.apache.axis2.jaxws.binding.BindingUtils;
 import org.apache.axis2.jaxws.binding.SOAPBinding;
@@ -80,6 +81,7 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
         // Setting standard property defaults for the request context
         requestContext.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, Boolean.FALSE);
         requestContext.put(BindingProvider.SOAPACTION_USE_PROPERTY, Boolean.TRUE);
+        requestContext.put(AddressingConstants.DISABLE_ADDRESSING_FOR_OUT_MESSAGES, Boolean.TRUE);
         
         // Set the endpoint address
         String endpointAddress = (epr != null ) ? epr.getAddress() : endpointDesc.getEndpointAddress();        
@@ -112,7 +114,18 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
         if (binding instanceof SOAPBinding) {
             // MTOM can be enabled either at the ServiceDescription level (via the WSDL binding type) or
             // at the EndpointDescription level via the binding type used to create a Dispatch.
-            boolean enableMTOMFromMetadata = endpointDesc.getServiceDescription().isMTOMEnabled(serviceDelegate);
+            boolean enableMTOMFromMetadata = false;
+            
+            // if we have an SEI for the port, then we'll use it in order to search for MTOM configuration
+            if(endpointDesc.getEndpointInterfaceDescription() != null
+                    &&
+                    endpointDesc.getEndpointInterfaceDescription().getSEIClass() != null) {
+                enableMTOMFromMetadata = endpointDesc.getServiceDescription().isMTOMEnabled(serviceDelegate, 
+                                                                   endpointDesc.getEndpointInterfaceDescription().getSEIClass());
+            }
+            else {
+                enableMTOMFromMetadata = endpointDesc.getServiceDescription().isMTOMEnabled(serviceDelegate);
+            }
             if (!enableMTOMFromMetadata) {
                 String bindingType = endpointDesc.getClientBindingID();
                 enableMTOMFromMetadata = (bindingType.equals(SOAPBinding.SOAP11HTTP_MTOM_BINDING) || 
@@ -123,6 +136,25 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
                 ((SOAPBinding) binding).setMTOMEnabled(true);
             }
         }
+                
+        // check for properties that need to be set on the BindingProvider
+        String seiName = null;
+        if(endpointDesc.getEndpointInterfaceDescription() != null 
+                &&
+                endpointDesc.getEndpointInterfaceDescription().getSEIClass() != null) {
+            seiName = endpointDesc.getEndpointInterfaceDescription().getSEIClass().getName();
+        }
+        String portQNameString = endpointDesc.getPortQName().toString();
+        String key = seiName + ":" + portQNameString;
+        Map<String, Object> bProps = endpointDesc.getServiceDescription().getBindingProperties(serviceDelegate, key);
+        if(bProps != null) {
+            if(log.isDebugEnabled()) {
+                log.debug("Setting binding props with size: " + bProps.size() + " on " +
+                "BindingProvider RequestContext");
+            }
+            requestContext.putAll(bProps);
+        }
+        
         binding.setHandlerChain(handlerResolver.getHandlerChain(endpointDesc.getPortInfo()));
         
         //Set JAX-WS 2.1 related properties.
@@ -184,27 +216,25 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
     */
     protected void setupSessionContext(Map<String, Object> properties) {
         String sessionKey = null;
-        String sessionValue = null;
+        Object sessionValue = null;
 
         if (properties == null) {
-            return;
-        }
-
-        if (properties.containsKey(HTTPConstants.HEADER_LOCATION)) {
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("NoMaintainSessionProperty"));
+        } else if (properties.containsKey(HTTPConstants.HEADER_LOCATION)) {
             sessionKey = HTTPConstants.HEADER_LOCATION;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, sessionValue);
             }
         } else if (properties.containsKey(HTTPConstants.HEADER_COOKIE)) {
             sessionKey = HTTPConstants.HEADER_COOKIE;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(HTTPConstants.COOKIE_STRING, sessionValue);
             }
         } else if (properties.containsKey(HTTPConstants.HEADER_COOKIE2)) {
             sessionKey = HTTPConstants.HEADER_COOKIE2;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(HTTPConstants.COOKIE_STRING, sessionValue);
             }

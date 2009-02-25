@@ -19,8 +19,8 @@
 
 package org.apache.axis2.jaxws.server.dispatcher;
 
+import org.apache.axis2.Constants;
 import org.apache.axis2.jaxws.ExceptionFactory;
-import org.apache.axis2.jaxws.binding.BindingUtils;
 import org.apache.axis2.jaxws.context.utils.ContextUtils;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.core.util.MessageContextUtils;
@@ -31,24 +31,30 @@ import org.apache.axis2.jaxws.message.Block;
 import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.XMLFault;
+import org.apache.axis2.jaxws.message.databinding.OMBlock;
 import org.apache.axis2.jaxws.message.factory.BlockFactory;
+import org.apache.axis2.jaxws.message.factory.DataSourceBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
+import org.apache.axis2.jaxws.message.factory.OMBlockFactory;
 import org.apache.axis2.jaxws.message.factory.SOAPEnvelopeBlockFactory;
 import org.apache.axis2.jaxws.message.factory.SourceBlockFactory;
 import org.apache.axis2.jaxws.message.factory.XMLStringBlockFactory;
+import org.apache.axis2.jaxws.message.util.XMLFaultUtils;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
 import org.apache.axis2.jaxws.server.EndpointCallback;
 import org.apache.axis2.jaxws.server.EndpointInvocationContext;
 import org.apache.axis2.jaxws.server.InvocationHelper;
 import org.apache.axis2.jaxws.server.ServerConstants;
 import org.apache.axis2.jaxws.utility.ClassUtils;
+import org.apache.axis2.jaxws.utility.DataSourceFormatter;
 import org.apache.axis2.jaxws.utility.ExecutorFactory;
 import org.apache.axis2.jaxws.utility.SingleThreadedExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.soap.SOAPEnvelope;
 
 import javax.activation.DataSource;
-import javax.xml.bind.JAXBContext;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.transform.Source;
@@ -123,8 +129,10 @@ public class ProviderDispatcher extends JavaDispatcher {
         Throwable fault = null;
         Object[] input = new Object[] {param};
         Object responseParamValue = null;
+        Method target = null;
         try {
-            responseParamValue = invokeTargetOperation(getJavaMethod(), input);
+            target = getJavaMethod();
+            responseParamValue = invokeTargetOperation(target, input);
         } catch (Throwable e) {
             fault = ClassUtils.getRootCause(e);
             faultThrown = true;
@@ -136,6 +144,7 @@ public class ProviderDispatcher extends JavaDispatcher {
             // If a fault was thrown, we need to create a slightly different
             // MessageContext, than in the response path.
             responseMsgCtx = createFaultResponse(request, fault);
+            setExceptionProperties(responseMsgCtx, target, fault);
         } else {
             responseMsgCtx = createResponse(request, input, responseParamValue);
         }
@@ -280,8 +289,11 @@ public class ProviderDispatcher extends JavaDispatcher {
                         log.debug("Number Message attachments=" + message.getAttachmentIDs().size());
                     }
                 }
-
-                requestParamValue = message.getValue(null, factory);
+                if (providerType.equals(OMElement.class)) {
+                    requestParamValue = message.getAsOMElement();
+                } else {
+                    requestParamValue = message.getValue(null, factory);
+                }
                 if (requestParamValue == null) {
                     if (log.isDebugEnabled()) {
                         log.debug(
@@ -294,6 +306,9 @@ public class ProviderDispatcher extends JavaDispatcher {
                 if (block != null) {
                     try {
                         requestParamValue = block.getBusinessObject(true);
+                        if (requestParamValue instanceof OMBlock) {
+                            requestParamValue = ((OMBlock)requestParamValue).getOMElement();
+                        }
                     } catch (WebServiceException e) {
                         throw ExceptionFactory.makeWebServiceException(e);
                     } catch (XMLStreamException e) {
@@ -344,7 +359,7 @@ public class ProviderDispatcher extends JavaDispatcher {
             
 
             response = MessageContextUtils.createResponseMessageContext(request);
-            response.setMessage(m);
+            initMessageContext(response, m, output);
         } catch (RuntimeException e) {
             if (log.isDebugEnabled()) {
                 log.debug("Throwable caught creating Response MessageContext");
@@ -357,6 +372,14 @@ public class ProviderDispatcher extends JavaDispatcher {
         }
         
         return response;
+    }
+    
+    protected void initMessageContext(MessageContext responseMsgCtx, Message m, Object output) {
+        responseMsgCtx.setMessage(m);
+        if(output instanceof DataSource){
+            responseMsgCtx.setProperty(Constants.Configuration.MESSAGE_FORMATTER, 
+                    new DataSourceFormatter(((DataSource)output).getContentType()));
+        }
     }
     
     public MessageContext createFaultResponse(MessageContext request, Throwable fault) {
@@ -454,6 +477,13 @@ public class ProviderDispatcher extends JavaDispatcher {
                         log.debug("Creating message from SOAPMessage");
                     }
                     message = msgFactory.createFrom((SOAPMessage)value);
+                } else if (value instanceof SOAPEnvelope) {
+                    // The value from the provider is already an SOAPEnvelope OMElement, so
+                    // it doesn't need to be parsed into one.
+                    if (log.isDebugEnabled()) {
+                        log.debug("Creating message from OMElement");
+                    }
+                    message = msgFactory.createFrom((SOAPEnvelope) value, protocol);
                 } else {
                     if (log.isDebugEnabled()) {
                         log.debug("Creating message using " + factory);
@@ -468,7 +498,20 @@ public class ProviderDispatcher extends JavaDispatcher {
                 }
                 Block block = factory.createFrom(value, null, null);
                 message = msgFactory.create(protocol);
-                message.setBodyBlock(block);
+                
+                if (XMLFaultUtils.containsFault(block)) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("The response block created contained a fault.  Converting to an XMLFault object.");
+                    }
+                    // If the Provider returned a fault, then let's correct the output and 
+                    // put an XMLFault on the Message.  This makes it easier for downstream 
+                    // consumers to get the SOAPFault from the OM SOAPEnvelope.
+                    XMLFault fault = XMLFaultUtils.createXMLFault(block, message.getProtocol());
+                    message.setXMLFault(fault);
+                }
+                else {
+                    message.setBodyBlock(block);
+                }
             }
         }
 
@@ -499,8 +542,10 @@ public class ProviderDispatcher extends JavaDispatcher {
             provider = (Provider<Source>)serviceInstance;
         } else if (clazz == SOAPMessage.class) {
             provider = (Provider<SOAPMessage>)serviceInstance;
-        } else if (clazz == JAXBContext.class) {
-            provider = (Provider<JAXBContext>)serviceInstance;
+        } else if (clazz == DataSource.class) {
+            provider = (Provider<DataSource>)serviceInstance;
+        } else if (clazz == OMElement.class) {
+            provider = (Provider<OMElement>)serviceInstance;
         }
 
         if (provider == null) {
@@ -552,6 +597,7 @@ public class ProviderDispatcher extends JavaDispatcher {
     *   javax.xml.transform.Source
     *   javax.xml.soap.SOAPMessage
     *   javax.activation.DataSource
+    *   org.apache.axiom.om.OMElement
     *
     * We've also added support for String types which is NOT dictated
     * by the spec.
@@ -560,7 +606,8 @@ public class ProviderDispatcher extends JavaDispatcher {
         boolean valid = clazz == String.class ||
                 clazz == SOAPMessage.class ||
                 clazz == Source.class ||
-                clazz == DataSource.class;
+                clazz == DataSource.class ||
+                clazz == OMElement.class;
 
         if (!valid) {
             if (log.isDebugEnabled()) {
@@ -582,15 +629,21 @@ public class ProviderDispatcher extends JavaDispatcher {
         if (type.equals(String.class)) {
             _blockFactory = (XMLStringBlockFactory)FactoryRegistry.getFactory(
                     XMLStringBlockFactory.class);
+        } else if (type.equals(DataSource.class)) {
+            _blockFactory = (DataSourceBlockFactory)FactoryRegistry.getFactory(
+                    DataSourceBlockFactory.class);
         } else if (type.equals(Source.class)) {
             _blockFactory = (SourceBlockFactory)FactoryRegistry.getFactory(
                     SourceBlockFactory.class);
         } else if (type.equals(SOAPMessage.class)) {
             _blockFactory = (SOAPEnvelopeBlockFactory)FactoryRegistry.getFactory(
                     SOAPEnvelopeBlockFactory.class);
+        } else if (type.equals(OMElement.class)) {
+            _blockFactory = (OMBlockFactory)FactoryRegistry.getFactory(
+                    OMBlockFactory.class);
         } else {
             throw ExceptionFactory.makeWebServiceException(
-            		Messages.getMessage("bFactoryErr",type.getClass().getName()));
+            		Messages.getMessage("bFactoryErr",type.getName()));
         }
 
         return _blockFactory;
@@ -609,7 +662,7 @@ public class ProviderDispatcher extends JavaDispatcher {
         return m;
     }
     
-    private void initialize(MessageContext mc) {
+    protected void initialize(MessageContext mc) {
 
         mc.setOperationName(mc.getAxisMessageContext().getAxisOperation().getName());
 

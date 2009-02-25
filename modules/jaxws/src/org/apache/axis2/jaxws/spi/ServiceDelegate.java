@@ -20,6 +20,30 @@
 package org.apache.axis2.jaxws.spi;
 
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Iterator;
+import java.util.concurrent.Executor;
+
+import javax.activation.DataSource;
+import javax.xml.bind.JAXBContext;
+import javax.xml.namespace.QName;
+import javax.xml.soap.SOAPMessage;
+import javax.xml.transform.Source;
+import javax.xml.ws.Dispatch;
+import javax.xml.ws.EndpointReference;
+import javax.xml.ws.Service;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.WebServiceFeature;
+import javax.xml.ws.Service.Mode;
+import javax.xml.ws.handler.HandlerResolver;
+
+import org.apache.axiom.om.OMElement;
+import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.java.security.AccessController;
@@ -42,26 +66,6 @@ import org.apache.axis2.jaxws.util.WSDLWrapper;
 import org.apache.axis2.jaxws.utility.ExecutorFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
-import javax.activation.DataSource;
-import javax.xml.bind.JAXBContext;
-import javax.xml.namespace.QName;
-import javax.xml.soap.SOAPMessage;
-import javax.xml.transform.Source;
-import javax.xml.ws.Dispatch;
-import javax.xml.ws.EndpointReference;
-import javax.xml.ws.Service;
-import javax.xml.ws.Service.Mode;
-import javax.xml.ws.WebServiceException;
-import javax.xml.ws.WebServiceFeature;
-import javax.xml.ws.handler.HandlerResolver;
-import java.lang.reflect.Proxy;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.Iterator;
-import java.util.concurrent.Executor;
 
 /**
  * The ServiceDelegate serves as the backing implementation for all of the methods in the {@link
@@ -236,12 +240,17 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
     // are only suitibale for creating Distpach instances.
     public void addPort(QName portName, String bindingId, String endpointAddress)
             throws WebServiceException {
+        verifyServiceDescriptionActive();
+        if (log.isDebugEnabled()) {
+            log.debug("Calling addPort : ("
+                      + portName + "," + bindingId + "," + endpointAddress + ")");
+        }
     	if(endpointAddress!=null && endpointAddress.trim().length()==0){
     		ExceptionFactory.makeWebServiceException(Messages.getMessage("addPortErr1", (portName!=null)?portName.getLocalPart():"", endpointAddress));
     	}
         EndpointDescription endpointDesc =
                 DescriptionFactory.updateEndpoint(serviceDescription, null, portName,
-                                                  DescriptionFactory.UpdateType.ADD_PORT, this);
+                                                  DescriptionFactory.UpdateType.ADD_PORT, this, bindingId, endpointAddress);
         // TODO: Need to set endpointAddress and set or check bindingId on the EndpointDesc
         endpointDesc.setEndpointAddress(endpointAddress);
         endpointDesc.setClientBindingID(bindingId);
@@ -266,6 +275,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     @Override
     public <T> Dispatch<T> createDispatch(EndpointReference jaxwsEPR, Class<T> type, Mode mode, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         if (jaxwsEPR == null) {
             throw ExceptionFactory
                     .makeWebServiceException(Messages.getMessage("dispatchNoEndpointReference"));
@@ -323,6 +333,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     @Override
     public Dispatch<Object> createDispatch(EndpointReference jaxwsEPR, JAXBContext context, Mode mode, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         if (jaxwsEPR == null) {
             throw ExceptionFactory
                     .makeWebServiceException(Messages.getMessage("dispatchNoEndpointReference"));
@@ -371,6 +382,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     @Override
     public <T> Dispatch<T> createDispatch(QName portName, Class<T> type, Mode mode, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         if (portName == null) {
             throw ExceptionFactory
                     .makeWebServiceException(Messages.getMessage("createDispatchFail0"));
@@ -416,6 +428,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     @Override
     public Dispatch<Object> createDispatch(QName portName, JAXBContext context, Mode mode, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         if (portName == null) {
             throw ExceptionFactory
                     .makeWebServiceException(Messages.getMessage("createDispatchFail0"));
@@ -513,6 +526,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     @Override
     public <T> T getPort(QName portName, Class<T> sei, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         /* TODO Check to see if WSDL Location is provided.
          * if not check WebService annotation's WSDLLocation
          * if both are not provided then throw exception.
@@ -592,6 +606,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
     * @see javax.xml.ws.spi.ServiceDelegate#getHandlerResolver()
     */
     public HandlerResolver getHandlerResolver() {
+        verifyServiceDescriptionActive();
         if (handlerResolver == null) {
             handlerResolver = new HandlerResolverImpl(serviceDescription, this);
         }
@@ -603,6 +618,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
     * @see javax.xml.ws.spi.ServiceDelegate#getPorts()
     */
     public Iterator<QName> getPorts() {
+        verifyServiceDescriptionActive();
         return getServiceDescription().getPorts(this).iterator();
     }
 
@@ -619,6 +635,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
     * @see javax.xml.ws.spi.ServiceDelegate#getWSDLDocumentLocation()
     */
     public URL getWSDLDocumentLocation() {
+        verifyServiceDescriptionActive();
         try {
             String wsdlLocation = ((ServiceDescriptionWSDL) serviceDescription).getWSDLLocation();
             if(wsdlLocation == null) {
@@ -667,10 +684,12 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
      * 
      */
     public ServiceClient getServiceClient(QName portQName) throws WebServiceException {
+        verifyServiceDescriptionActive();
         return serviceDescription.getServiceClient(portQName, this);
     }
     
     public <T> T getPort(org.apache.axis2.addressing.EndpointReference axis2EPR, String addressingNamespace, Class<T> sei, WebServiceFeature... features) {
+        verifyServiceDescriptionActive();
         DescriptionBuilderComposite sparseComposite = getPortMetadata();
         resetPortMetadata();
         EndpointDescription endpointDesc = null;
@@ -745,6 +764,7 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
 
     // TODO: Remove this method and put the WSDLWrapper methods on the ServiceDescriptor directly
     private WSDLWrapper getWSDLWrapper() {
+        verifyServiceDescriptionActive();
         return ((ServiceDescriptionWSDL)serviceDescription).getWSDLWrapper();
     }
 
@@ -756,7 +776,8 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
         return clazz != null && (clazz == String.class ||
                 clazz == Source.class ||
                 clazz == DataSource.class ||
-                clazz == SOAPMessage.class);
+                clazz == SOAPMessage.class ||
+                clazz == OMElement.class);
     }
 
     private boolean isValidDispatchTypeWithMode(Class clazz, Mode mode) {
@@ -849,4 +870,101 @@ public class ServiceDelegate extends javax.xml.ws.spi.ServiceDelegate {
         return classes;
     }
     
+    /**
+     * PROPRIETARY METHOD TO RELEASE RESOUCES.  USE OF THIS METHOD IS NOT JAX-WS COMPLIANT 
+     * AND IS NON-PORTABLE!  
+     * 
+     * This method can be called by client code to try to release
+     * resources associated with the Service instance parameter.  These resources include
+     * the JAX-WS metadata objects (e.g. ServiceDescription, EndpointDescription) and the
+     * associated Axis2 objects (e.g. AxisService and realted objects).  Note that these 
+     * resources can be shared across multiple service delegates, and so they will not actually 
+     * be released until the last service delegate using them is closed.
+     * 
+     * Note that it is not necessary to call this method since the service delegate finalizer
+     * will also release the resources as appropriate.  However, finalizers are not necessarily run
+     * in a timely fashion and the timing varies across JVMs.  To predictibly release resources
+     * to prevent large memory requirements and/or OutOfMemory errors, this proprietary release 
+     * method can be called.
+     * 
+     * @param service Instance of the Service for which resources may be released.
+     */
+    public static void releaseService(Service service) {
+        // Find the ServiceDelegate corresponding to the service to be closed
+        // This is the back way around since there is no close on the Service
+        ServiceDelegate serviceDelegate = getServiceDelegateForService(service);
+        serviceDelegate.releaseServiceResources();
+    }
+    
+    private static ServiceDelegate getServiceDelegateForService(Service service) {
+        // Need to get to the private Service._delegate
+        ServiceDelegate returnServiceDelegate = null;
+        try {
+            try {
+                Field serviceDelgateField = service.getClass().getDeclaredFields()[0];
+                serviceDelgateField.setAccessible(true);
+                returnServiceDelegate = (ServiceDelegate) serviceDelgateField.get(service);
+            } catch (ArrayIndexOutOfBoundsException e) {
+                // This may be a generated service subclass, so get the delegate from the superclass
+                Field serviceDelegateField = service.getClass().getSuperclass().getDeclaredFields()[0];
+                serviceDelegateField.setAccessible(true);
+                returnServiceDelegate = (ServiceDelegate) serviceDelegateField.get(service);
+            } 
+        } catch (SecurityException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Attempt to get service delegate for service caught exception.", e);
+            }
+            throw ExceptionFactory.makeWebServiceException(e);
+        } catch (IllegalAccessException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Attempt to get service delegate for service caught exception.", e);
+            }
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
+        return returnServiceDelegate;
+
+    }
+    
+    /**
+     * This can be called from the proprietary static release method (which can be called via 
+     * client code), or it can be called by the finalizer.  This method tries to release resources 
+     * associated with the ServiceDelegate.  Note that since other ServiceDelegates can share these 
+     * resources (e.g. ServiceDescription, EndpointDescription, AxisService), the resources may 
+     * not be releaseed until the last ServiceDelegate using them issues a close.
+     */
+    private void releaseServiceResources() {
+        if (log.isDebugEnabled()) {
+            log.debug("ServiceDelegate.releaseServiceResouces entry");
+        }
+        // This can be called indirectly by client code or by the finalizer.  If it hasn't been
+        // called yet, have the endpointDescriptions release resources.
+        if (serviceDescription != null) {
+            serviceDescription.releaseResources(this);
+            serviceDescription = null;
+        }
+    }
+
+    /**
+     * Verify that there is an associated serviceDescription for this delegate.  If not, a
+     * webServiceException will be thrown.  A serviceDelegate may have a null serviceDescription
+     * if the client code issues the proprietary method call relealseServiceResources. 
+     */
+    private void verifyServiceDescriptionActive() {
+        if (serviceDescription == null) {
+            // TODO: This should be NLS'd
+            throw ExceptionFactory.makeWebServiceException("Attempt to use Service after it was released");
+        }
+    }
+    
+    protected void finalize() throws Throwable {
+        try {
+            releaseServiceResources();
+        } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.debug("ServiceDelgate Finalizer caught exception", e);
+            }
+        } finally {
+            super.finalize();
+        }
+    }   
 }

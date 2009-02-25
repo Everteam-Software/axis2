@@ -26,39 +26,20 @@ import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingHelper;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.client.Options;
+import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.ServiceContext;
-import org.apache.axis2.dataretrieval.AxisDataLocator;
-import org.apache.axis2.dataretrieval.AxisDataLocatorImpl;
-import org.apache.axis2.dataretrieval.DRConstants;
-import org.apache.axis2.dataretrieval.Data;
-import org.apache.axis2.dataretrieval.DataRetrievalException;
-import org.apache.axis2.dataretrieval.DataRetrievalRequest;
-import org.apache.axis2.dataretrieval.LocatorType;
-import org.apache.axis2.dataretrieval.OutputForm;
-import org.apache.axis2.dataretrieval.SchemaSupplier;
-import org.apache.axis2.dataretrieval.WSDLSupplier;
+import org.apache.axis2.dataretrieval.*;
 import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.deployment.util.ExcludeInfo;
 import org.apache.axis2.deployment.util.PhasesInfo;
 import org.apache.axis2.deployment.util.Utils;
-import org.apache.axis2.description.java2wsdl.DefaultSchemaGenerator;
-import org.apache.axis2.description.java2wsdl.DocLitBareSchemaGenerator;
-import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
-import org.apache.axis2.description.java2wsdl.SchemaGenerator;
-import org.apache.axis2.description.java2wsdl.TypeTable;
-import org.apache.axis2.engine.AxisConfiguration;
-import org.apache.axis2.engine.DefaultObjectSupplier;
-import org.apache.axis2.engine.MessageReceiver;
-import org.apache.axis2.engine.ObjectSupplier;
-import org.apache.axis2.engine.ServiceLifeCycle;
+import org.apache.axis2.description.java2wsdl.*;
+import org.apache.axis2.engine.*;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.phaseresolver.PhaseResolver;
 import org.apache.axis2.transport.TransportListener;
-import org.apache.axis2.transport.http.server.HttpUtils;
-import org.apache.axis2.util.Loader;
-import org.apache.axis2.util.LoggingControl;
-import org.apache.axis2.util.XMLPrettyPrinter;
+import org.apache.axis2.util.*;
 import org.apache.axis2.util.XMLUtils;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
@@ -70,20 +51,10 @@ import org.apache.ws.commons.schema.XmlSchemaExternal;
 import org.apache.ws.commons.schema.XmlSchemaObjectCollection;
 import org.apache.ws.commons.schema.utils.NamespaceMap;
 import org.apache.ws.commons.schema.utils.NamespacePrefixList;
-import org.codehaus.jam.JMethod;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.w3c.dom.*;
 import org.xml.sax.SAXException;
 
-import javax.wsdl.Definition;
-import javax.wsdl.Import;
-import javax.wsdl.Port;
-import javax.wsdl.Service;
-import javax.wsdl.Types;
-import javax.wsdl.WSDLException;
+import javax.wsdl.*;
 import javax.wsdl.extensions.http.HTTPAddress;
 import javax.wsdl.extensions.schema.Schema;
 import javax.wsdl.extensions.soap.SOAPAddress;
@@ -93,26 +64,13 @@ import javax.wsdl.xml.WSDLReader;
 import javax.wsdl.xml.WSDLWriter;
 import javax.xml.namespace.QName;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+import java.io.*;
+import java.lang.reflect.Method;
 import java.net.SocketException;
 import java.net.URL;
 import java.security.PrivilegedAction;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Vector;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Class AxisService
@@ -135,14 +93,14 @@ public class AxisService extends AxisDescription {
 	public static final String INCLUDE_TAG = "include";
 	public static final String SCHEMA_LOCATION = "schemaLocation";
 
-	private Map endpointMap = new HashMap();
+	private Map<String, AxisEndpoint> endpointMap = new HashMap<String, AxisEndpoint>();
 
 	/*
 	 * This is a map between the QName of the element of a message specified in
 	 * the WSDL and an Operation. It enables SOAP Body-based dispatching for
 	 * doc-literal bindings.
 	 */
-	private Map messageElementQNameToOperationMap = new HashMap();
+	private Map<QName, AxisOperation> messageElementQNameToOperationMap = new HashMap<QName, AxisOperation>();
 
 	private int nsCount = 0;
 	private static final Log log = LogFactory.getLog(AxisService.class);
@@ -150,7 +108,7 @@ public class AxisService extends AxisDescription {
 
 	// Maps httpLocations to corresponding operations. Used to dispatch rest
 	// messages.
-	private HashMap httpLocationDispatcherMap = null;
+	private HashMap<String, AxisOperation> httpLocationDispatcherMap = null;
 
 	// A map of (String alias, AxisOperation operation). The aliases might
 	// include: SOAPAction,
@@ -167,25 +125,25 @@ public class AxisService extends AxisDescription {
 	// "foo" is not unique across different operations:
 	// operation 1: action = foo, name = bar
 	// operation 2: action = bar, name = foo
-	private HashMap operationsAliasesMap = null;
+	private HashMap<String, AxisOperation> operationsAliasesMap = null;
 
 	// Collection of aliases that are invalid for this service because they are
 	// duplicated across
 	// multiple operations under this service.
-	private List invalidOperationsAliases = null;
+	private List<String> invalidOperationsAliases = null;
 	// private HashMap operations = new HashMap();
 
 	// to store module ref at deploy time parsing
-	private ArrayList moduleRefs = null;
+	private ArrayList<String> moduleRefs = null;
 
 	// to keep the time that last update time of the service
 	private long lastupdate;
-	private HashMap moduleConfigmap;
+	private HashMap<String, ModuleConfiguration> moduleConfigmap;
 	private String name;
 	private ClassLoader serviceClassLoader;
 
 	// to keep the XMLScheam getting either from WSDL or java2wsdl
-	private ArrayList schemaList;
+	private ArrayList<XmlSchema> schemaList;
 	// private XmlSchema schema;
 
 	// wsdl is there for this service or not (in side META-INF)
@@ -195,7 +153,7 @@ public class AxisService extends AxisDescription {
 	private String scope;
 
 	// to store default message receivers
-	private HashMap messageReceivers;
+	private HashMap<String, MessageReceiver> messageReceivers;
 
 	// to set the handler chain available in phase info
 	private boolean useDefaultChains = true;
@@ -215,7 +173,7 @@ public class AxisService extends AxisDescription {
 	private String schematargetNamespacePrefix = Java2WSDLConstants.SCHEMA_NAMESPACE_PRFIX;
 
 	private boolean enableAllTransports = true;
-	private List exposedTransports = new ArrayList();
+	private List<String> exposedTransports = new ArrayList<String>();
 
 	// To keep reference to ServiceLifeCycle instance , if the user has
 	// specified in services.xml
@@ -280,7 +238,7 @@ public class AxisService extends AxisDescription {
 
 	// Data Locators for WS-Mex Support
 	private HashMap dataLocators;
-	private HashMap dataLocatorClassNames;
+	private HashMap<String, String> dataLocatorClassNames;
 	private AxisDataLocatorImpl defaultDataLocator;
 	// Define search sequence for datalocator based on Data Locator types.
 	LocatorType[] availableDataLocatorTypes = new LocatorType[] {
@@ -292,7 +250,8 @@ public class AxisService extends AxisDescription {
 	private String bindingName;
         
 	// List of MessageContextListeners that listen for events on the MessageContext
-        private ArrayList messageContextListeners = new ArrayList();
+        private CopyOnWriteArrayList<MessageContextListener> messageContextListeners = 
+            new CopyOnWriteArrayList<MessageContextListener>();
 
         // names list keep to preserve the parameter order
         private List operationsNameList;
@@ -301,9 +260,7 @@ public class AxisService extends AxisDescription {
 	private boolean customWsdl = false;
 
 	private HashMap policyMap = new HashMap();
-	
-	private HashMap epMap = null; 
-	
+
 	public AxisEndpoint getEndpoint(String key) {
 		return (AxisEndpoint) endpointMap.get(key);
 	}
@@ -373,8 +330,8 @@ public class AxisService extends AxisDescription {
 		moduleRefs = new ArrayList();
 		schemaList = new ArrayList();
 		serviceClassLoader = (ClassLoader) org.apache.axis2.java.security.AccessController
-				.doPrivileged(new PrivilegedAction() {
-					public Object run() {
+				.doPrivileged(new PrivilegedAction<ClassLoader>() {
+					public ClassLoader run() {
 						return Thread.currentThread().getContextClassLoader();
 					}
 				});
@@ -574,14 +531,14 @@ public class AxisService extends AxisDescription {
 	 *             if a problem occurs
 	 */
 	void addModuleOperations(AxisModule module) throws AxisFault {
-		HashMap map = module.getOperations();
-		Collection col = map.values();
+		HashMap<QName, AxisOperation> map = module.getOperations();
+		Collection<AxisOperation> col = map.values();
 		PhaseResolver phaseResolver = new PhaseResolver(getAxisConfiguration());
-		for (Iterator iterator = col.iterator(); iterator.hasNext();) {
+		for (Iterator<AxisOperation> iterator = col.iterator(); iterator.hasNext();) {
 			AxisOperation axisOperation = copyOperation((AxisOperation) iterator
 					.next());
 			if (this.getOperation(axisOperation.getName()) == null) {
-				ArrayList wsamappings = axisOperation.getWSAMappingList();
+				ArrayList<String> wsamappings = axisOperation.getWSAMappingList();
 				if (wsamappings != null) {
 					for (int j = 0, size = wsamappings.size(); j < size; j++) {
 						String mapping = (String) wsamappings.get(j);
@@ -604,7 +561,6 @@ public class AxisService extends AxisDescription {
 				phaseResolver.engageModuleToOperation(axisOperation, module);
 
 				this.addOperation(axisOperation);
-				Utils.addModuleBindingOperation(this, axisOperation);
 			}
 		}
 	}
@@ -626,8 +582,17 @@ public class AxisService extends AxisDescription {
 	 */
 	public void addOperation(AxisOperation axisOperation) {
 		axisOperation.setParent(this);
+        
+        if (log.isDebugEnabled()) {
+            if (axisOperation.getName().equals(ServiceClient.ANON_OUT_ONLY_OP)
+                    || (axisOperation.getName().equals(ServiceClient.ANON_OUT_ONLY_OP))
+                    || (axisOperation.getName().equals(ServiceClient.ANON_OUT_ONLY_OP))) {
+                log.debug("Client-defined operation name matches default operation name. "
+                        + "this may cause interoperability issues.  Name is: " + axisOperation.getName().toString());
+            }
+        }
 
-		Iterator modules = getEngagedModules().iterator();
+		Iterator<AxisModule> modules = getEngagedModules().iterator();
 
 		while (modules.hasNext()) {
 			AxisModule module = (AxisModule) modules.next();
@@ -680,7 +645,7 @@ public class AxisService extends AxisDescription {
 			mapActionToOperation(action, axisOperation);
 		}
 
-		ArrayList wsamappings = axisOperation.getWSAMappingList();
+		ArrayList<String> wsamappings = axisOperation.getWSAMappingList();
 		if (wsamappings != null) {
 			for (int j = 0, size = wsamappings.size(); j < size; j++) {
 				String mapping = (String) wsamappings.get(j);
@@ -728,7 +693,7 @@ public class AxisService extends AxisDescription {
 		operation.setMessageReceiver(axisOperation.getMessageReceiver());
 		operation.setName(axisOperation.getName());
 
-		Iterator parameters = axisOperation.getParameters().iterator();
+		Iterator<Parameter> parameters = axisOperation.getParameters().iterator();
 
 		while (parameters.hasNext()) {
 			Parameter parameter = (Parameter) parameters.next();
@@ -782,7 +747,7 @@ public class AxisService extends AxisDescription {
 		// adding module operations
 		addModuleOperations(axisModule);
 
-		Iterator operations = getOperations();
+		Iterator<AxisOperation> operations = getOperations();
 		while (operations.hasNext()) {
 			AxisOperation axisOperation = (AxisOperation) operations.next();
 			axisOperation.engageModule(axisModule, engager);
@@ -953,7 +918,7 @@ public class AxisService extends AxisDescription {
 		this.eprs = eprs;
 	}
 
-	public String[] getEPRs() throws AxisFault {
+	public String[] getEPRs() {
 		if (eprs != null && eprs.length != 0) {
 			return eprs;
 		}
@@ -963,7 +928,7 @@ public class AxisService extends AxisDescription {
 
 	private String[] calculateEPRs() {
 		try {
-			String requestIP = HttpUtils.getIpAddress(getAxisConfiguration());
+			String requestIP = org.apache.axis2.util.Utils.getIpAddress(getAxisConfiguration());
 			return calculateEPRs(requestIP);
 		} catch (SocketException e) {
 			log.error("Cannot get local IP address", e);
@@ -976,9 +941,9 @@ public class AxisService extends AxisDescription {
 		if (axisConfig == null) {
 			return null;
 		}
-		ArrayList eprList = new ArrayList();
+		ArrayList<String> eprList = new ArrayList<String>();
 		if (enableAllTransports) {
-			for (Iterator transports = axisConfig.getTransportsIn().values()
+			for (Iterator<TransportInDescription> transports = axisConfig.getTransportsIn().values()
 					.iterator(); transports.hasNext();) {
 				TransportInDescription transportIn = (TransportInDescription) transports
 						.next();
@@ -1005,7 +970,7 @@ public class AxisService extends AxisDescription {
 				}
 			}
 		} else {
-			List trs = this.exposedTransports;
+			List<String> trs = this.exposedTransports;
 			for (int i = 0; i < trs.size(); i++) {
 				String trsName = (String) trs.get(i);
 				TransportInDescription transportIn = axisConfig
@@ -1119,40 +1084,40 @@ public class AxisService extends AxisDescription {
 	 * 
 	 * @param definition
 	 */
-	private void changeImportAndIncludeLocations(Definition definition) {
+	private void changeImportAndIncludeLocations(Definition definition) throws AxisFault {
 
-		// adjust the schema locations in types section
-		Types types = definition.getTypes();
-		if (types != null) {
-			List extensibilityElements = types.getExtensibilityElements();
-			Object extensibilityElement = null;
-			Schema schema = null;
-			for (Iterator iter = extensibilityElements.iterator(); iter.hasNext();) {
-				extensibilityElement = iter.next();
-				if (extensibilityElement instanceof Schema) {
-					schema = (Schema) extensibilityElement;
-					changeLocations(schema.getElement());
-				}
-			}
-		}
-		
-		Iterator iter = definition.getImports().values().iterator();
-		Vector values = null;
-		Import wsdlImport = null;
-		String originalImprotString = null;
-		for (; iter.hasNext();) {
-		    values = (Vector) iter.next();
-		    for (Iterator valuesIter = values.iterator(); valuesIter.hasNext();) {
-		        wsdlImport = (Import) valuesIter.next();
-		        originalImprotString = wsdlImport.getLocationURI();
-		        if (originalImprotString.indexOf("://") == -1 && originalImprotString.indexOf("?wsdl=") == -1){
-		            wsdlImport.setLocationURI(this.name + "?wsdl=" + originalImprotString);
-		        }
-		        changeImportAndIncludeLocations(wsdlImport.getDefinition());
-		    }
-		}
-	
-	}
+        // adjust the schema locations in types section
+        Types types = definition.getTypes();
+        if (types != null) {
+            List extensibilityElements = types.getExtensibilityElements();
+            Object extensibilityElement = null;
+            Schema schema = null;
+            for (Iterator iter = extensibilityElements.iterator(); iter.hasNext();) {
+                extensibilityElement = iter.next();
+                if (extensibilityElement instanceof Schema) {
+                    schema = (Schema) extensibilityElement;
+                    changeLocations(schema.getElement());
+                }
+            }
+        }
+
+        Iterator iter = definition.getImports().values().iterator();
+        Vector values = null;
+        Import wsdlImport = null;
+        String originalImprotString = null;
+        for (; iter.hasNext();) {
+            values = (Vector) iter.next();
+            for (Iterator valuesIter = values.iterator(); valuesIter.hasNext();) {
+                wsdlImport = (Import) valuesIter.next();
+                originalImprotString = wsdlImport.getLocationURI();
+                if (originalImprotString.indexOf("://") == -1 && originalImprotString.indexOf("?wsdl=") == -1){
+                    wsdlImport.setLocationURI(this.getServiceEPR() + "?wsdl=" + originalImprotString);
+                }
+                changeImportAndIncludeLocations(wsdlImport.getDefinition());
+            }
+        }
+
+    }
 
 	/**
 	 * change the schema Location in the elemment
@@ -1160,56 +1125,79 @@ public class AxisService extends AxisDescription {
 	 * @param element
 	 */
 
-	private void changeLocations(Element element) {
-		NodeList nodeList = element.getChildNodes();
-		String tagName;
-		for (int i = 0; i < nodeList.getLength(); i++) {
-			tagName = nodeList.item(i).getLocalName();
-			if (IMPORT_TAG.equals(tagName) || INCLUDE_TAG.equals(tagName)) {
-				processImport(nodeList.item(i));
-			}
-		}
-	}
+	private void changeLocations(Element element) throws AxisFault {
+        NodeList nodeList = element.getChildNodes();
+        String tagName;
+        for (int i = 0; i < nodeList.getLength(); i++) {
+            tagName = nodeList.item(i).getLocalName();
+            if (IMPORT_TAG.equals(tagName) || INCLUDE_TAG.equals(tagName)) {
+                processImport(nodeList.item(i));
+            }
+        }
+    }
 
-	private void updateSchemaLocation(XmlSchema schema) {
-	    XmlSchemaObjectCollection includes = schema.getIncludes();
-	    for (int j = 0; j < includes.getCount(); j++) {
-	        Object item = includes.getItem(j);
-	        if (item instanceof XmlSchemaExternal) {
-	            XmlSchemaExternal xmlSchemaExternal = (XmlSchemaExternal) item;
-	            XmlSchema s = xmlSchemaExternal.getSchema();
-	            updateSchemaLocation(s, xmlSchemaExternal);
-	        }
-	    }
-	}
+	private void updateSchemaLocation(XmlSchema schema) throws AxisFault {
+        XmlSchemaObjectCollection includes = schema.getIncludes();
+        for (int j = 0; j < includes.getCount(); j++) {
+            Object item = includes.getItem(j);
+            if (item instanceof XmlSchemaExternal) {
+                XmlSchemaExternal xmlSchemaExternal = (XmlSchemaExternal) item;
+                XmlSchema s = xmlSchemaExternal.getSchema();
+                updateSchemaLocation(s, xmlSchemaExternal);
+            }
+        }
+    }
 	   
-	private void updateSchemaLocation(XmlSchema s, XmlSchemaExternal xmlSchemaExternal) {
-	    if (s != null) {
-	        String schemaLocation = xmlSchemaExternal.getSchemaLocation();
+	private void updateSchemaLocation(XmlSchema s, XmlSchemaExternal xmlSchemaExternal) throws AxisFault {
+        if (s != null) {
+            String schemaLocation = xmlSchemaExternal.getSchemaLocation();
 
-	        if (schemaLocation.indexOf("://") == -1 && schemaLocation.indexOf("?xsd=") == -1) {	            
-	            String newscheamlocation = this.name + "?xsd=" + schemaLocation;
-	            xmlSchemaExternal.setSchemaLocation(newscheamlocation);                               
-	        }
-	    }
-	}
+            if (schemaLocation.indexOf("://") == -1 && schemaLocation.indexOf("?xsd=") == -1) {
+                String newscheamlocation = this.getServiceEPR() + "?xsd=" + schemaLocation;
+                xmlSchemaExternal.setSchemaLocation(newscheamlocation);
+            }
+        }
+    }
 	   
-	private void processImport(Node importNode) {
-		NamedNodeMap nodeMap = importNode.getAttributes();
-		Node attribute;
-		String attributeValue;
-		for (int i = 0; i < nodeMap.getLength(); i++) {
-			attribute = nodeMap.item(i);
-			if (attribute.getNodeName().equals("schemaLocation")) {
-				attributeValue = attribute.getNodeValue();
+	private void processImport(Node importNode) throws AxisFault {
+        NamedNodeMap nodeMap = importNode.getAttributes();
+        Node attribute;
+        String attributeValue;
+        for (int i = 0; i < nodeMap.getLength(); i++) {
+            attribute = nodeMap.item(i);
+            if (attribute.getNodeName().equals("schemaLocation")) {
+                attributeValue = attribute.getNodeValue();
                 if (attributeValue.indexOf("://") == -1 && attributeValue.indexOf("?xsd=") == -1) {
-                    attribute.setNodeValue(this.name + "?xsd=" + attributeValue);
+                    attribute.setNodeValue(this.getServiceEPR() + "?xsd=" + attributeValue);
                 }
             }
-		}
-	}
+        }
+    }
 
-	/**
+    private String getServiceEPR() {
+        String serviceEPR = null;
+        Parameter parameter = this.getParameter(Constants.Configuration.GENERATE_ABSOLUTE_LOCATION_URIS);
+        if ((parameter != null) && JavaUtils.isTrueExplicitly(parameter.getValue())) {
+            String[] eprs = this.getEPRs();
+            for (int i = 0; i < eprs.length; i++) {
+                if ((eprs[i] != null) && (eprs[i].startsWith("http:"))){
+                    serviceEPR = eprs[i];
+                    break;
+                }
+            }
+            if (serviceEPR == null){
+                serviceEPR = eprs[0];
+            }
+        } else {
+            serviceEPR = this.name;
+        }
+        if (serviceEPR.endsWith("/")){
+            serviceEPR = serviceEPR.substring(0, serviceEPR.lastIndexOf("/"));
+        }
+        return serviceEPR;
+    }
+
+    /**
 	 * Produces a XSD for this AxisService and prints it to the specified
 	 * OutputStream.
 	 * 
@@ -1239,7 +1227,7 @@ public class AxisService extends AxisDescription {
 		// call the populator
 		populateSchemaMappings();
 		Map schemaMappingtable = getSchemaMappingTable();
-		ArrayList schemas = getSchema();
+		ArrayList<XmlSchema> schemas = getSchema();
 
 		// a name is present - try to pump the requested schema
 		if (!"".equals(xsd)) {
@@ -1276,7 +1264,7 @@ public class AxisService extends AxisDescription {
 		} else {
 			// user specified no name and there is only one schema
 			// so pump that out
-			ArrayList list = getSchema();
+			ArrayList<XmlSchema> list = getSchema();
 			if (list.size() > 0) {
 				XmlSchema schema = getSchema(0);
 				if (schema != null) {
@@ -1348,6 +1336,16 @@ public class AxisService extends AxisDescription {
 		printWSDL(out, null);
 	}
 
+        private AxisEndpoint getAxisEndpoint(String port) {
+            // if service has a single endpoint, this will cause the [serviceName] address
+            // to be used in wsdl instead of the [serviceName].[endpointName]
+            if (endpointMap.size() == 1 && endpointMap.containsKey(getEndpointName())) {
+                return null;
+            } else {
+                return (AxisEndpoint)endpointMap.get(port);
+            }
+        }
+
 	private void setPortAddress(Definition definition, String requestIP)
 			throws AxisFault {
 		Iterator serviceItr = definition.getServices().values().iterator();
@@ -1356,6 +1354,7 @@ public class AxisService extends AxisDescription {
 			Iterator portItr = serviceElement.getPorts().values().iterator();
 			while (portItr.hasNext()) {
 				Port port = (Port) portItr.next();
+				AxisEndpoint endpoint = getAxisEndpoint(port.getName());
 				List list = port.getExtensibilityElements();
 				for (int i = 0; i < list.size(); i++) {
 					Object extensibilityEle = list.get(i);
@@ -1365,45 +1364,89 @@ public class AxisService extends AxisDescription {
 						if (existingAddress == null
 								|| existingAddress
 										.equals("REPLACE_WITH_ACTUAL_URL")) {
-							((SOAPAddress) extensibilityEle)
-									.setLocationURI(getEPRs()[0]);
-						} else {
-							if (requestIP == null) {
+							if (endpoint != null) {
 								((SOAPAddress) extensibilityEle)
-										.setLocationURI(getLocationURI(
-												getEPRs(), existingAddress));
+										.setLocationURI(endpoint
+												.calculateEndpointURL());
 							} else {
 								((SOAPAddress) extensibilityEle)
-										.setLocationURI(getLocationURI(
-												calculateEPRs(requestIP),
-												existingAddress));
+										.setLocationURI(getEPRs()[0]);
+							}
+						} else {
+							if (requestIP == null) {
+								if (endpoint != null) {
+									((SOAPAddress) extensibilityEle)
+											.setLocationURI(endpoint
+													.calculateEndpointURL());
+								} else {
+									((SOAPAddress) extensibilityEle)
+											.setLocationURI(getLocationURI(
+													getEPRs(), existingAddress));
+								}
+							} else {
+								if (endpoint != null) {
+									((SOAPAddress) extensibilityEle)
+											.setLocationURI(endpoint
+													.calculateEndpointURL());
+								} else {
+									((SOAPAddress) extensibilityEle)
+											.setLocationURI(getLocationURI(
+													calculateEPRs(requestIP),
+													existingAddress));
+								}
 							}
 						}
 					} else if (extensibilityEle instanceof SOAP12Address) {
 						SOAP12Address soapAddress = (SOAP12Address) extensibilityEle;
 						String exsistingAddress = soapAddress.getLocationURI();
 						if (requestIP == null) {
-							((SOAP12Address) extensibilityEle)
-									.setLocationURI(getLocationURI(getEPRs(),
-											exsistingAddress));
+							if (endpoint != null) {
+								((SOAP12Address) extensibilityEle)
+										.setLocationURI(endpoint
+												.calculateEndpointURL());
+
+							} else {
+								((SOAP12Address) extensibilityEle)
+										.setLocationURI(getLocationURI(
+												getEPRs(), exsistingAddress));
+							}
 						} else {
-							((SOAP12Address) extensibilityEle)
-									.setLocationURI(getLocationURI(
-											calculateEPRs(requestIP),
-											exsistingAddress));
+							if (endpoint != null) {
+								((SOAP12Address) extensibilityEle)
+										.setLocationURI(endpoint
+												.calculateEndpointURL());
+							} else {
+								((SOAP12Address) extensibilityEle)
+										.setLocationURI(getLocationURI(
+												calculateEPRs(requestIP),
+												exsistingAddress));
+
+							}
 						}
 					} else if (extensibilityEle instanceof HTTPAddress) {
 						HTTPAddress httpAddress = (HTTPAddress) extensibilityEle;
 						String exsistingAddress = httpAddress.getLocationURI();
 						if (requestIP == null) {
-							((HTTPAddress) extensibilityEle)
-									.setLocationURI(getLocationURI(getEPRs(),
-											exsistingAddress));
+							if (endpoint != null) {
+								((HTTPAddress) extensibilityEle)
+										.setLocationURI(endpoint
+												.calculateEndpointURL());
+							} else {
+								((HTTPAddress) extensibilityEle)
+										.setLocationURI(getLocationURI(
+												getEPRs(), exsistingAddress));
+							}
 						} else {
-							((HTTPAddress) extensibilityEle)
-									.setLocationURI(getLocationURI(
-											calculateEPRs(requestIP),
-											exsistingAddress));
+							if (endpoint != null) {
+								((HTTPAddress) extensibilityEle)
+										.setLocationURI(endpoint
+												.calculateEndpointURL());
+							} else {
+								((HTTPAddress) extensibilityEle)
+										.setLocationURI(getLocationURI(
+												calculateEPRs(requestIP),
+												exsistingAddress));
+							}
 						}
 					}
 					// TODO : change the Endpoint refrence addess as well.
@@ -1484,7 +1527,7 @@ public class AxisService extends AxisDescription {
 		try {
 			String wsdlntfound = "<error>"
 					+ "<description>Unable to generate WSDL 1.1 for this service</description>"
-					+ "<reason>If you wish Axis2 to automatically generate the WSDL 1.1, then please +"
+					+ "<reason>If you wish Axis2 to automatically generate the WSDL 1.1, then please "
 					+ "set useOriginalwsdl as false in your services.xml</reason>";
 			out.write(wsdlntfound.getBytes());
 			if (e != null) {
@@ -1549,9 +1592,9 @@ public class AxisService extends AxisDescription {
 	/**
 	 * Gets the control operation which are added by module like RM.
 	 */
-	public ArrayList getControlOperations() {
-		Iterator op_itr = getOperations();
-		ArrayList operationList = new ArrayList();
+	public ArrayList<AxisOperation> getControlOperations() {
+		Iterator<AxisOperation> op_itr = getOperations();
+		ArrayList<AxisOperation> operationList = new ArrayList<AxisOperation>();
 
 		while (op_itr.hasNext()) {
 			AxisOperation operation = (AxisOperation) op_itr.next();
@@ -1584,7 +1627,7 @@ public class AxisService extends AxisDescription {
 		return (ModuleConfiguration) moduleConfigmap.get(moduleName);
 	}
 
-	public ArrayList getModules() {
+	public ArrayList<String> getModules() {
 		return moduleRefs;
 	}
 
@@ -1742,8 +1785,8 @@ public class AxisService extends AxisDescription {
 	 * 
 	 * @return Returns HashMap
 	 */
-	public Iterator getOperations() {
-		return getChildren();
+	public Iterator<AxisOperation> getOperations() {
+		return (Iterator<AxisOperation>) getChildren();
 	}
 
 	/*
@@ -1755,9 +1798,9 @@ public class AxisService extends AxisDescription {
 	/**
 	 * Gets only the published operations.
 	 */
-	public ArrayList getPublishedOperations() {
-		Iterator op_itr = getOperations();
-		ArrayList operationList = new ArrayList();
+	public ArrayList<AxisOperation> getPublishedOperations() {
+		Iterator<AxisOperation> op_itr = getOperations();
+		ArrayList<AxisOperation> operationList = new ArrayList<AxisOperation>();
 
 		while (op_itr.hasNext()) {
 			AxisOperation operation = (AxisOperation) op_itr.next();
@@ -1812,7 +1855,7 @@ public class AxisService extends AxisDescription {
 		this.name = name;
 	}
 
-	public ArrayList getSchema() {
+	public ArrayList<XmlSchema> getSchema() {
 		return schemaList;
 	}
 
@@ -1825,8 +1868,8 @@ public class AxisService extends AxisDescription {
 		}
 	}
 
-	public void addSchema(Collection schemas) {
-		Iterator iterator = schemas.iterator();
+	public void addSchema(Collection<XmlSchema> schemas) {
+		Iterator<XmlSchema> iterator = schemas.iterator();
 		while (iterator.hasNext()) {
 			XmlSchema schema = (XmlSchema) iterator.next();
 			schemaList.add(schema);
@@ -1959,7 +2002,7 @@ public class AxisService extends AxisDescription {
 		eprs = calculateEPRs();
 	}
 
-	public List getExposedTransports() {
+	public List<String> getExposedTransports() {
 		return this.exposedTransports;
 	}
 
@@ -2016,9 +2059,9 @@ public class AxisService extends AxisDescription {
 	 *            the module in question
 	 */
 	private void removeModuleOperations(AxisModule module) {
-		HashMap moduleOperations = module.getOperations();
+		HashMap<QName, AxisOperation> moduleOperations = module.getOperations();
 		if (moduleOperations != null) {
-			for (Iterator modOpsIter = moduleOperations.values().iterator(); modOpsIter
+			for (Iterator<AxisOperation> modOpsIter = moduleOperations.values().iterator(); modOpsIter
 					.hasNext();) {
 				AxisOperation operation = (AxisOperation) modOpsIter.next();
 				removeOperation(operation.getName());
@@ -2139,7 +2182,7 @@ public class AxisService extends AxisDescription {
 			AxisConfiguration axisConfig) throws AxisFault {
 
 		try {
-			HashMap messageReciverMap = new HashMap();
+			HashMap<String, MessageReceiver> messageReciverMap = new HashMap<String, MessageReceiver>();
 			Class inOnlyMessageReceiver = Loader
 					.loadClass("org.apache.axis2.rpc.receivers.RPCInOnlyMessageReceiver");
 			MessageReceiver messageReceiver = (MessageReceiver) inOnlyMessageReceiver
@@ -2238,7 +2281,7 @@ public class AxisService extends AxisDescription {
 	 */
 	public static AxisService createService(String implClass,
 			String serviceName, AxisConfiguration axisConfiguration,
-			Map messageReceiverClassMap, String targetNamespace,
+			Map<String, MessageReceiver> messageReceiverClassMap, String targetNamespace,
 			ClassLoader loader, SchemaGenerator schemaGenerator,
 			AxisService axisService) throws AxisFault {
 		Parameter parameter = new Parameter(Constants.SERVICE_CLASS, implClass);
@@ -2272,12 +2315,12 @@ public class AxisService extends AxisDescription {
 		if (targetNamespace != null && !"".equals(targetNamespace)) {
 			axisService.setTargetNamespace(targetNamespace);
 		}
-		JMethod[] method = schemaGenerator.getMethods();
+		Method[] method = schemaGenerator.getMethods();
 		PhasesInfo pinfo = axisConfiguration.getPhasesInfo();
 		for (int i = 0; i < method.length; i++) {
-			JMethod jmethod = method[i];
+			Method jmethod = method[i];
 			AxisOperation operation = axisService.getOperation(new QName(
-					jmethod.getSimpleName()));
+					jmethod.getName()));
 			String mep = operation.getMessageExchangePattern();
 			MessageReceiver mr;
 			if (messageReceiverClassMap != null) {
@@ -2326,7 +2369,7 @@ public class AxisService extends AxisDescription {
 		AxisOperation operation = getOperation(opName);
 		if (operation != null) {
 			removeChild(opName);
-			ArrayList mappingList = operation.getWSAMappingList();
+			ArrayList<String> mappingList = operation.getWSAMappingList();
 			if (mappingList != null) {
 				for (int i = 0; i < mappingList.size(); i++) {
 					String actionMapping = (String) mappingList.get(i);
@@ -2343,7 +2386,7 @@ public class AxisService extends AxisDescription {
 	 * @return a Map of prefix (String) to namespace URI (String)
 	 * @deprecated please use getNamespaceMap()
 	 */
-	public Map getNameSpacesMap() {
+	public Map<String, String> getNameSpacesMap() {
 		return namespaceMap;
 	}
 
@@ -2562,26 +2605,24 @@ public class AxisService extends AxisDescription {
 	 * @param xmlSchemaExternal
 	 * @param nameTable
 	 */
-	private void adjustSchemaLocation(XmlSchema s,
-			XmlSchemaExternal xmlSchemaExternal, Hashtable nameTable,
-			Hashtable importedScheams, Hashtable sourceURIToNewLocationMap) {
-		if (s != null) {
-			String schemaLocation = xmlSchemaExternal.getSchemaLocation();
+    private void adjustSchemaLocation(XmlSchema s,
+                                      XmlSchemaExternal xmlSchemaExternal, Hashtable nameTable,
+                                      Hashtable importedScheams, Hashtable sourceURIToNewLocationMap) {
+        if (s != null) {
+            String schemaLocation = xmlSchemaExternal.getSchemaLocation();
 
-			if (schemaLocation.indexOf("://") == -1) {
-				String newscheamlocation = customSchemaNamePrefix == null ?
-				// use the default mode
-				(getName() + "?xsd=" + getScheamLocationWithDot(
-						sourceURIToNewLocationMap, s))
-						:
-						// custom prefix is present - add the custom prefix
-						(customSchemaNamePrefix + getScheamLocationWithDot(
-								sourceURIToNewLocationMap, s));
-				xmlSchemaExternal.setSchemaLocation(newscheamlocation);
-				importedScheams.put(schemaLocation, newscheamlocation);
-			}
-		}
-	}
+            String newscheamlocation = customSchemaNamePrefix == null ?
+                    // use the default mode
+                    (this.getServiceEPR() + "?xsd=" + getScheamLocationWithDot(
+                            sourceURIToNewLocationMap, s))
+                    :
+                    // custom prefix is present - add the custom prefix
+                    (customSchemaNamePrefix + getScheamLocationWithDot(
+                            sourceURIToNewLocationMap, s));
+            xmlSchemaExternal.setSchemaLocation(newscheamlocation);
+            importedScheams.put(schemaLocation, newscheamlocation);
+        }
+    }
 
 	private Object getScheamLocationWithDot(
 			Hashtable sourceURIToNewLocationMap, XmlSchema s) {
@@ -2960,7 +3001,7 @@ public class AxisService extends AxisDescription {
 	}
 
 	// TODO : Explain what goes in this map!
-	public Map getEndpoints() {
+	public Map<String, AxisEndpoint> getEndpoints() {
 		return endpointMap;
 	}
 
@@ -3013,9 +3054,7 @@ public class AxisService extends AxisDescription {
      * @param scl
      */
     public void addMessageContextListener(MessageContextListener scl) {
-        synchronized (messageContextListeners) {
-            messageContextListeners.add(scl);
-        }
+        messageContextListeners.add(scl);
     }
     
     /**
@@ -3023,9 +3062,7 @@ public class AxisService extends AxisDescription {
      * @param scl
      */
     public void removeMessageContextListener(MessageContextListener scl) {
-        synchronized (messageContextListeners) {
-            messageContextListeners.remove(scl);
-        }
+        messageContextListeners.remove(scl);
     }
     
     /**
@@ -3033,11 +3070,9 @@ public class AxisService extends AxisDescription {
      * @return true if ServiceContextLister is in the list
      */
     public boolean hasMessageContextListener(Class cls) {
-        synchronized (messageContextListeners) {
-            for (int i=0; i<messageContextListeners.size(); i++) {
-                if (messageContextListeners.get(i).getClass() == cls) {
-                    return true;
-                }
+        for (int i=0; i<messageContextListeners.size(); i++) {
+            if (messageContextListeners.get(i).getClass() == cls) {
+                return true;
             }
         }
         return false;
@@ -3049,36 +3084,18 @@ public class AxisService extends AxisDescription {
      * @param mc MessageContext
      */
     public void attachServiceContextEvent(ServiceContext sc, MessageContext mc) {
-        synchronized (messageContextListeners) {
-            for (int i=0; i<messageContextListeners.size(); i++) {
-                ((MessageContextListener) messageContextListeners.get(i)).
-                    attachServiceContextEvent(sc, mc);
-            }
+        for (int i=0; i<messageContextListeners.size(); i++) {
+            messageContextListeners.get(i).attachServiceContextEvent(sc, mc);
         }
     }
     
     /**
      * Signal an Attach Envelope Event
-     * @param sc ServiceContext
      * @param mc MessageContext
      */
     public void attachEnvelopeEvent(MessageContext mc) {
-        synchronized (messageContextListeners) {
-            for (int i=0; i<messageContextListeners.size(); i++) {
-                ((MessageContextListener) messageContextListeners.get(i)).
-                    attachEnvelopeEvent(mc);
-            }
+        for (int i=0; i<messageContextListeners.size(); i++) {
+            messageContextListeners.get(i).attachEnvelopeEvent(mc);
         }
-    }
-    
-    public HashMap getEpMap() {
-        if (epMap == null) {
-            Utils.populateEPMap(this);      
-        }
-            return epMap;
-    }
-      
-    public void setEpMap(HashMap epMap) {
-        this.epMap = epMap;
     }
 }

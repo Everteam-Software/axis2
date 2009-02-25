@@ -48,23 +48,17 @@ public class AddressingValidationHandler extends AbstractHandler implements Addr
         }
 
         if (JavaUtils.isTrueExplicitly(flag)) {
-            // If no AxisOperation has been found at the end of the dispatch phase and addressing
-            // is in use we should throw an ActionNotSupported Fault, unless we've been told
-            // not to do this check (by Synapse, for instance)
-            if (JavaUtils.isTrue(msgContext.getProperty(ADDR_VALIDATE_ACTION), true)) {
-                checkAction(msgContext);
-
-                // Check if the wsa:MessageID is required or not.
-                checkMessageIDHeader(msgContext);
-                
-                // Check that if wsamInvocationPattern flag is in effect that the replyto and faultto are valid
-                checkWSAMInvocationPattern(msgContext);
-            }
+            // Check if the wsa:MessageID is required or not.
+            checkMessageIDHeader(msgContext);
         }
-
-        if (JavaUtils.isFalseExplicitly(flag)) {
+        else {
             // Check that if wsaddressing=required that addressing headers were found inbound
             checkUsingAddressing(msgContext);
+        }
+        
+        // Check that if wsamInvocationPattern flag is in effect that the replyto and faultto are valid.
+        if (JavaUtils.isTrue(msgContext.getProperty(ADDR_VALIDATE_INVOCATION_PATTERN), true)) {
+            checkWSAMInvocationPattern(msgContext);
         }
 
         return InvocationResponse.CONTINUE;
@@ -106,11 +100,11 @@ public class AddressingValidationHandler extends AbstractHandler implements Addr
         String value =
                 AddressingHelper.getInvocationPatternParameterValue(msgContext.getAxisOperation());
         if (log.isTraceEnabled()) {
-            log.trace("checkAnonymous: value=" + value);
+            log.trace("checkWSAMInvocationPattern: value=" + value);
         }
         if(!AddressingConstants.WSAM_INVOCATION_PATTERN_BOTH.equals(value)){
         	if (WSAM_INVOCATION_PATTERN_SYNCHRONOUS.equals(value)) {
-        		if (AddressingHelper.isReplyRedirected(msgContext)) {
+        		if (!AddressingHelper.isSyncReplyAllowed(msgContext)) {
         			EndpointReference anonEPR =
         				new EndpointReference(AddressingConstants.Final.WSA_ANONYMOUS_URL);
         			msgContext.setReplyTo(anonEPR);
@@ -118,7 +112,7 @@ public class AddressingValidationHandler extends AbstractHandler implements Addr
         			AddressingFaultsHelper.triggerOnlyAnonymousAddressSupportedFault(msgContext,
         					AddressingConstants.WSA_REPLY_TO);
         		}
-        		if (AddressingHelper.isFaultRedirected(msgContext)) {
+        		if (!AddressingHelper.isSyncFaultAllowed(msgContext)) {
         			EndpointReference anonEPR =
         				new EndpointReference(AddressingConstants.Final.WSA_ANONYMOUS_URL);
         			msgContext.setReplyTo(anonEPR);
@@ -140,18 +134,6 @@ public class AddressingValidationHandler extends AbstractHandler implements Addr
     }
 
     /**
-     * If addressing was found and the dispatch failed we SHOULD (and hence will) return a
-     * WS-Addressing ActionNotSupported fault. This will make more sense once the
-     * AddressingBasedDsipatcher is moved into the addressing module
-     */
-    private void checkAction(MessageContext msgContext) throws AxisFault {
-        if ((msgContext.getAxisService() == null) || (msgContext.getAxisOperation() == null)) {
-            AddressingFaultsHelper
-                    .triggerActionNotSupportedFault(msgContext, msgContext.getWSAAction());
-        }
-    }
-
-    /**
      * Validate that a message id is present when required. The check applied here only applies to
      * WS-Addressing headers that comply with the 2005/08 (final) spec.
      *
@@ -166,16 +148,19 @@ public class AddressingValidationHandler extends AbstractHandler implements Addr
         }
 
         AxisOperation axisOperation = msgContext.getAxisOperation();
-        String mep = axisOperation.getMessageExchangePattern();
-        int mepConstant = Utils.getAxisSpecifMEPConstant(mep);
-
-        if (mepConstant == WSDLConstants.MEP_CONSTANT_IN_OUT ||
-                mepConstant == WSDLConstants.MEP_CONSTANT_IN_OPTIONAL_OUT ||
-                mepConstant == WSDLConstants.MEP_CONSTANT_ROBUST_IN_ONLY) {
-            String messageId = msgContext.getOptions().getMessageId();
-            if (messageId == null || "".equals(messageId)) {
-                AddressingFaultsHelper
-                        .triggerMessageAddressingRequiredFault(msgContext, WSA_MESSAGE_ID);
+        
+        if (axisOperation != null) {
+            String mep = axisOperation.getMessageExchangePattern();
+            int mepConstant = Utils.getAxisSpecifMEPConstant(mep);
+            
+            if (mepConstant == WSDLConstants.MEP_CONSTANT_IN_OUT ||
+                    mepConstant == WSDLConstants.MEP_CONSTANT_IN_OPTIONAL_OUT ||
+                    mepConstant == WSDLConstants.MEP_CONSTANT_ROBUST_IN_ONLY) {
+                String messageId = msgContext.getOptions().getMessageId();
+                if (messageId == null || "".equals(messageId)) {
+                    AddressingFaultsHelper
+                    .triggerMessageAddressingRequiredFault(msgContext, WSA_MESSAGE_ID);
+                }
             }
         }
     }

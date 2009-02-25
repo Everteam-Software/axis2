@@ -107,6 +107,7 @@ public class JavaBeanDispatcher extends JavaDispatcher {
             return null;
         } else if (faultThrown) {
             response = createFaultResponse(mc, mc.getMessage().getProtocol(), fault);
+            setExceptionProperties(response, target, fault);
         } else {
             response = createResponse(mc, mc.getMessage().getProtocol(), methodInputParams, output);
         }
@@ -204,15 +205,8 @@ public class JavaBeanDispatcher extends JavaDispatcher {
         
         return;
     }
-
-    protected Object invokeService(MessageContext ctx,
-                                   Method method, 
-                                   Object obj,
-                                   Object args[]) throws Exception {
-        return method.invoke(obj, args);
-    }
     
-    private void initialize(MessageContext mc) {
+    protected void initialize(MessageContext mc) {
         mc.setOperationName(mc.getAxisMessageContext().getAxisOperation().getName());
         mc.setOperationDescription(Utils.getOperationDescription(mc));
         endpointDesc = mc.getEndpointDescription();

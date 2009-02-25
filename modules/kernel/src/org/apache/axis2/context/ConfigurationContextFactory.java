@@ -21,11 +21,7 @@ package org.apache.axis2.context;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
-import org.apache.axis2.deployment.AxisConfigBuilder;
-import org.apache.axis2.deployment.DeploymentConstants;
-import org.apache.axis2.deployment.DeploymentEngine;
-import org.apache.axis2.deployment.FileSystemConfigurator;
-import org.apache.axis2.deployment.URLBasedAxisConfigurator;
+import org.apache.axis2.deployment.*;
 import org.apache.axis2.deployment.util.Utils;
 import org.apache.axis2.description.AxisModule;
 import org.apache.axis2.description.AxisServiceGroup;
@@ -66,11 +62,28 @@ public class ConfigurationContextFactory {
     public static ConfigurationContext createConfigurationContext(
             AxisConfigurator axisConfigurator) throws AxisFault {
         AxisConfiguration axisConfig = axisConfigurator.getAxisConfiguration();
-        ConfigurationContext configContext = new ConfigurationContext(axisConfig);
-
-        if (axisConfig.getClusterManager() != null) {
-            configContext.initCluster();
+        // call to the deployment listners
+        Parameter param = axisConfig.getParameter(Constants.Configuration.DEPLOYMENT_LIFE_CYCLE_LISTENER);
+        DeploymentLifeCycleListener deploymentLifeCycleListener = null;
+        if (param != null){
+            String className = (String) param.getValue();
+            try {
+                deploymentLifeCycleListener = (DeploymentLifeCycleListener) Class.forName(className).newInstance();
+            } catch (InstantiationException e) {
+                log.error("Can not instantiate deployment Listener " + className, e);
+                throw new AxisFault("Can not instantiate deployment Listener " + className);
+            } catch (IllegalAccessException e) {
+                log.error("Illegal Access deployment Listener " + className, e);
+                throw new AxisFault("Illegal Access deployment Listener " + className);
+            } catch (ClassNotFoundException e) {
+                log.error("Class not found deployment Listener " + className, e);
+                throw new AxisFault("Class not found deployment Listener " + className);
+            }
         }
+        if (deploymentLifeCycleListener != null){
+            deploymentLifeCycleListener.preDeploy(axisConfig);
+        }
+        ConfigurationContext configContext = new ConfigurationContext(axisConfig);
 
         if (axisConfigurator instanceof DeploymentEngine) {
             ((DeploymentEngine) axisConfigurator).setConfigContext(configContext);
@@ -86,6 +99,15 @@ public class ConfigurationContextFactory {
         initApplicationScopeServices(configContext);
 
         axisConfig.setStart(true);
+        if (deploymentLifeCycleListener != null){
+            deploymentLifeCycleListener.postDeploy(configContext);
+        }
+
+        // Finally initialize the cluster
+        if (axisConfig.getClusterManager() != null) {
+            configContext.initCluster();
+        }
+        
         return configContext;
     }
 
@@ -243,7 +265,7 @@ public class ConfigurationContextFactory {
                 } else {
                     fileName = axisModule.getName();
                 }
-                configuration.getFaultyModules().put(fileName, faultyModule.get(axisModule));
+                configuration.getFaultyModules().put(fileName, faultyModule.get(axisModule).toString());
                 //removing from original list
                 configuration.removeModule(axisModule.getName(), axisModule.getName());
             }

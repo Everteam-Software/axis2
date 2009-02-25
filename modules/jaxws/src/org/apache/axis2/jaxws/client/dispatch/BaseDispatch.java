@@ -38,6 +38,7 @@ import org.apache.axis2.jaxws.spi.Binding;
 import org.apache.axis2.jaxws.spi.Constants;
 import org.apache.axis2.jaxws.spi.ServiceDelegate;
 import org.apache.axis2.jaxws.spi.migrator.ApplicationContextMigratorUtil;
+import org.apache.axis2.transport.http.HTTPConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -50,6 +51,8 @@ import javax.xml.ws.WebServiceException;
 import javax.xml.ws.WebServiceFeature;
 import javax.xml.ws.http.HTTPBinding;
 import javax.xml.ws.soap.SOAPBinding;
+
+import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 
@@ -137,11 +140,29 @@ public abstract class BaseDispatch<T> extends BindingProvider
             Binding binding = (Binding) getBinding();
             invocationContext.setHandlers(binding.getHandlerChain());
 
-            Message requestMsg = createRequestMessage(obj);
-           
-            setupMessageProperties(requestMsg);
-            requestMsgCtx.setMessage(requestMsg);
+            initMessageContext(obj, requestMsgCtx);
 
+            /*
+             * if SESSION_MAINTAIN_PROPERTY is true, and the client app has explicitly set a HEADER_COOKIE on the request context, assume the client
+             * app is expecting the HEADER_COOKIE to be the session id.  If we were establishing a new session, no cookie would be sent, and the 
+             * server would reply with a "Set-Cookie" header, which is copied as a "Cookie"-keyed property to the service context during response.
+             * In this case, if we succeed in using an existing server session, no "Set-Cookie" header will be returned, and therefore no
+             * "Cookie"-keyed property would be set on the service context.  So, let's copy our request context HEADER_COOKIE key to the service
+             * context now to prevent the "no cookie" exception in BindingProvider.setupSessionContext.  It is possible the server does not support
+             * sessions, in which case no error occurs, but the client app would assume it is participating in a session.
+             */
+            if ((requestContext.containsKey(BindingProvider.SESSION_MAINTAIN_PROPERTY)) && ((Boolean)requestContext.get(BindingProvider.SESSION_MAINTAIN_PROPERTY))) {
+                if ((requestContext.containsKey(HTTPConstants.HEADER_COOKIE)) && (requestContext.get(HTTPConstants.HEADER_COOKIE) != null)) {
+                    if (invocationContext.getServiceClient().getServiceContext().getProperty(HTTPConstants.HEADER_COOKIE) == null) {
+                        invocationContext.getServiceClient().getServiceContext().setProperty(HTTPConstants.HEADER_COOKIE, requestContext.get(HTTPConstants.HEADER_COOKIE));
+                        if (log.isDebugEnabled()) {
+                            log.debug("Client-app defined Cookie property (assume to be session cookie) on request context copied to service context." +
+                                    "  Caution:  server may or may not support sessions, but client app will not be informed when not supported.");
+                        }
+                    }
+                }
+            }
+                        
             // Migrate the properties from the client request context bag to
             // the request MessageContext.
             ApplicationContextMigratorUtil.performMigrationToMessageContext(
@@ -168,9 +189,22 @@ public abstract class BaseDispatch<T> extends BindingProvider
                 throw wse;
             }
 
-            Message responseMsg = responseMsgCtx.getMessage();
-            Object returnObj = getValueFromMessage(responseMsg);
-
+            // Get the return object
+            Object returnObj = null;
+            try {
+                Message responseMsg = responseMsgCtx.getMessage();
+                returnObj = getValueFromMessage(responseMsg);
+            }
+            finally {
+                // Free the incoming input stream
+                try {
+                    responseMsgCtx.freeInputStream();
+                }
+                catch (Throwable t) {
+                    throw ExceptionFactory.makeWebServiceException(t);
+                }
+            }
+           
             //Check to see if we need to maintain session state
             checkMaintainSessionState(requestMsgCtx, invocationContext);
 
@@ -184,6 +218,17 @@ public abstract class BaseDispatch<T> extends BindingProvider
         } catch (Exception e) {
             // All exceptions are caught and rethrown as a WebServiceException
             throw ExceptionFactory.makeWebServiceException(e);
+        }
+    }
+
+    protected void initMessageContext(Object obj, MessageContext requestMsgCtx) {
+        Message requestMsg = createRequestMessage(obj);
+        setupMessageProperties(requestMsg);
+        requestMsgCtx.setMessage(requestMsg);
+        // handle HTTP_REQUEST_METHOD property
+        String method = (String)requestContext.get(javax.xml.ws.handler.MessageContext.HTTP_REQUEST_METHOD);
+        if (method != null) {
+            requestMsgCtx.setProperty(org.apache.axis2.Constants.Configuration.HTTP_METHOD, method);
         }
     }
 
@@ -221,10 +266,7 @@ public abstract class BaseDispatch<T> extends BindingProvider
             Binding binding = (Binding) getBinding();
             invocationContext.setHandlers(binding.getHandlerChain());
 
-            Message requestMsg = createRequestMessage(obj);
-
-            setupMessageProperties(requestMsg);
-            requestMsgCtx.setMessage(requestMsg);
+            initMessageContext(obj, requestMsgCtx);
 
             // Migrate the properties from the client request context bag to
             // the request MessageContext.
@@ -288,10 +330,7 @@ public abstract class BaseDispatch<T> extends BindingProvider
             Binding binding = (Binding) getBinding();
             invocationContext.setHandlers(binding.getHandlerChain());
 
-            Message requestMsg = createRequestMessage(obj);
-
-            setupMessageProperties(requestMsg);
-            requestMsgCtx.setMessage(requestMsg);
+            initMessageContext(obj, requestMsgCtx);
 
             // Migrate the properties from the client request context bag to
             // the request MessageContext.
@@ -366,10 +405,7 @@ public abstract class BaseDispatch<T> extends BindingProvider
             Binding binding = (Binding) getBinding();
             invocationContext.setHandlers(binding.getHandlerChain());
 
-            Message requestMsg = createRequestMessage(obj);
-
-            setupMessageProperties(requestMsg);
-            requestMsgCtx.setMessage(requestMsg);
+            initMessageContext(obj, requestMsgCtx);
 
             // Migrate the properties from the client request context bag to
             // the request MessageContext.
@@ -430,16 +466,25 @@ public abstract class BaseDispatch<T> extends BindingProvider
      * @return
      */
     public static WebServiceException getFaultResponse(MessageContext msgCtx) {
-        Message msg = msgCtx.getMessage();
-        if (msg != null && msg.isFault()) {
-            //XMLFault fault = msg.getXMLFault();
-            // 4.3.2 conformance bullet 1 requires a ProtocolException here
-            ProtocolException pe =
+        try {
+            Message msg = msgCtx.getMessage();
+            if (msg != null && msg.isFault()) {
+                //XMLFault fault = msg.getXMLFault();
+                // 4.3.2 conformance bullet 1 requires a ProtocolException here
+                ProtocolException pe =
                     MethodMarshallerUtils.createSystemException(msg.getXMLFault(), msg);
-            return pe;
-        } else if (msgCtx.getLocalException() != null) {
-            // use the factory, it'll throw the right thing:
-            return ExceptionFactory.makeWebServiceException(msgCtx.getLocalException());
+                return pe;
+            } else if (msgCtx.getLocalException() != null) {
+                // use the factory, it'll throw the right thing:
+                return ExceptionFactory.makeWebServiceException(msgCtx.getLocalException());
+            }
+        } finally {
+            // Free the incoming input stream
+            try {
+                msgCtx.freeInputStream();
+            } catch (IOException ioe) {
+                return ExceptionFactory.makeWebServiceException(ioe);
+            }
         }
 
         return null;
@@ -496,8 +541,8 @@ public abstract class BaseDispatch<T> extends BindingProvider
             }
         } else {
             // In all cases (PAYLOAD and MESSAGE) we must throw a WebServiceException
-            // if the parameter is null.
-            if (object == null) {
+            // if the parameter is null and request method is POST or PUT.
+            if (object == null && isPOSTorPUTRequest()) {
                 throw ExceptionFactory.makeWebServiceException(Messages.getMessage("dispatchNullParamHttpBinding"));
             }
         }
@@ -511,6 +556,14 @@ public abstract class BaseDispatch<T> extends BindingProvider
 
         // If we've gotten this far, then all is good.
         return true;
+    }
+    
+    private boolean isPOSTorPUTRequest() {
+        String method = (String)this.requestContext.get(javax.xml.ws.handler.MessageContext.HTTP_REQUEST_METHOD);
+        // if HTTP_REQUEST_METHOD is not specified, assume it is a POST method
+        return (method == null || 
+                HTTPConstants.HEADER_POST.equalsIgnoreCase(method) || 
+                HTTPConstants.HEADER_PUT.equalsIgnoreCase(method));
     }
     
     private Message createRequestMessage(Object obj) throws WebServiceException {

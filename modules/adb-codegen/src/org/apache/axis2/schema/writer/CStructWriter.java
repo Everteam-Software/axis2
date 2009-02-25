@@ -31,6 +31,7 @@ import org.apache.axis2.schema.util.SchemaPropertyLoader;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.XSLTTemplateProcessor;
 import org.apache.axis2.util.XSLTUtils;
+//import com.ibm.wsdl.util.xml.DOM2Writer;
 import org.apache.axis2.wsdl.databinding.CUtils;
 import org.apache.ws.commons.schema.XmlSchemaElement;
 import org.apache.ws.commons.schema.XmlSchemaSimpleType;
@@ -53,6 +54,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import com.ibm.wsdl.util.xml.DOM2Writer;
 
 /**
  * Java Bean writer for the schema compiler.
@@ -77,7 +80,8 @@ public class CStructWriter implements BeanWriter {
     private Document globalWrappedHeaderDocument;
 
     private Map modelMap = new HashMap();
-    private static final String DEFAULT_PACKAGE = "adb";
+    private static final String ADB_CLASS_PREFIX = "adb_";
+    private static final String ADB_CLASS_POSTFIX = "_t*";
     private static final String DEFAULT_C_CLASS_NAME = "axiom_node_t*";
 
     private Map baseTypeMap = new JavaTypeMap().getTypeMap();
@@ -240,7 +244,6 @@ public class CStructWriter implements BeanWriter {
      * @return Returns String.
      * @throws org.apache.axis2.schema.SchemaCompilationException
      *
-     * @see BeanWriter#write(org.apache.ws.commons.schema.XmlSchemaSimpleType, java.util.Map, org.apache.axis2.schema.BeanWriterMetaInfoHolder)
      */
     public String write(XmlSchemaSimpleType simpleType,
                         Map typeMap,
@@ -353,8 +356,9 @@ public class CStructWriter implements BeanWriter {
 
             if (writeClasses) {
                 //create the file
-                File outSource = createOutFile(className, ".c");
-                File outHeader = createOutFile(className, ".h");
+                String fileName = className.substring(4, className.length() -3);
+                File outSource = createOutFile(fileName, ".c");
+                File outHeader = createOutFile(fileName, ".h");
                 //parse with the template and create the files
                 parseSource(modelSource, outSource);
                 parseHeader(modelHeader, outHeader);
@@ -407,14 +411,14 @@ public class CStructWriter implements BeanWriter {
      throws SchemaCompilationException {
 
         Element rootElt = XSLTUtils.getElement(model, "class");
-        XSLTUtils.addAttribute(model, "name", className, rootElt);
-        XSLTUtils.addAttribute(model, "caps-name", className.toUpperCase(), rootElt);
+        String strippedClassName = className.substring(4, className.length() -3);
+        XSLTUtils.addAttribute(model, "name", strippedClassName, rootElt);
         XSLTUtils.addAttribute(model, "originalName", originalName, rootElt);
         XSLTUtils.addAttribute(model, "nsuri", qName.getNamespaceURI(), rootElt);
         XSLTUtils.addAttribute(model, "nsprefix", getPrefixForURI(qName.getNamespaceURI(), qName.getPrefix()), rootElt);
 
         /* use caps for macros */
-        String capsName = className.toUpperCase();
+        String capsName = strippedClassName.toUpperCase();
         XSLTUtils.addAttribute(model, "caps-name", capsName, rootElt);
 
 
@@ -505,7 +509,7 @@ public class CStructWriter implements BeanWriter {
         XSLTUtils.addAttribute(model, "type", metainf.getItemTypeClassName(), itemType);
         XSLTUtils.addAttribute(model, "nsuri", metainf.getItemTypeQName().getNamespaceURI(), itemType);
         XSLTUtils.addAttribute(model, "originalName", metainf.getItemTypeQName().getLocalPart(), itemType);
-        XSLTUtils.addAttribute(model, "cname", cName, itemType);
+        XSLTUtils.addAttribute(model, "cname", cName.substring(4, cName.length()-3), itemType);
 
         if (typeMap.containsKey(metainf.getItemTypeQName()) ||
                 groupTypeMap.containsKey(metainf.getItemTypeClassName())) {
@@ -618,7 +622,7 @@ public class CStructWriter implements BeanWriter {
             XSLTUtils.addAttribute(model, "nsuri", name.getNamespaceURI(), property);
             XSLTUtils.addAttribute(model, "prefix", name.getPrefix(), property);
 
-            XSLTUtils.addAttribute(model, "cname", xmlName, property);
+            XSLTUtils.addAttribute(model, "cname", xmlName.substring(4, xmlName.length() -3), property);
 
 
             String CClassNameForElement = metainf.getClassNameForQName(name);
@@ -634,7 +638,7 @@ public class CStructWriter implements BeanWriter {
             /**
              * Caps for use in C macros
              */
-            XSLTUtils.addAttribute(model, "caps-cname", xmlName.toUpperCase(), property);
+            XSLTUtils.addAttribute(model, "caps-cname", xmlName.substring(4, xmlName.length() -3 ).toUpperCase(), property);
             XSLTUtils.addAttribute(model, "caps-type", CClassNameForElement.toUpperCase(), property);
 
             if (PrimitiveTypeFinder.isPrimitive(CClassNameForElement)) {
@@ -893,10 +897,12 @@ public class CStructWriter implements BeanWriter {
                     String attribValue = (String) iterator.next();
                     XSLTUtils.addAttribute(model, "value", attribValue, enumFacet);
                     if (validJava) {
-                        XSLTUtils.addAttribute(model, "id", attribValue, enumFacet);
+                        XSLTUtils.addAttribute(model, "id", attribValue.toUpperCase(), enumFacet);
                     } else {
                         id++;
-                        XSLTUtils.addAttribute(model, "id", "value" + id, enumFacet);
+                        // Replace all invalid characters and append an id to avoid collisions
+                        XSLTUtils.addAttribute(model, "id", 
+                                attribValue.toUpperCase().replaceAll("[^A-Z0-9]", "_") + "_" + id, enumFacet);
                     }
                 }
             }
@@ -993,14 +999,22 @@ public class CStructWriter implements BeanWriter {
             cName = xmlName;
         }
 
+        cName = cName.replace('.','_');
+        cName = cName.replace('-','_');
+
         while (listOfNames.contains(cName.toLowerCase())) {
+            if (!listOfNames.contains((cName + "E").toLowerCase())){
+                cName = cName + "E";
+            } else {
+                cName = cName + count++;
+            }
             cName = cName + CStructWriter.count++;
         }
 
-        String intName = cName.replace('.','_');
-        String outName = intName.replace('-','_');
-        listOfNames.add(outName.toLowerCase());
-        return outName;
+        listOfNames.add(cName.toLowerCase());
+
+        String modifiedCName = ADB_CLASS_PREFIX  + cName + ADB_CLASS_POSTFIX;
+        return modifiedCName;
     }
 
 

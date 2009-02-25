@@ -82,7 +82,6 @@ class EndpointInterfaceDescriptionImpl
     // ANNOTATION: @SOAPBinding
     // Note this is the Type-level annotation.  See OperationDescription for the Method-level annotation
     private SOAPBinding soapBindingAnnotation;
-    // TODO: Should this be using the jaxws annotation values or should that be wrappered?
     private javax.jws.soap.SOAPBinding.Style soapBindingStyle;
     // Default value per JSR-181 MR Sec 4.7 "Annotation: javax.jws.soap.SOAPBinding" pg 28
     public static final javax.jws.soap.SOAPBinding.Style SOAPBinding_Style_DEFAULT =
@@ -201,11 +200,8 @@ class EndpointInterfaceDescriptionImpl
         parentEndpointDescription = parent;
         this.dbc = dbc;
 
-        //TODO: yikes! ...too much redirection, consider setting this in higher level
         getEndpointDescription().getAxisService()
                 .setTargetNamespace(getEndpointDescriptionImpl().getTargetNamespace());
-
-        //TODO: Determine if the isClass parameter is really necessary
 
         // Per JSR-181 all methods on the SEI are mapped to operations regardless
         // of whether they include an @WebMethod annotation.  That annotation may
@@ -225,7 +221,6 @@ class EndpointInterfaceDescriptionImpl
         while (iter.hasNext()) {
             mdc = iter.next();
 
-            //TODO: Verify that this classname is truly always the wrapper class
             mdc.setDeclaringClass(dbc.getClassName());
 
             // Only add if it is a method that would be or is in the WSDL i.e. 
@@ -258,14 +253,6 @@ class EndpointInterfaceDescriptionImpl
         if (log.isDebugEnabled())
             log.debug("EndpointInterfaceDescriptionImpl: Finished Adding operations");
 
-        //TODO: Need to process the other annotations that can exist, on the server side
-        //      and at the class level.
-        //      They are, as follows:       
-        //          HandlerChain (181)
-        //          SoapBinding (181)
-        //          WebServiceRefAnnot (List) (JAXWS)
-        //          BindingTypeAnnot (JAXWS Sec. 7.8 -- Used to set either the AS.endpoint, or AS.SoapNSUri)
-        //          WebServiceContextAnnot (JAXWS via injection)
     }
 
 
@@ -347,7 +334,6 @@ class EndpointInterfaceDescriptionImpl
                 // (3) If an operationDesc does exist and has a java method set on it already, add a new one. 
                 //
                 // TODO: May need to change when Axis2 supports overloaded WSDL operations
-                // TODO: May need to change when ServiceDescription can build an AxisService from annotations
 
                 // Get the QName for this java method and then update (or add) the appropriate OperationDescription
                 // See comments below for imporant notes about the current implementation.
@@ -361,8 +347,6 @@ class EndpointInterfaceDescriptionImpl
                     // which are defined on the SEI are not defined as operations in the WSDL.
                     // Although they usually specific the same OperationName as the WSDL operation, 
                     // there may be cases where they do not.
-                    // TODO: Is this path an error path, or can the async methods specify different operation names than the 
-                    //       WSDL operation?
                     OperationDescription operation = new OperationDescriptionImpl(seiMethod, this);
                     addOperation(operation);
                 } else {
@@ -372,7 +356,6 @@ class EndpointInterfaceDescriptionImpl
                     // HOWEVER the generated JAX-WS async methods (see above) may (will always?) have the same
                     // operation name and so will come down this path; they need to be added.
                     // TODO: When Axis2 starts supporting overloaded operations, then this logic will need to be changed
-                    // TODO: Should we verify that these are the async methods before adding them, and treat it as an error otherwise?
 
                     // Loop through all the opdescs; if one doesn't currently have a java method set, set it
                     // If all have java methods set, then add a new one.  Assume we'll need to add a new one.
@@ -407,7 +390,6 @@ class EndpointInterfaceDescriptionImpl
      * @param javaMethodName String representing a Java Method Name
      * @return
      */
-    // FIXME: This is confusing; some getOperations use the QName from the WSDL or annotation; this one uses the java method name; rename this signature I think; add on that takes a String but does a QName lookup against the WSDL/Annotation
     public OperationDescription[] getOperationForJavaMethod(String javaMethodName) {
         if (DescriptionUtils.isEmpty(javaMethodName)) {
             return null;
@@ -489,8 +471,6 @@ class EndpointInterfaceDescriptionImpl
     * @see org.apache.axis2.jaxws.description.EndpointInterfaceDescription#getDispatchableOperation(QName operationQName)
     */
     public OperationDescription[] getDispatchableOperation(QName operationQName) {
-    	//FIXME:OperationDescriptionImpl creates operation qname with empty namespace. Thus using localname
-    	//to read dispachable operation.
         // REVIEW: Can this be synced at a more granular level?  Can't sync on dispatchableOperations because
         //         it may be null, but also the initialization must finish before next thread sees 
         //         dispatachableOperations != null
@@ -499,6 +479,9 @@ class EndpointInterfaceDescriptionImpl
                 initializeDispatchableOperationsList();
             }
         }
+
+        // Note that OperationDescriptionImpl creates operation qname with empty namespace. Thus 
+        // using only the localPart to get dispatchable operations.
     	QName key = new QName("",operationQName.getLocalPart());
     	List<OperationDescription> operations = dispatchableOperations.get(key);
     	if(operations!=null){
@@ -593,8 +576,6 @@ class EndpointInterfaceDescriptionImpl
     // SOAP Binding annotation realted methods
     // ========================================
     public SOAPBinding getAnnoSoapBinding() {
-        // TODO: Test with sei Null, not null, SOAP Binding annotated, not annotated
-
         if (soapBindingAnnotation == null) {
             soapBindingAnnotation = dbc.getSoapBindingAnnot();
         }
@@ -669,9 +650,16 @@ class EndpointInterfaceDescriptionImpl
                 new ArrayList<MethodDescriptionComposite>();
 
         if (dbc.isInterface()) {
-
-            retrieveList.addAll(retrieveSEIMethodsChain(dbc));
-
+            if(log.isDebugEnabled()) {
+                log.debug("Removing overridden methods for interface: " + dbc.getClassName() + 
+                          " with super interface: " + dbc.getSuperClassName());
+            }
+            
+            // make sure we retrieve all the methods, then remove the overridden
+            // methods that exist in the base interface
+            retrieveList = retrieveSEIMethodsChain(dbc);
+            retrieveList = removeOverriddenMethods(retrieveList, dbc);
+            
         } else {
             //this is an implied SEI...rules are more complicated
 
@@ -748,6 +736,49 @@ class EndpointInterfaceDescriptionImpl
         }
         return hierarchyMap;
     }
+    
+    /**
+     * This method drives the establishment of the hierarchy of interfaces for an SEI.
+     */
+    private Map<String, Integer> getInterfaceHierarchy(DescriptionBuilderComposite dbc) {
+        if(log.isDebugEnabled()) {
+            log.debug("Getting interface hierarchy for: " + dbc.getClassName());
+        }
+        Map<String, Integer> hierarchyMap = new HashMap<String, Integer>();
+        hierarchyMap.put(dbc.getClassName(), 0);
+        return getInterfaceHierarchy(dbc.getInterfacesList(), 
+                                     hierarchyMap, 
+                                     1);
+    }
+
+    /**
+     * Recursive method that builds the hierarchy of interfaces. This begins with an
+     * SEI and walks all of its super interfaces.
+     */
+    private Map<String, Integer> getInterfaceHierarchy(List<String> interfaces,
+                                                           Map<String, Integer> hierarchyMap,
+                                                           int level) {
+        HashMap<String, DescriptionBuilderComposite> dbcMap = getEndpointDescriptionImpl().
+            getServiceDescriptionImpl().getDBCMap();
+        
+        // walk through all of the interfaces
+        if(interfaces != null
+                &&
+                !interfaces.isEmpty()) {
+            for(String interfaze : interfaces) {
+                DescriptionBuilderComposite interDBC = dbcMap.get(interfaze);
+                if(interDBC != null) {
+                    if(log.isDebugEnabled()) {
+                        log.debug("Inserting super interface " + interDBC.getClassName() + 
+                                  " at level " + level);
+                    }
+                    hierarchyMap.put(interDBC.getClassName(), level);
+                    return getInterfaceHierarchy(interDBC.getInterfacesList(), hierarchyMap, level++);
+                }
+            }
+        }
+        return hierarchyMap;
+    }
 
     /**
      * This method will loop through each method that was previously determined as being relevant to
@@ -762,7 +793,8 @@ class EndpointInterfaceDescriptionImpl
     private ArrayList<MethodDescriptionComposite> removeOverriddenMethods(
             ArrayList<MethodDescriptionComposite>
                     methodList, DescriptionBuilderComposite dbc) {
-        HashMap<String, Integer> hierarchyMap = getClassHierarchy(dbc);
+        Map<String, Integer> hierarchyMap = dbc.isInterface() ? getInterfaceHierarchy(dbc) : 
+            getClassHierarchy(dbc);
         ArrayList<MethodDescriptionComposite> returnMethods =
                 new ArrayList<MethodDescriptionComposite>();
         for (int i = 0; i < methodList.size(); i++) {
@@ -806,7 +838,7 @@ class EndpointInterfaceDescriptionImpl
     private static MethodDescriptionComposite getBaseMethod(MethodDescriptionComposite mdc,
                                                             int index,
                                                             ArrayList<MethodDescriptionComposite> methodList,
-                                                            HashMap<String, Integer>
+                                                            Map<String, Integer>
                                                                     hierarchyMap) {
         int baseLevel = hierarchyMap.get(mdc.getDeclaringClass());
         if (log.isDebugEnabled()) {
@@ -969,7 +1001,6 @@ class EndpointInterfaceDescriptionImpl
             } else {
                 // Default value per JSR-181 MR Sec 4.1 pg 15 defers to "Implementation defined, 
                 // as described in JAX-WS 2.0, section 3.2" which is JAX-WS 2.0 Sec 3.2, pg 29.
-                // FIXME: Hardcoded protocol for namespace
                 webServiceTargetNamespace =
                     DescriptionUtils.makeNamespaceFromPackageName(
                             DescriptionUtils.getJavaPackageName(dbc.getClassName()),
@@ -980,7 +1011,6 @@ class EndpointInterfaceDescriptionImpl
     }
 
     public String getAnnoWebServiceName() {
-        //REVIEW the following, used to get Port
         if (webService_Name == null) {
 
             if (getAnnoWebService() != null

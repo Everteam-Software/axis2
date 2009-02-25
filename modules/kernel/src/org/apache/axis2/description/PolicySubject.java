@@ -33,10 +33,9 @@ import org.apache.neethi.PolicyReference;
 public class PolicySubject {
 
 	private boolean updated = false;
-	
 	private Date lastUpdatedTime = new Date();
-
-	private HashMap attachedPolicyComponents = new HashMap();
+	
+	private HashMap<String, PolicyComponent> attachedPolicyComponents = new HashMap<String, PolicyComponent>();
 
 	public void attachPolicy(Policy policy) {
 		String key = policy.getName();
@@ -52,11 +51,11 @@ public class PolicySubject {
 
 	public void attachPolicyReference(PolicyReference reference) {
 		attachedPolicyComponents.put(reference.getURI(), reference);
-		setLastUpdatedTime(new Date());
+		setLastUpdatedTime(new Date()); 
 	}
 
-	public void attachPolicyComponents(List policyComponents) {
-		for (Iterator iterator = policyComponents.iterator(); iterator
+	public void attachPolicyComponents(List<PolicyComponent> policyComponents) {
+		for (Iterator<PolicyComponent> iterator = policyComponents.iterator(); iterator
 				.hasNext();) {
 			attachPolicyComponent((PolicyComponent) iterator.next());
 		}
@@ -89,7 +88,7 @@ public class PolicySubject {
 
 	}
 
-	public Collection getAttachedPolicyComponents() {
+	public Collection<PolicyComponent> getAttachedPolicyComponents() {
 		return attachedPolicyComponents.values();
 	}
 
@@ -109,7 +108,8 @@ public class PolicySubject {
 					"policy doesn't have a name or an id ");
 		}
 		attachedPolicyComponents.put(key, policy);
-		setLastUpdatedTime(new Date());		
+		setLastUpdatedTime(new Date());
+		
 		if (!isUpdated()) {
 			setUpdated(true);
 		}
@@ -130,12 +130,12 @@ public class PolicySubject {
 			setUpdated(true);
 		}
 	}
-	
-        public Date getLastUpdatedTime() {
-                return lastUpdatedTime;
-        }
 
-        public void setLastUpdatedTime(Date lastUpdatedTime) {
-                this.lastUpdatedTime = lastUpdatedTime;
-        }
+	public Date getLastUpdatedTime() {
+		return lastUpdatedTime;
+	}
+
+	public void setLastUpdatedTime(Date lastUpdatedTime) {
+		this.lastUpdatedTime = lastUpdatedTime;
+	}
 }

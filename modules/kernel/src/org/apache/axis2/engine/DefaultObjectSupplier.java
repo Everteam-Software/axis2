@@ -23,11 +23,26 @@ import org.apache.axis2.AxisFault;
 
 public class DefaultObjectSupplier implements ObjectSupplier {
 
-    public Object getObject(Class clazz) throws AxisFault {
-        try {
-            return clazz.newInstance();
-        } catch (Exception e) {
-            throw AxisFault.makeFault(e);
-        }
-    }
+	/* (non-Javadoc)
+	 * @see org.apache.axis2.engine.ObjectSupplier#getObject(java.lang.Class)
+	 */
+	public Object getObject(Class clazz) throws AxisFault {
+		try {
+			Class parent = clazz.getDeclaringClass();
+			Object instance = null;
+
+			if (parent != null) {
+				// if this is an inner class then that can be a non static inner class. 
+				// those classes have to be instantiated in a different way than a normal initialization.
+				instance = clazz.getConstructor(new Class[] { parent })
+						.newInstance(new Object[] { getObject(parent) });
+			} else {
+				instance = clazz.newInstance();
+			}
+
+			return instance;
+		} catch (Exception e) {
+			throw AxisFault.makeFault(e);
+		}
+	}
 }

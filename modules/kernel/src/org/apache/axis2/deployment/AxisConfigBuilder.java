@@ -20,13 +20,13 @@
 
 package org.apache.axis2.deployment;
 
-import edu.emory.mathcs.backport.java.util.Collections;
 import org.apache.axiom.attachments.lifecycle.LifecycleManager;
 import org.apache.axiom.om.OMAttribute;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.soap.RolePlayer;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.transaction.TransactionConfiguration;
 import org.apache.axis2.builder.ApplicationXMLBuilder;
 import org.apache.axis2.builder.Builder;
 import org.apache.axis2.builder.MIMEBuilder;
@@ -36,12 +36,7 @@ import org.apache.axis2.builder.XFormURLEncodedBuilder;
 import org.apache.axis2.dataretrieval.DRConstants;
 import org.apache.axis2.deployment.util.PhasesInfo;
 import org.apache.axis2.deployment.util.Utils;
-import org.apache.axis2.description.HandlerDescription;
-import org.apache.axis2.description.ModuleConfiguration;
-import org.apache.axis2.description.ParameterInclude;
-import org.apache.axis2.description.PolicyInclude;
-import org.apache.axis2.description.TransportInDescription;
-import org.apache.axis2.description.TransportOutDescription;
+import org.apache.axis2.description.*;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.AxisObserver;
 import org.apache.axis2.engine.MessageReceiver;
@@ -65,9 +60,11 @@ import java.io.InputStream;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 public class AxisConfigBuilder extends DescriptionBuilder {
 
@@ -79,6 +76,11 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                              DeploymentEngine deploymentEngine) {
         super(serviceInputStream, axisConfiguration);
         this.deploymentEngine = deploymentEngine;
+    }
+
+
+    public AxisConfigBuilder(AxisConfiguration axisConfiguration) {
+        this.axisConfig = axisConfiguration;
     }
 
     public void populateConfig() throws DeploymentException {
@@ -181,6 +183,24 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                 clusterBuilder.buildCluster(clusterElement);
             }
 
+            //Add jta transaction  configuration
+            OMElement transactionElement = config_element
+                    .getFirstChildWithName(new QName(TAG_TRANSACTION));
+            if (transactionElement != null) {
+                ParameterInclude transactionParameters = new ParameterIncludeImpl();
+                Iterator parameters = transactionElement.getChildrenWithName(new QName(TAG_PARAMETER));
+                processParameters(parameters, transactionParameters, null);
+                TransactionConfiguration txcfg = new TransactionConfiguration(transactionParameters);
+
+                OMAttribute timeoutAttribute = transactionElement.getAttribute(new QName(TAG_TIMEOUT));
+                if(timeoutAttribute != null) {
+                    txcfg.setTransactionTimeout(Integer.parseInt(timeoutAttribute.getAttributeValue()));
+                }
+
+                axisConfig.setTransactionConfig(txcfg);
+            }
+
+                    
             /*
             * Add Axis2 default builders if they are not overidden by the config
             */
@@ -350,19 +370,20 @@ public class AxisConfigBuilder extends DescriptionBuilder {
     }
     
     private void processDeployers(Iterator deployerItr) {
-        HashMap directoryToExtensionMappingMap = new HashMap();
         HashMap extensionToDeployerMappingMap = new HashMap();
+        Map<String, Map<String, Deployer>> deployers = new HashMap<String, Map<String, Deployer>>();
         while (deployerItr.hasNext()) {
             OMElement element = (OMElement) deployerItr.next();
             String directory = element.getAttributeValue(new QName(DIRECTORY));
             if (directory == null) {
                 log.error("Deployer missing 'directory' attribute : " + element.toString());
+                continue;
             }
 
             String extension = element.getAttributeValue(new QName(EXTENSION));
             if (extension == null) {
                 log.error("Deployer missing 'extension' attribute : " + element.toString());
-                return;
+                continue;
             }
 
             // A leading dot is redundant, so strip it.  So we allow either ".foo" or "foo", either
@@ -384,19 +405,18 @@ public class AxisConfigBuilder extends DescriptionBuilder {
             }
             deployer.setDirectory(directory);
             deployer.setExtension(extension);
-            if (directory != null) {
-                ArrayList extensionList = (ArrayList) directoryToExtensionMappingMap.get(directory);
-                if (extensionList == null) {
-                    extensionList = new ArrayList();
-                }
-                extensionList.add(extension);
-                directoryToExtensionMappingMap.put(directory, extensionList);
+            
+            Map<String, Deployer> extensionMap = deployers.get(directory);
+            if (extensionMap == null) {
+                extensionMap = new HashMap<String, Deployer>();
+                deployers.put(directory, extensionMap);
             }
+            extensionMap.put(extension, deployer);
             extensionToDeployerMappingMap.put(extension, deployer);
         }
         if (deploymentEngine != null) {
-            deploymentEngine.setDirectoryToExtensionMappingMap(directoryToExtensionMappingMap);
             deploymentEngine.setExtensionToDeployerMappingMap(extensionToDeployerMappingMap);
+            deploymentEngine.setDeployers(deployers);
         }
     }
 
@@ -570,7 +590,8 @@ public class AxisConfigBuilder extends DescriptionBuilder {
         }
     }
 
-    private void processTransportReceivers(Iterator trs_senders) throws DeploymentException {
+    public ArrayList  processTransportReceivers(Iterator trs_senders) throws DeploymentException {
+        ArrayList transportReceivers = new ArrayList();
         while (trs_senders.hasNext()) {
             TransportInDescription transportIN;
             OMElement transport = (OMElement) trs_senders.next();
@@ -611,14 +632,16 @@ public class AxisConfigBuilder extends DescriptionBuilder {
                     processParameters(itr, transportIN, axisConfig);
                     // adding to axis2 config
                     axisConfig.addTransportIn(transportIN);
+                    transportReceivers.add(transportIN);
                 } catch (AxisFault axisFault) {
                     throw new DeploymentException(axisFault);
                 }
             }
         }
+        return transportReceivers;
     }
 
-    private void processTransportSenders(Iterator trs_senders) throws DeploymentException {
+    public void processTransportSenders(Iterator trs_senders) throws DeploymentException {
         while (trs_senders.hasNext()) {
             TransportOutDescription transportout;
             OMElement transport = (OMElement) trs_senders.next();

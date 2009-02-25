@@ -20,6 +20,12 @@
 
 package org.apache.axis2.context;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.clustering.ClusterManager;
 import org.apache.axis2.clustering.context.Replicator;
@@ -28,11 +34,6 @@ import org.apache.axis2.util.Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-
 /**
  * This is the top most level of the Context hierarchy and is a bag of properties.
  */
@@ -40,8 +41,9 @@ public abstract class AbstractContext {
 
     private static final Log log = LogFactory.getLog(AbstractContext.class);
     
-    private static boolean DEBUG_ENABLED = log.isDebugEnabled();
-    private static boolean DEBUG_CALLSTACK_ON_SET = log.isDebugEnabled();
+    private static final int DEFAULT_MAP_SIZE = 64;
+    private static boolean DEBUG_ENABLED = log.isTraceEnabled();
+    private static boolean DEBUG_PROPERTY_SET = false;
     
     /**
      * Property used to indicate copying of properties is needed by context.
@@ -51,8 +53,8 @@ public abstract class AbstractContext {
     protected long lastTouchedTime;
 
     protected transient AbstractContext parent;
-    protected transient Map properties;
-    private transient Map propertyDifferences;
+    protected transient Map<String, Object> properties;
+    private transient Map<String, Object> propertyDifferences;
 
     protected AbstractContext(AbstractContext parent) {
         this.parent = parent;
@@ -91,10 +93,8 @@ public abstract class AbstractContext {
      * @deprecated Use {@link #getPropertyNames()}, {@link #getProperty(String)},
      *             {@link #setProperty(String, Object)} & {@link #removeProperty(String)}instead.
      */
-    public Map getProperties() {
-        if (this.properties == null) {
-            this.properties = new HashMap();
-        }
+    public Map<String, Object> getProperties() {
+        initPropertiesMap();
         return properties;
     }
 
@@ -104,11 +104,17 @@ public abstract class AbstractContext {
      *
      * @return Iterator over a collection of keys
      */
-    public Iterator getPropertyNames() {
-        if (properties == null) {
-            properties = new HashMap();
+    public Iterator<String> getPropertyNames() {
+        initPropertiesMap();
+        HashSet<String> copyKeySet = null;
+        // Lock the table in a try/catch so it will always be unlocked in the finally block
+        try {
+            ((HashMapUpdateLockable<String, Object>) properties).lockForUpdate();
+            copyKeySet = new HashSet<String>(properties.keySet());
+        } finally {
+            ((HashMapUpdateLockable<String, Object>) properties).unlockForUpdate();
         }
-        return properties.keySet().iterator();
+        return (copyKeySet != null) ? copyKeySet.iterator() : null;
     }
 
     /**
@@ -173,9 +179,7 @@ public abstract class AbstractContext {
      * @param value
      */
     public void setProperty(String key, Object value) {
-        if (this.properties == null) {
-            this.properties = new HashMap();
-        }
+        initPropertiesMap();
         properties.put(key, value);
         addPropertyDifference(key, value, false);
         if (DEBUG_ENABLED) {
@@ -193,7 +197,7 @@ public abstract class AbstractContext {
         synchronized(this) {
             // Lazizly create propertyDifferences map
             if (propertyDifferences == null) {
-                propertyDifferences = new HashMap();
+                propertyDifferences = new HashMap<String, Object>(DEFAULT_MAP_SIZE);
             }
             propertyDifferences.put(key, new PropertyDifference(key, value, isRemoved));
         }
@@ -230,9 +234,7 @@ public abstract class AbstractContext {
      * @param value
      */
     public void setNonReplicableProperty(String key, Object value) {
-        if (this.properties == null) {
-            this.properties = new HashMap();
-        }
+        initPropertiesMap();
         properties.put(key, value);
     }
 
@@ -274,9 +276,9 @@ public abstract class AbstractContext {
      *
      * @return The property differences
      */
-    public synchronized Map getPropertyDifferences() {
+    public synchronized Map<String, Object> getPropertyDifferences() {
         if (propertyDifferences == null) {
-            propertyDifferences = new HashMap();
+            propertyDifferences = new HashMap<String, Object>(DEFAULT_MAP_SIZE);
         }
         return propertyDifferences;
     }
@@ -307,7 +309,7 @@ public abstract class AbstractContext {
      *
      * @param properties
      */
-    public void setProperties(Map properties) {
+    public void setProperties(Map<String, Object> properties) {
         if (properties == null) {
             this.properties = null;
         } else {
@@ -319,15 +321,18 @@ public abstract class AbstractContext {
                 
                 if (this.properties != properties) {
                     if (DEBUG_ENABLED) {
-                        for (Iterator iterator = properties.entrySet().iterator();
+                        for (Iterator<Entry<String, Object>> iterator = properties.entrySet().iterator();
                         iterator.hasNext();) {
-                            Entry entry = (Entry) iterator.next();
+                            Entry<String, Object> entry = iterator.next();
                             debugPropertySet((String) entry.getKey(), entry.getValue());
 
                         }
                     }
                 }
-                this.properties = properties;
+                // The Map we got argument is probably NOT an instance of the Concurrent 
+                // map we use to store properties, so create a new one using the values from the
+                // argument map.
+                this.properties = new HashMapUpdateLockable<String, Object>(properties);
             }
         }
     }
@@ -338,14 +343,12 @@ public abstract class AbstractContext {
      *
      * @param props The table of properties to copy
      */
-    public void mergeProperties(Map props) {
+    public void mergeProperties(Map<String, Object> props) {
         if (props != null) {
-            if (this.properties == null) {
-                this.properties = new HashMap();
-            }
-            for (Iterator iterator = props.keySet().iterator();
+            initPropertiesMap();
+            for (Iterator<String> iterator = props.keySet().iterator();
                  iterator.hasNext();) {
-                Object key = iterator.next();
+                String key = iterator.next();
                 Object value = props.get(key);
                 this.properties.put(key, value);
                 if (DEBUG_ENABLED) {
@@ -391,7 +394,7 @@ public abstract class AbstractContext {
      * @param value
      */
     private void debugPropertySet(String key, Object value) {
-        if (DEBUG_ENABLED) {
+        if (DEBUG_PROPERTY_SET) {
             String className = (value == null) ? "null" : value.getClass().getName();
             String classloader = "null";
             if(value != null) {
@@ -412,10 +415,136 @@ public abstract class AbstractContext {
             }
             log.debug("  Value Class = " + className);
             log.debug("  Value Classloader = " + classloader);
-            if (this.DEBUG_CALLSTACK_ON_SET) {
-                log.debug(  "Call Stack = " + JavaUtils.callStackToString());
-            }
+            log.debug(  "Call Stack = " + JavaUtils.callStackToString());
             log.debug("==================");
+        }
+    }
+    
+    /**
+     * If the 'properties' map has not been allocated yet, then allocate it. 
+     */
+    private void initPropertiesMap() {
+        if (properties == null) {
+            // This needs to be a concurrent collection to prevent ConcurrentModificationExcpetions
+            // for async-on-the-wire.  It was originally: 
+//            properties = new HashMap(DEFAULT_MAP_SIZE);
+            properties = new HashMapUpdateLockable<String, Object>(DEFAULT_MAP_SIZE);
+        }
+    }
+}
+
+/**
+ * HashMap that supports an update lock.  HashMap methods that would directly update the collection
+ * will block if the collection is locked.  They will be released when the collection is unlocked.
+ * Methods that do not update the collection will not be blocked.
+ */
+class HashMapUpdateLockable<K, V> extends HashMap<K, V> {
+
+    // Used for synchronization during update locking.  Also indicates if the table is locked.
+    // Initially, it is not locked.
+    private UpdateLock updateLock = new UpdateLock(false);
+
+    HashMapUpdateLockable() {
+        super();
+    }
+    HashMapUpdateLockable(int size) {
+        super(size);
+    }
+
+    HashMapUpdateLockable(Map<K, V> map) {
+        super(map);
+    }
+
+    /**
+     * Similar to super method but will block if collection is locked.
+     * @see java.util.HashMap#put(java.lang.Object, java.lang.Object)
+     */
+    public V put(K key, V value) {
+        checkUpdateLock(true);
+        return super.put(key, value);
+    }
+
+    /**
+     * Similar to super method but will block if collection is locked.
+     * @see java.util.HashMap#putAll(java.util.Map)
+     */
+    public void putAll(Map<? extends K, ? extends V> map) {
+        checkUpdateLock(true);
+        super.putAll(map);
+    }
+
+    /**
+     * Similar to super method but will block if collection is locked.
+     * @see java.util.HashMap#remove(java.lang.Object)
+     */
+    public V remove(Object key) {
+        checkUpdateLock(true);
+        return super.remove(key);
+    }
+
+    /**
+     * Lock the collection for update.  NOTE: This should be called inside a try block and the 
+     * unlock method should be called inside a finally block to ensure the lock is always
+     * released!  If the collection is locked, methods that directly update the table will 
+     * block until released by the unlock.
+     * @see #unlockForUpdate()
+     */
+    void lockForUpdate() {
+        synchronized(updateLock) {
+            updateLock.setLock(true);
+        }
+    }
+
+    /**
+     * Unock the collection for update.  NOTE: This should be called inside a finally block and the 
+     * lock method should be called inside a try block to ensure the lock is always
+     * released!  If the collection is locked, methods that directly update the table will 
+     * block until released by this unlock.
+     * @see #lockForUpdate()
+     */
+    void unlockForUpdate() {
+        synchronized(updateLock) {
+            updateLock.setLock(false);
+            updateLock.notifyAll();
+        }
+    }
+
+    /**
+     * Check if the update lock is currently held.  Optionally block until the lock is released.
+     * @param wait If true, will block until the lock is released
+     * @return true if the collection is currently locked for update, false if it is not.
+     */
+    boolean checkUpdateLock(boolean wait) {
+        boolean isLocked = false;
+        synchronized(updateLock) {
+            if (wait) {
+                while (updateLock.isLocked()) {
+                    try {
+                        updateLock.wait();
+                    } catch (InterruptedException e) {
+                        // Ignore the interrupt; recheck the lock and wait if appropriate.
+                    }
+                }
+            }
+            isLocked = updateLock.isLocked();
+        }
+
+        return isLocked;
+    }
+
+    class UpdateLock {
+        private boolean isLocked = false;
+
+        UpdateLock(boolean isLocked) {
+            this.isLocked = isLocked;
+        }
+
+        void setLock(boolean lockValue) {
+            this.isLocked = lockValue;
+        }
+
+        boolean isLocked() {
+            return isLocked;
         }
     }
 }

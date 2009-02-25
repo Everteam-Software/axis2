@@ -234,7 +234,7 @@ public class ConverterUtil {
             return invokeToStringMethod(value,Calendar.class);
         } else {
             // lexical form of the calendar is '-'? yyyy '-' mm '-' dd 'T' hh ':' mm ':' ss ('.' s+)? (zzzzzz)?
-            if (!value.isSet(Calendar.ZONE_OFFSET)){
+            if (value.get(Calendar.ZONE_OFFSET) == -1){
                 value.setTimeZone(TimeZone.getDefault());
             }
             StringBuffer dateString = new StringBuffer(28);
@@ -576,7 +576,7 @@ public class ConverterUtil {
         if (source.length() >= 10) {
             //first 10 numbers must give the year
             if ((source.charAt(4) != '-') || (source.charAt(7) != '-')){
-                throw new RuntimeException("invalid date format (" + source + ") wiht out - s at correct place ");
+                throw new RuntimeException("invalid date format (" + source + ") with out - s at correct place ");
             }
             year = Integer.parseInt(source.substring(0,4));
             month = Integer.parseInt(source.substring(5,7));
@@ -609,6 +609,7 @@ public class ConverterUtil {
 
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
+        calendar.setLenient(false);
         calendar.set(Calendar.YEAR, year);
         //xml month stars from the 1 and calendar month is starts with 0
         calendar.set(Calendar.MONTH, month - 1);
@@ -868,6 +869,8 @@ public class ConverterUtil {
         Date date = null;
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
+        calendar.setLenient(false);
+
 
         if (source.startsWith("-")) {
             source = source.substring(1);
@@ -880,7 +883,7 @@ public class ConverterUtil {
         int hour = 0;
         int minite = 0;
         int second = 0;
-        int miliSecond = 0;
+        long miliSecond = 0;
         int timeZoneOffSet = TimeZone.getDefault().getRawOffset();
 
 
@@ -890,7 +893,7 @@ public class ConverterUtil {
                     (source.charAt(10) != 'T') ||
                     (source.charAt(13) != ':') ||
                     (source.charAt(16) != ':')) {
-                throw new RuntimeException("invalid date format (" + source + ") wiht out - s at correct place ");
+                throw new RuntimeException("invalid date format (" + source + ") with out - s at correct place ");
             }
             year = Integer.parseInt(source.substring(0, 4));
             month = Integer.parseInt(source.substring(5, 7));
@@ -980,9 +983,11 @@ public class ConverterUtil {
                     miliSecond = miliSecond / 10;
                 }
             }
-            calendar.set(Calendar.MILLISECOND, miliSecond);
+            calendar.set(Calendar.MILLISECOND, (int)miliSecond);
             calendar.set(Calendar.ZONE_OFFSET, timeZoneOffSet);
             calendar.set(Calendar.DST_OFFSET, 0);
+
+
 
         } else {
             throw new NumberFormatException("date string can not be less than 19 charactors");
@@ -1518,7 +1523,7 @@ public class ConverterUtil {
                 NamespaceContext namespaceContext = xmlStreamReader.getNamespaceContext();
                 String attributeNameSpace = namespaceContext.getNamespaceURI(attributeTypePrefix);
 
-                if (attributeNameSpace.equals(Constants.XSD_NAMESPACE)) {
+                if (Constants.XSD_NAMESPACE.equals(attributeNameSpace)) {
                     if ("base64Binary".equals(attributeType)) {
                         xmlStreamReader.next();
                         returnObject = getDataHandlerObject(xmlStreamReader);

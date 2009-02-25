@@ -26,6 +26,7 @@ import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.message.databinding.JAXBUtils;
 import org.apache.axis2.jaxws.message.util.XMLStreamWriterWithOS;
 import org.apache.axis2.jaxws.spi.Constants;
+import org.apache.axis2.jaxws.utility.JavaUtils;
 import org.apache.axis2.jaxws.utility.XMLRootElementUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -45,10 +46,13 @@ import javax.xml.stream.XMLStreamWriter;
 import javax.xml.ws.Holder;
 import javax.xml.ws.WebServiceException;
 import java.io.OutputStream;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.PrivilegedAction;
 import java.text.ParseException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TreeSet;
 
 /*
@@ -64,20 +68,27 @@ public class JAXBDSContext {
     public static final boolean DEBUG_ENABLED = log.isDebugEnabled();
 
     private TreeSet<String> contextPackages;  // List of packages needed by the context
-    private String contextPackagesKey;        // Unique key that represents the set of contextPackages (usually toString)
-    private JAXBContext jaxbContext = null;   // JAXBContext
+    private String contextPackagesKey;        // Unique key that represents the set of packages
+    
+    private JAXBContext customerJAXBContext;      // JAXBContext provided by the customer api
+    //  JAXBContext loaded by the engine.  It is weakref'd to allow GC
+    private WeakReference<JAXBContext> autoJAXBContext = null;   
     private JAXBUtils.CONSTRUCTION_TYPE       // How the JAXBContext is constructed
             constructionType = JAXBUtils.CONSTRUCTION_TYPE.UNKNOWN;
     private MessageContext msgContext;    
 
-    // There are two modes of marshalling and unmarshalling: "by java type" and "by schema element".
+    // There are two modes of marshalling and unmarshalling: 
+    //   "by java type" and "by schema element".
     // The prefered mode is "by schema element" because it is safe and xml-centric.
     // However there are some circumstances when "by schema element" is not available.
     //    Examples: RPC Lit processing (the wire element is defined by a wsdl:part...not schema)
-    //              Doc/Lit Bare "Minimal" Processing (JAXB ObjectFactories are missing...and thus we must use "by type" for primitives/String)
+    //              Doc/Lit Bare "Minimal" Processing (JAXB ObjectFactories are missing...
+    //                   and thus we must use "by type" for primitives/String)
     // Please don't use "by java type" processing to get around errors.
     private Class processType = null;
     private boolean isxmlList =false;
+    
+    private String webServiceNamespace;
 
     /**
      * Full Constructor JAXBDSContext (most performant)
@@ -111,13 +122,14 @@ public class JAXBDSContext {
     }
 
     /**
-     * "Dispatch" Constructor Use this full constructor when the JAXBContent is provided by the
+     * "Dispatch" Constructor 
+     * Use this full constructor when the JAXBContent is provided by the
      * customer.
      *
      * @param jaxbContext
      */
     public JAXBDSContext(JAXBContext jaxbContext) {
-        this.jaxbContext = jaxbContext;
+        this.customerJAXBContext = jaxbContext;
     }
 
     /** @return Class representing type of the element */
@@ -134,24 +146,62 @@ public class JAXBDSContext {
      * @throws JAXBException
      */
     public JAXBContext getJAXBContext(ClassLoader cl) throws JAXBException {
-        if (jaxbContext == null) {
+        if (customerJAXBContext != null) {
+            return customerJAXBContext;
+        }
+        
+        // Get the weakly cached JAXBContext
+        JAXBContext jc = null;
+        if (autoJAXBContext != null) {
+            jc = autoJAXBContext.get();
+        }
+        
+        if (jc == null) {
             if (log.isDebugEnabled()) {
                 log.debug(
                         "A JAXBContext did not exist, creating a new one with the context packages.");
             }
             Holder<JAXBUtils.CONSTRUCTION_TYPE> constructType =
                     new Holder<JAXBUtils.CONSTRUCTION_TYPE>();
-            jaxbContext =
-                    JAXBUtils.getJAXBContext(contextPackages, constructType, contextPackagesKey, cl);
+            Map<String, Object> properties = null;
+            
+            /*
+             * We set the default namespace to the web service namespace to fix an
+             * obscur bug.
+             * 
+             * If the class representing a JAXB data object does not define a namespace
+             * (via an annotation like @XmlType or via ObjectFactory or schema gen information)
+             * then the namespace information is defaulted.
+             * 
+             * The xjc tool defaults the namespace information to unqualified.
+             * However the wsimport tool defaults the namespace to the namespace of the
+             * webservice.
+             * 
+             * To "workaround" this issue, a default namespace equal to the webservice
+             * namespace is set on the JAXB marshaller.  This has the effect of changing the
+             * "unqualified namespaces" into the namespace used by the webservice.
+             * 
+             */
+            if (this.webServiceNamespace != null) {
+                properties = new HashMap<String, Object>();
+                properties.put(JAXBUtils.DEFAULT_NAMESPACE_REMAP, this.webServiceNamespace);
+            }
+            jc = JAXBUtils.getJAXBContext(contextPackages, constructType, 
+                                          contextPackagesKey, cl, properties);
             constructionType = constructType.value;
+            autoJAXBContext = new WeakReference<JAXBContext>(jc);
         } else {
             if (log.isDebugEnabled()) {
                 log.debug("Using an existing JAXBContext");
             }
         }
-        return jaxbContext;
+        return jc;
     }
 
+    public void setWebServiceNamespace(String namespace) {
+        this.webServiceNamespace = namespace;
+    }
+    
     /** @return RPC Declared Type */
     public Class getProcessType() {
         return processType;
@@ -208,8 +258,8 @@ public class JAXBDSContext {
      * Create an Attachment unmarshaller for unmarshalling MTOM/SWA Attachments
      * @return AttachmentUnmarshaller
      */
-    protected AttachmentUnmarshaller createAttachmentUnmarshaller() {
-        return new JAXBAttachmentUnmarshaller(getMessageContext());
+    protected AttachmentUnmarshaller createAttachmentUnmarshaller(XMLStreamReader reader) {
+        return new JAXBAttachmentUnmarshaller(getMessageContext(), reader);
     }
 
     /**
@@ -227,7 +277,7 @@ public class JAXBDSContext {
 
         
         // Create an attachment unmarshaller
-        AttachmentUnmarshaller aum = createAttachmentUnmarshaller();
+        AttachmentUnmarshaller aum = createAttachmentUnmarshaller(reader);
 
         if (aum != null) {
             if (DEBUG_ENABLED) {
@@ -289,7 +339,8 @@ public class JAXBDSContext {
                 marshalByElement(obj, 
                                  m, 
                                  writer, 
-                                 !am.isXOPPackage());
+                                 true);
+                                 //!am.isXOPPackage());
             } else {
                 marshalByType(obj,
                               m,
@@ -321,6 +372,10 @@ public class JAXBDSContext {
                 // XMLStreamWriter. 
                 // Take advantage of this optimization if there is an output stream.
                 try {
+                    if (!optimize) {
+                        log.trace(JavaUtils.stackToString());
+                        getOutputStream(writer);
+                    }
                     OutputStream os = (optimize) ? getOutputStream(writer) : null;
                     if (os != null) {
                         if (DEBUG_ENABLED) {
@@ -360,13 +415,23 @@ public class JAXBDSContext {
      * @return OutputStream or null
      */
     private static OutputStream getOutputStream(XMLStreamWriter writer) throws XMLStreamException {
+        if (log.isDebugEnabled()) {
+            log.debug("XMLStreamWriter is " + writer);
+        }
+        OutputStream os = null;
         if (writer.getClass() == MTOMXMLStreamWriter.class) {
-            return ((MTOMXMLStreamWriter) writer).getOutputStream();
+            os = ((MTOMXMLStreamWriter) writer).getOutputStream();
+            if (log.isDebugEnabled()) {
+                log.debug("OutputStream accessible from MTOMXMLStreamWriter is " + os);
+            }
         }
         if (writer.getClass() == XMLStreamWriterWithOS.class) {
-            return ((XMLStreamWriterWithOS) writer).getOutputStream();
+            os = ((XMLStreamWriterWithOS) writer).getOutputStream();
+            if (log.isDebugEnabled()) {
+                log.debug("OutputStream accessible from XMLStreamWriterWithOS is " + os);
+            }
         }
-        return null;
+        return os;
     }
     
     /**
@@ -482,24 +547,43 @@ public class JAXBDSContext {
         });
     }
 
-    private static Object unmarshalArray(XMLStreamReader reader, Unmarshaller u, 
+    private static Object unmarshalArray(final XMLStreamReader reader, 
+                                         final Unmarshaller u, 
                                          Class type)
        throws Exception {
+        try {
+            if (DEBUG_ENABLED) {
+                log.debug("Invoking unmarshalArray");
+            }
+            Object jaxb = AccessController.doPrivileged(new PrivilegedAction() {
+                public Object run() {
+                    try {
+                        return u.unmarshal(reader, String[].class);
+                    } catch (OMException e) {
+                        throw e;
+                    } catch (Throwable t) {
+                        throw new OMException(t);
+                    }
+                }
+            });
 
-        Object jaxb = u.unmarshal(reader, String[].class);
-                     
-        Object typeObj = getTypeEnabledObject(jaxb);
-        
-        // Now convert String Array in to the required Type Array.
-        if (typeObj instanceof String[]) {
-            String[] strArray = (String[]) typeObj;
-            Object obj = XSDListUtils.fromStringArray(strArray, type);
-            QName qName =
+            Object typeObj = getTypeEnabledObject(jaxb);
+
+            // Now convert String Array in to the required Type Array.
+            if (typeObj instanceof String[]) {
+                String[] strArray = (String[]) typeObj;
+                Object obj = XSDListUtils.fromStringArray(strArray, type);
+                QName qName =
                     XMLRootElementUtil.getXmlRootElementQNameFromObject(jaxb);
-            jaxb = new JAXBElement(qName, type, obj);
+                jaxb = new JAXBElement(qName, type, obj);
+            }
+
+            return jaxb;
+        } catch (OMException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new OMException(t);
         }
-        
-        return jaxb;
     }
    
     /**
@@ -515,22 +599,47 @@ public class JAXBDSContext {
      * @throws DatatypeConfigurationException
      * @throws InvocationTargetException
      */
-    public static Object unmarshalAsListOrArray(XMLStreamReader reader, Unmarshaller u, 
+    public static Object unmarshalAsListOrArray(final XMLStreamReader reader, 
+                                                final Unmarshaller u, 
                                                  Class type)
-        throws IllegalAccessException, ParseException,NoSuchMethodException,InstantiationException,
+        throws IllegalAccessException, ParseException,NoSuchMethodException,
+        InstantiationException,
         DatatypeConfigurationException,InvocationTargetException,JAXBException {
-        //If this is an xsd:list, we need to return the appropriate
-        // list or array (see NOTE above)
-        // First unmarshal as a String
-        Object jaxb = u.unmarshal(reader, String.class);
-        //Second convert the String into a list or array
-        if (getTypeEnabledObject(jaxb) instanceof String) {
-            QName qName = XMLRootElementUtil.getXmlRootElementQNameFromObject(jaxb);
-            Object obj = XSDListUtils.fromXSDListString((String) getTypeEnabledObject(jaxb), type);
-            return new JAXBElement(qName, type, obj);
-        } else {
-            return jaxb;
-        }
+        
+        
+            if (DEBUG_ENABLED) {
+                log.debug("Invoking unmarshaArray");
+            }
+            
+            // If this is an xsd:list, we need to return the appropriate
+            // list or array (see NOTE above)
+            // First unmarshal as a String
+            Object jaxb = null;
+            try {
+                jaxb = AccessController.doPrivileged(new PrivilegedAction() {
+                    public Object run() {
+                        try {
+                            return u.unmarshal(reader, String.class);
+                        } catch (OMException e) {
+                            throw e;
+                        } catch (Throwable t) {
+                            throw new OMException(t);
+                        }
+                    }
+                });
+            } catch (OMException e) {
+                throw e;
+            } catch (Throwable t) {
+                throw new OMException(t);
+            }
+            //Second convert the String into a list or array
+            if (getTypeEnabledObject(jaxb) instanceof String) {
+                QName qName = XMLRootElementUtil.getXmlRootElementQNameFromObject(jaxb);
+                Object obj = XSDListUtils.fromXSDListString((String) getTypeEnabledObject(jaxb), type);
+                return new JAXBElement(qName, type, obj);
+            } else {
+                return jaxb;
+            }
 
     }
 

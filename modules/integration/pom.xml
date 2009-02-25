@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-integration</artifactId>
@@ -43,6 +43,18 @@
                 </exclusion>
             </exclusions>
         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-http</artifactId>
+        </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-tcp</artifactId>
+        </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>axis2-transport-local</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.apache.geronimo.specs</groupId>
             <artifactId>geronimo-activation_1.1_spec</artifactId>
@@ -51,7 +63,7 @@
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-scripting</artifactId>
             <type>mar</type>
-            <version>1.41</version>
+            <version>${version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.geronimo.specs</groupId>
@@ -106,17 +118,6 @@
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-jaxbri</artifactId>
-            <version>${version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.axis2</groupId>
-            <artifactId>axis2-jaxws-api</artifactId>
             <version>${version}</version>
             <exclusions>
                 <exclusion>
@@ -204,17 +205,6 @@
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
-            <artifactId>axis2-saaj-api</artifactId>
-            <version>${version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.geronimo.specs</groupId>
-                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-saaj</artifactId>
             <version>${version}</version>
             <exclusions>
@@ -227,6 +217,17 @@
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>axis2-spring</artifactId>
+            <version>${version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>org.apache.axis2.osgi</artifactId>
             <version>${version}</version>
             <exclusions>
                 <exclusion>
@@ -288,16 +289,8 @@
             <artifactId>xalan</artifactId>
         </dependency>
         <dependency>
-            <groupId>javax.servlet</groupId>
-            <artifactId>servlet-api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.apache.xmlbeans</groupId>
             <artifactId>xmlbeans</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.activemq</groupId>
-            <artifactId>activemq-core</artifactId>
         </dependency>
         <dependency>
             <groupId>wsdl4j</groupId>
@@ -319,60 +312,6 @@
         </dependency>
     </dependencies>
     <profiles>
-        <profile>
-            <id>java14</id>
-            <activation>
-                <jdk>1.4</jdk>
-            </activation>
-            <dependencies>
-                <dependency>
-                    <groupId>org.apache.activemq</groupId>
-                    <artifactId>apache-activemq</artifactId>
-                    <version>${activemq.version-jdk14}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <inherited>true</inherited>
-                        <configuration>
-                            <skip>false</skip>
-
-                            <!-- The pertest forkMode is not ideal but seems to be necessary
-                       because the test server doesn't shut down properly :-(
-                       Should be removed if possible -->
-                            <forkMode>pertest</forkMode>
-                            <argLine>-Xms256m -Xmx512m</argLine>
-                            <!-- Enable the next 2 lines if you want to attach a debugger
-                         <argLine>-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5006</argLine>-->
-                            <includes>
-                                <include>**/*Test.java</include>
-                            </includes>
-                            <excludes>
-                                <exclude>**/*Abstract*.java</exclude>
-                                <exclude>**/*Util*.java</exclude>
-                                <exclude>**/*InteropStubTest.java</exclude>
-                                <exclude>**/*ServiceGroupContextTest.java</exclude>
-                                <exclude>**/*EchoRawSwAFileInputTest.java</exclude>
-                                <exclude>**org/apache/axis2/mail/*.java</exclude>
-                                <exclude>**org/apache/axis2/transport/DualChannelRequestResponseRawXMLTest.java
-                                </exclude>
-                                <exclude>**org/apache/axis2/soap12testing/soap12testsuite/*.java</exclude>
-                                <exclude>**/ScenarioST1Test.java</exclude>
-                                <exclude>**/samples/wsdl/perf2/*.java</exclude>
-                            </excludes>
-                            <systemProperties>
-                                <property>
-                                    <name>build.repository</name>
-                                    <value>./target/test-classes</value>
-                                </property>
-                            </systemProperties>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
         <profile>
             <id>java15</id>
             <activation>
@@ -402,12 +341,10 @@
                                 <exclude>**/*InteropStubTest.java</exclude>
                                 <exclude>**/*ServiceGroupContextTest.java</exclude>
                                 <exclude>**/*EchoRawSwAFileInputTest.java</exclude>
-                                <exclude>**org/apache/axis2/mail/*.java</exclude>
-                                <exclude>**org/apache/axis2/transport/DualChannelRequestResponseRawXMLTest.java
-                                </exclude>
                                 <exclude>**org/apache/axis2/soap12testing/soap12testsuite/*.java</exclude>
                                 <exclude>**/ScenarioST1Test.java</exclude>
                                 <exclude>**/samples/wsdl/perf2/*.java</exclude>
+                                <exclude>**/ComplexDataTypesDocLitBareTest.java</exclude>
                             </excludes>
                             <systemProperties>
                                 <property>
@@ -449,12 +386,11 @@
                                 <exclude>**/*InteropStubTest.java</exclude>
                                 <exclude>**/*ServiceGroupContextTest.java</exclude>
                                 <exclude>**/*EchoRawSwAFileInputTest.java</exclude>
-                                <exclude>**org/apache/axis2/mail/*.java</exclude>
-                                <exclude>**org/apache/axis2/transport/DualChannelRequestResponseRawXMLTest.java
-                                </exclude>
                                 <exclude>**org/apache/axis2/soap12testing/soap12testsuite/*.java</exclude>
                                 <exclude>**/ScenarioST1Test.java</exclude>
                                 <exclude>**/samples/wsdl/perf2/*.java</exclude>
+                                <exclude>**/ComplexDataTypesDocLitBareTest.java</exclude>
+                                <exclude>**/ComplexDataTypesTest.java</exclude>
                             </excludes>
                             <systemProperties>
                                 <property>
@@ -507,14 +443,6 @@
         <testSourceDirectory>test</testSourceDirectory>
         <resources>
             <resource>
-                <directory>../..</directory>
-                <includes>
-                    <include>NOTICE.txt</include>
-                    <include>LICENSE.txt</include>
-                </includes>
-                <filtering>false</filtering>
-            </resource>
-            <resource>
                 <directory>conf</directory>
                 <includes>
                     <include>**/*.properties</include>
@@ -549,8 +477,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <inherited>true</inherited>
                 <configuration>
-                    <source>1.4</source>
-                    <target>1.4</target>
+                    <source>1.5</source>
+                    <target>1.5</target>
                 </configuration>
             </plugin>
             <plugin>

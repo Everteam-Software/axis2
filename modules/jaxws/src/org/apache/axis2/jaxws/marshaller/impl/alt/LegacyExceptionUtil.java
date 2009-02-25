@@ -114,7 +114,7 @@ class LegacyExceptionUtil {
             if (faultBeanName != null && faultBeanName.length() > 0) {
                 try {
                     try {
-                    faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName);
+                        faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName);
                     } catch (ClassNotFoundException e){
                         faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName, fd.getOperationDescription().getEndpointInterfaceDescription().getEndpointDescription().getAxisService().getClassLoader());
                     }
@@ -137,7 +137,7 @@ class LegacyExceptionUtil {
 
                 // Get the map of child objects
                 Map<String, Object> childObjects = getChildObjectsMap(t, pdMap);
-
+                Map<String, Class> declaringClass = new HashMap<String, Class>();
                 List<String> childNames = new ArrayList<String>(childObjects.keySet());
 
                 if (log.isErrorEnabled()) {
@@ -148,7 +148,7 @@ class LegacyExceptionUtil {
                 Map<String, PropertyDescriptorPlus> pdMapForBean =
                         marshalDesc.getPropertyDescriptorMap(faultBeanClass);
                 faultBean =
-                        wrapperTool.wrap(faultBeanClass, childNames, childObjects, pdMapForBean);
+                        wrapperTool.wrap(faultBeanClass, childNames, childObjects, declaringClass, pdMapForBean);
                 if (log.isErrorEnabled()) {
                     log.debug("Completed creation of the fault bean.");
                 }

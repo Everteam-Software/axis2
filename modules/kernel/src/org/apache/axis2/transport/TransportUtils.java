@@ -27,6 +27,7 @@ import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axiom.om.impl.builder.StAXBuilder;
+import org.apache.axiom.om.util.DetachableInputStream;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPEnvelope;
@@ -55,12 +56,25 @@ import javax.xml.stream.XMLStreamException;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 public class TransportUtils {
 
     private static final Log log = LogFactory.getLog(TransportUtils.class);
 
     public static SOAPEnvelope createSOAPMessage(MessageContext msgContext) throws AxisFault {
+        return createSOAPMessage(msgContext, false);
+    }
+    
+    /**
+     * This method will create a SOAPEnvelope based on the InputStream stored on
+     * the MessageContext. The 'detach' parameter controls whether or not the 
+     * underlying DetachableInputStream is detached at the end of the method. Note,
+     * detaching the DetachableInputStream closes the underlying InputStream that
+     * is stored on the MessageContext.
+     */
+    public static SOAPEnvelope createSOAPMessage(MessageContext msgContext,
+                                                 boolean detach) throws AxisFault {
         try {
             InputStream inStream = (InputStream) msgContext
                     .getProperty(MessageContext.TRANSPORT_IN);
@@ -85,7 +99,20 @@ public class TransportUtils {
             }
             msgContext.setProperty(Constants.Configuration.CHARACTER_SET_ENCODING, charSetEnc);
 
-            return createSOAPMessage(msgContext, inStream, contentType);
+            SOAPEnvelope env = createSOAPMessage(msgContext, inStream, contentType);
+            
+            // if we were told to detach, we will make the call here, this is only applicable
+            // if a DetachableInputStream instance is found on the MessageContext
+            if(detach) {
+                DetachableInputStream dis = (DetachableInputStream) msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM);
+                if(dis != null) {
+                    if(log.isDebugEnabled()) {
+                        log.debug("Detaching input stream after SOAPEnvelope construction");
+                    }
+                    dis.detach();
+                }
+            }
+            return env;
         } catch (Exception e) {
             throw AxisFault.makeFault(e);
         }
@@ -278,6 +305,12 @@ public class TransportUtils {
             messageFormatter = msgContext.getConfigurationContext()
                     .getAxisConfiguration().getMessageFormatter(messageFormatString);
 
+        }
+        if (messageFormatter == null) {
+            messageFormatter = (MessageFormatter) msgContext.getProperty(Constants.Configuration.MESSAGE_FORMATTER);
+            if(messageFormatter != null) {
+                return messageFormatter;
+            }
         }
         if (messageFormatter == null) {
 
@@ -483,14 +516,16 @@ public class TransportUtils {
        	Attachments attachments = msgContext.getAttachmentMap();
        	LifecycleManager lcm = (LifecycleManager)msgContext.getRootContext().getAxisConfiguration().getParameterValue(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER);
            if (attachments != null) {
-               String [] keys = attachments.getAllContentIDs(); 
+               // Get the list of Content IDs for the attachments...but does not try to pull the stream for new attachments.
+               // (Pulling the stream for new attachments will probably fail...the stream is probably closed)
+               List keys = attachments.getContentIDList();
                if (keys != null) {
                	String key = null;
                	File file = null;
                	DataSource dataSource = null;
-                   for (int i = 0; i < keys.length; i++) {
+                   for (int i = 0; i < keys.size(); i++) {
                        try {
-                           key = keys[i];
+                           key = (String) keys.get(i);
                            dataSource = attachments.getDataHandler(key).getDataSource();
                            if(dataSource instanceof CachedFileDataSource){
                            	file = ((CachedFileDataSource)dataSource).getFile();
@@ -531,6 +566,35 @@ public class TransportUtils {
            
            if (log.isDebugEnabled()) {
                log.debug("Exiting deleteAttachments()");
+           }
+       }
+       
+       /**
+        * This method can be called by components wishing to detach the DetachableInputStream
+        * object that is present on the MessageContext. This is meant to shield components
+        * from any logic that needs to be executed on the DetachableInputStream in order to 
+        * have it effectively detached. If the DetachableInputStream is not present, or if
+        * the supplied MessageContext is null, no action will be taken.
+        */
+       public static void detachInputStream(MessageContext msgContext) throws AxisFault {
+           try {
+               if(msgContext != null
+                       &&
+                       msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM) != null) {
+                   DetachableInputStream dis = (DetachableInputStream) msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM);
+                   if(log.isDebugEnabled()) {
+                       log.debug("Detaching DetachableInputStream: " + dis);
+                   }
+                   dis.detach();
+               }
+               else {
+                   if(log.isDebugEnabled()) {
+                       log.debug("Detach not performed for MessageContext: " + msgContext);
+                   }
+               }  
+           }
+           catch(Throwable t) {
+               throw AxisFault.makeFault(t);
            }
        }
 }

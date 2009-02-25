@@ -52,11 +52,11 @@ public final class ContextClusteringCommandFactory {
     getCommandCollection(AbstractContext[] contexts,
                          Map excludedReplicationPatterns) {
 
-        ArrayList commands = new ArrayList(contexts.length);
+        ArrayList<ContextClusteringCommand> commands = new ArrayList<ContextClusteringCommand>(contexts.length);
         ContextClusteringCommandCollection collection =
                 new ContextClusteringCommandCollection(commands);
-        for (int i = 0; i < contexts.length; i++) {
-            ContextClusteringCommand cmd = getUpdateCommand(contexts[i],
+        for (AbstractContext context : contexts) {
+            ContextClusteringCommand cmd = getUpdateCommand(context,
                                                             excludedReplicationPatterns,
                                                             false);
             if (cmd != null) {
@@ -87,10 +87,6 @@ public final class ContextClusteringCommandFactory {
                 cmd = null;
             }
         }
-
-        synchronized (context) {
-            context.clearPropertyDifferences(); // Once we send the diffs, we should clear the diffs
-        }
         return cmd;
     }
 
@@ -104,11 +100,7 @@ public final class ContextClusteringCommandFactory {
             fillProperties(cmd, context, propertyNames);
             if (cmd.isPropertiesEmpty()) {
                 cmd = null;
-            } 
-        }
-
-        synchronized (context) {
-            context.clearPropertyDifferences(); // Once we send the diffs, we should clear the diffs
+            }
         }
         return cmd;
     }
@@ -150,8 +142,8 @@ public final class ContextClusteringCommandFactory {
         if (!includeAllProperties) {
             synchronized (context) {
                 Map diffs = context.getPropertyDifferences();
-                for (Iterator iter = diffs.keySet().iterator(); iter.hasNext();) {
-                    String key = (String) iter.next();
+                for (Object o : diffs.keySet()) {
+                    String key = (String) o;
                     PropertyDifference diff = (PropertyDifference) diffs.get(key);
                     Object value = diff.getValue();
 
@@ -174,7 +166,7 @@ public final class ContextClusteringCommandFactory {
                 for (Iterator iter = context.getPropertyNames(); iter.hasNext();) {
                     String key = (String) iter.next();
                     Object value = context.getPropertyNonReplicable(key);
-                    if (value instanceof Serializable) { 
+                    if (value instanceof Serializable) {
 
                         // Next check whether it matches an excluded pattern
                         if (!isExcluded(key, context.getClass().getName(), excludedPropertyPatterns)) {
@@ -193,26 +185,28 @@ public final class ContextClusteringCommandFactory {
     private static void fillProperties(UpdateContextCommand updateCmd,
                                        AbstractContext context,
                                        String[] propertyNames) throws ClusteringFault {
-        synchronized (context) {
-            Map diffs = context.getPropertyDifferences();
-            for (int i = 0; i < propertyNames.length; i++) {
-                String key = propertyNames[i];
-                Object prop = context.getPropertyNonReplicable(key);
+        Map diffs = context.getPropertyDifferences();
+        for (String key : propertyNames) {
+            Object prop = context.getPropertyNonReplicable(key);
 
-                // First check whether it is serializable
-                if (prop instanceof Serializable) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("sending property =" + key + "-" + prop);
-                    }
-                    PropertyDifference diff = (PropertyDifference) diffs.get(key);
+            // First check whether it is serializable
+            if (prop instanceof Serializable) {
+                if (log.isDebugEnabled()) {
+                    log.debug("sending property =" + key + "-" + prop);
+                }
+                PropertyDifference diff = (PropertyDifference) diffs.get(key);
+                if (diff != null) {
                     diff.setValue(prop);
                     updateCmd.addProperty(diff);
-                } else {
-                    String msg =
-                            "Trying to replicate non-serializable property " + key +
-                            " in context " + context;
-                    throw new ClusteringFault(msg);
+
+                    // Remove the diff?
+                    diffs.remove(key);
                 }
+            } else {
+                String msg =
+                        "Trying to replicate non-serializable property " + key +
+                        " in context " + context;
+                throw new ClusteringFault(msg);
             }
         }
     }
@@ -231,7 +225,7 @@ public final class ContextClusteringCommandFactory {
         if (!isExcluded) {
             // check in the default excludes
             List defaultExcludes =
-                (List) excludedPropertyPatterns.get(DeploymentConstants.TAG_DEFAULTS);
+                    (List) excludedPropertyPatterns.get(DeploymentConstants.TAG_DEFAULTS);
             if (defaultExcludes != null) {
                 isExcluded = isExcluded(defaultExcludes, propertyName);
             }
@@ -240,8 +234,8 @@ public final class ContextClusteringCommandFactory {
     }
 
     private static boolean isExcluded(List list, String propertyName) {
-        for (Iterator iter = list.iterator(); iter.hasNext();) {
-            String pattern = (String) iter.next();
+        for (Object aList : list) {
+            String pattern = (String) aList;
             if (pattern.startsWith("*")) {
                 pattern = pattern.replaceAll("\\*", "");
                 if (propertyName.endsWith(pattern)) {

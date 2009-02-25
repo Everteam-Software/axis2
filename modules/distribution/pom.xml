@@ -25,7 +25,7 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.4.1</version>
+        <version>1.5-beta-2</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
 
@@ -146,12 +146,20 @@
             <artifactId>geronimo-annotation_1.0_spec</artifactId>
         </dependency>
         <dependency>
-            <groupId>jaxen</groupId>
-            <artifactId>jaxen</artifactId>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-ws-metadata_2.0_spec</artifactId>
         </dependency>
         <dependency>
-            <groupId>annogen</groupId>
-            <artifactId>annogen</artifactId>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-saaj_1.3_spec</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-jaxws_2.1_spec</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jaxen</groupId>
+            <artifactId>jaxen</artifactId>
         </dependency>
         <dependency>
             <groupId>commons-httpclient</groupId>
@@ -162,20 +170,12 @@
             <artifactId>httpcore</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpcore-nio</artifactId>
-        </dependency>
-        <dependency>
             <groupId>commons-fileupload</groupId>
             <artifactId>commons-fileupload</artifactId>
         </dependency>
         <dependency>
             <groupId>wsdl4j</groupId>
             <artifactId>wsdl4j</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>backport-util-concurrent</groupId>
-            <artifactId>backport-util-concurrent</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.woden</groupId>
@@ -212,6 +212,31 @@
         <dependency>
             <groupId>xml-resolver</groupId>
             <artifactId>xml-resolver</artifactId>
+        </dependency>
+        <!-- Smack Jabber client libraries to be included -->
+        <dependency>
+            <groupId>org.igniterealtime</groupId>
+            <artifactId>smack</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.igniterealtime</groupId>
+            <artifactId>smackx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-lang</groupId>
+            <artifactId>commons-lang</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-transport-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-transport-tcp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-transport-local</artifactId>
         </dependency>
     </dependencies>
     <distributionManagement>
@@ -288,7 +313,6 @@
                                     <fileset dir="../..">
                                         <include name="LICENSE.txt"/>
                                         <include name="README.txt"/>
-                                        <include name="NOTICE.txt"/>
                                         <include name="release-notes.html"/>
                                     </fileset>
                                     <fileset dir="../../release-docs/readme-files">
@@ -343,8 +367,6 @@
                                       tofile="target/tmp-repository/modules/mex-${mex.mar.version}.mar"/>
                                 <copy file="../../modules/scripting/target/axis2-scripting-${version}.mar"
                                       tofile="target/tmp-repository/modules/scripting-${scripting.mar.version}.mar"/>
-                                <copy file="../../modules/kernel/target/smtpfault.mar"
-                                      tofile="target/tmp-repository/modules/smtpfault.mar"/>
 
                                 <!-- generate modules.list -->
                                 <echo file="target/tmp-repository/modules/modules.list" append="false">

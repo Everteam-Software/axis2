@@ -135,7 +135,7 @@ public class PropertyDescriptorPlus {
                 throw new RuntimeException(Messages.getMessage("pDescrErr2",targetBean.getClass().getName()));
             }
             Object ret = method.invoke(targetBean, null);
-            if (method.getReturnType() == JAXBElement.class) {
+            if (ret != null && method.getReturnType() == JAXBElement.class) {
                 ret = ((JAXBElement) ret).getValue();
             }
             return ret;
@@ -150,7 +150,7 @@ public class PropertyDescriptorPlus {
      * @throws IllegalAccessException
      * @throws JAXBWrapperException
      */
-    public void set(Object targetBean, Object propValue)
+    public void set(Object targetBean, Object propValue, Class dclClass)
             throws InvocationTargetException, IllegalAccessException, JAXBWrapperException {
 
         Method writeMethod  = null;
@@ -174,7 +174,7 @@ public class PropertyDescriptorPlus {
                 setList(targetBean, propValue);
             } else if (descriptor.getPropertyType() == JAXBElement.class) {
                 if (propValue != null) {
-                    Class clazz = propValue.getClass();
+                    Class clazz = dclClass!=null ? dclClass : propValue.getClass();
                     JAXBElement element = new JAXBElement(xmlName, clazz, propValue);
                     setAtomic(targetBean, element, writeMethod);
                 }

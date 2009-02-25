@@ -108,6 +108,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // In usage=WRAPPED, there will be a single JAXB block inside the body.
             // Get this block
             JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
             Block block = message.getBodyBlock(blockContext, factory);
@@ -226,6 +227,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // In usage=WRAPPED, there will be a single JAXB block inside the body.
             // Get this block
             JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
             Block block = message.getBodyBlock(blockContext, factory);
@@ -343,14 +345,18 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Create the inputs to the wrapper tool
             ArrayList<String> nameList = new ArrayList<String>();
             Map<String, Object> objectList = new HashMap<String, Object>();
+            Map<String, Class>  declaredClassMap = new HashMap<String, Class>();
 
             for (PDElement pde : pdeList) {
                 String name = pde.getParam().getParameterName();
-
+                
                 // The object list contains type rendered objects
                 Object value = pde.getElement().getTypeValue();
+                Class dclClass = pde.getParam().getParameterActualType();
+                
                 nameList.add(name);
                 objectList.put(name, value);
+                declaredClassMap.put(name, dclClass);
             }
 
             // Add the return object to the nameList and objectList
@@ -359,6 +365,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                 String name = operationDesc.getResultName();
                 nameList.add(name);
                 objectList.put(name, returnObject);
+                declaredClassMap.put(name, returnType);
             }
 
             // Now create the single JAXB element
@@ -370,7 +377,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                 cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
             }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
-            Object object = wrapperTool.wrap(cls, nameList, objectList,
+            Object object = wrapperTool.wrap(cls, nameList, objectList, declaredClassMap,
                                              marshalDesc.getPropertyDescriptorMap(cls));
 
             QName wrapperQName = new QName(operationDesc.getResponseWrapperTargetNamespace(),
@@ -389,9 +396,10 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Put the object into the message
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
-
+            JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             Block block = factory.createFrom(object,
-                                             new JAXBBlockContext(packages, packagesKey),
+                                             blockContext,
                                              wrapperQName);
             m.setBodyBlock(block);
 
@@ -451,14 +459,17 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Create the inputs to the wrapper tool
             ArrayList<String> nameList = new ArrayList<String>();
             Map<String, Object> objectList = new HashMap<String, Object>();
+            Map<String, Class> declaredClassMap = new HashMap<String, Class>();
 
             for (PDElement pv : pvList) {
                 String name = pv.getParam().getParameterName();
 
                 // The object list contains type rendered objects
                 Object value = pv.getElement().getTypeValue();
+                Class dclClass = pv.getParam().getParameterActualType();
                 nameList.add(name);
                 objectList.put(name, value);
+                declaredClassMap.put(name, dclClass);
             }
 
             // Now create the single JAXB element 
@@ -470,7 +481,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                 cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
             }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
-            Object object = wrapperTool.wrap(cls, nameList, objectList,
+            Object object = wrapperTool.wrap(cls, nameList, objectList, declaredClassMap, 
                                              marshalDesc.getPropertyDescriptorMap(cls));
 
             QName wrapperQName = new QName(operationDesc.getRequestWrapperTargetNamespace(),
@@ -489,9 +500,10 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Put the object into the message
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
-
+            JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             Block block = factory.createFrom(object,
-                                             new JAXBBlockContext(packages, packagesKey),
+                                             blockContext, 
                                              wrapperQName);
             m.setBodyBlock(block);
 

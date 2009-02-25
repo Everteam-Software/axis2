@@ -22,6 +22,7 @@ package org.apache.axis2.clustering;
 import junit.framework.TestCase;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.util.Utils;
 import org.apache.axis2.clustering.configuration.ConfigurationManager;
 import org.apache.axis2.clustering.configuration.DefaultConfigurationManager;
 import org.apache.axis2.clustering.configuration.DefaultConfigurationManagerListener;
@@ -37,7 +38,6 @@ import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisServiceGroup;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.engine.AxisConfiguration;
-import org.apache.axis2.transport.http.server.HttpUtils;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -57,7 +57,8 @@ public class ContextReplicationTest extends TestCase {
     private static final String TEST_SERVICE_NAME = "testService";
 
     private static final Parameter domainParam =
-            new Parameter(ClusteringConstants.DOMAIN, "axis2.domain." + UUIDGenerator.getUUID());
+            new Parameter(ClusteringConstants.Parameters.DOMAIN,
+                          "axis2.domain." + UUIDGenerator.getUUID());
 
     // --------------- Cluster-1 ------------------------------------------------------
     private ClusterManager clusterManager1;
@@ -189,7 +190,7 @@ public class ContextReplicationTest extends TestCase {
             return;
         }
 
-        System.setProperty(ClusteringConstants.LOCAL_IP_ADDRESS, HttpUtils.getIpAddress());
+        System.setProperty(ClusteringConstants.LOCAL_IP_ADDRESS, Utils.getIpAddress());
 
         // First cluster
         configurationContext1 =
@@ -556,6 +557,23 @@ public class ContextReplicationTest extends TestCase {
         assertNull(serviceContext1.getProperty(key1));
     }
 
+    public void testReplicationExclusion0() throws Exception {
+        if (!canRunTests) {
+            return;
+        }
+
+        String key1 = "local_configCtxKey";
+        String val1 = "configCtxVal1";
+        configurationContext1.setProperty(key1, val1);
+        List<String> exclusionPatterns = new ArrayList<String>();
+        exclusionPatterns.add("*"); // Exclude all properties
+        ctxMan1.setReplicationExcludePatterns("defaults", exclusionPatterns);
+        ctxMan1.updateContext(configurationContext1);
+
+        String value = (String) configurationContext2.getProperty(key1);
+        assertNull(value); // The property should not have gotten replicated
+    }
+
     public void testReplicationExclusion1() throws Exception {
         if (!canRunTests) {
             return;
@@ -564,7 +582,7 @@ public class ContextReplicationTest extends TestCase {
         String key1 = "local_configCtxKey";
         String val1 = "configCtxVal1";
         configurationContext1.setProperty(key1, val1);
-        List exclusionPatterns = new ArrayList();
+        List<String> exclusionPatterns = new ArrayList<String>();
         exclusionPatterns.add("local_*");
         ctxMan1.setReplicationExcludePatterns("defaults", exclusionPatterns);
         ctxMan1.updateContext(configurationContext1);
@@ -581,7 +599,7 @@ public class ContextReplicationTest extends TestCase {
         String key1 = "local_configCtxKey";
         String val1 = "configCtxVal1";
         configurationContext1.setProperty(key1, val1);
-        List exclusionPatterns = new ArrayList();
+        List<String> exclusionPatterns = new ArrayList<String>();
         exclusionPatterns.add("local_*");
         ctxMan1.setReplicationExcludePatterns("org.apache.axis2.context.ConfigurationContext",
                                               exclusionPatterns);
@@ -608,9 +626,9 @@ public class ContextReplicationTest extends TestCase {
         String val3 = "configCtxVal3";
         configurationContext1.setProperty(key3, val3);
 
-        List exclusionPatterns1 = new ArrayList();
+        List<String> exclusionPatterns1 = new ArrayList<String>();
         exclusionPatterns1.add("local1_*");
-        List exclusionPatterns2 = new ArrayList();
+        List<String> exclusionPatterns2 = new ArrayList<String>();
         exclusionPatterns2.add("local2_*");
         ctxMan1.setReplicationExcludePatterns("org.apache.axis2.context.ConfigurationContext",
                                               exclusionPatterns1);

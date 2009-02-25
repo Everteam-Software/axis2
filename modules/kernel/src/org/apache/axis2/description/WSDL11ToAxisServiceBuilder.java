@@ -31,7 +31,6 @@ import org.apache.axis2.addressing.EndpointReferenceHelper;
 import org.apache.axis2.addressing.wsdl.WSDL11ActionHelper;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.transport.http.HTTPConstants;
-import org.apache.axis2.transport.http.util.RESTUtil;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.axis2.util.PolicyUtil;
 import org.apache.axis2.util.XMLUtils;
@@ -569,8 +568,8 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
 
 	private void populatePortType(PortType wsdl4jPortType,
                                   Definition portTypeWSDL) throws AxisFault {
-	           copyExtensionAttributes(wsdl4jPortType.getExtensionAttributes(),
-                           axisService, PORT_TYPE);
+		copyExtensionAttributes(wsdl4jPortType.getExtensionAttributes(),
+				axisService, PORT_TYPE);
         List wsdl4jOperations = wsdl4jPortType.getOperations();
 
         // Added to use in ?wsdl2 as the interface name
@@ -655,7 +654,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 httpMethod = HTTPConstants.HEADER_POST;
             }
             if (httpLocation != null) {
-                httpLocationMap.put(RESTUtil.getConstantFromHTTPLocation(httpLocation, httpMethod),
+                httpLocationMap.put(WSDLUtil.getConstantFromHTTPLocation(httpLocation, httpMethod),
                                     axisBindingOperation.getAxisOperation());
             }
 
@@ -685,6 +684,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (isSetMessageQNames) {
                     BindingOperationEntry boe = find(wrappableBOEs, wsdl4jBindingOperation);
                     boolean isWrapped = (boe == null) ? false : boe.isWrappedInput();
+                    axisInMessage.setWrapped(isWrapped);
                     addQNameReference(axisInMessage, wsdl4jOperation,
                                       wsdl4jBindingInput,
                                       isWrapped);
@@ -726,6 +726,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (isSetMessageQNames) {
                     BindingOperationEntry boe = find(wrappableBOEs, wsdl4jBindingOperation);
                     boolean isWrapped = (boe == null) ? false : boe.isWrappedOutput();
+                    axisOutMessage.setWrapped(isWrapped);
                     addQNameReference(axisOutMessage, wsdl4jOperation,
                                       wsdl4jBindingOutput,
                                       isWrapped);
@@ -765,10 +766,10 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                                 axisOperation.getFaultMessages());
 
                         AxisBindingMessage axisBindingFaultMessage = new AxisBindingMessage();
-                        axisBindingFaultMessage.setName(faultMessage.getName());
                         addDocumentation(axisBindingFaultMessage, wsdl4jFaultMessge.getDocumentationElement());
                         axisBindingFaultMessage.setFault(true);
                         axisBindingFaultMessage.setAxisMessage(faultMessage);
+                        axisBindingFaultMessage.setName(faultMessage.getName());
                         axisBindingFaultMessage.setParent(axisBindingOperation);
 
                         axisBindingOperation.addFault(axisBindingFaultMessage);
@@ -1292,11 +1293,8 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
             axisOperation.setPolicyInclude(policyInclude);
         }
 
-        copyExtensionAttributes(wsdl4jOperation.getExtensionAttributes(),
+        copyExtensionAttributes(wsdl4jOperation.getExtensionAttributes(), 
                                axisOperation, PORT_TYPE_OPERATION);
-        
-        //copyExtensionAttributes(wsdl4jPortType.getExtensionAttributes(),
-        //        axisService, PORT_TYPE);
 
         Input wsdl4jInputMessage = wsdl4jOperation.getInput();
 
@@ -1308,7 +1306,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (null != message) {
                     inMessage.setName(message.getQName().getLocalPart());
                     copyExtensionAttributes(wsdl4jInputMessage.getExtensionAttributes(),
-                                          inMessage, PORT_TYPE_OPERATION_INPUT);
+                                           inMessage, PORT_TYPE_OPERATION_INPUT);
 
                 }
                 // Check if the action is already set as we don't want to
@@ -1339,7 +1337,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (null != message) {
 
                     outMessage.setName(message.getQName().getLocalPart());
-                    copyExtensionAttributes(wsdl4jOutputMessage.getExtensionAttributes(),
+                    copyExtensionAttributes(wsdl4jInputMessage.getExtensionAttributes(),
                                            outMessage, PORT_TYPE_OPERATION_OUTPUT);
 
                     // wsdl:portType -> wsdl:operation -> wsdl:output
@@ -1397,7 +1395,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (null != message) {
 
                     outMessage.setName(message.getQName().getLocalPart());
-                    copyExtensionAttributes(wsdl4jOutputMessage.getExtensionAttributes(),
+                    copyExtensionAttributes(wsdl4jInputMessage.getExtensionAttributes(),
                                            outMessage, PORT_TYPE_OPERATION_INPUT);
 
                     // wsdl:portType -> wsdl:operation -> wsdl:output
@@ -1586,8 +1584,8 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (BINDING_TYPE_SOAP.equals(this.bindingType)) {
                     // first see the body parts list
                     List bodyPartsList =
-                            getPartsListFromSoapBody(bindingInput.getExtensibilityElements());
-                        partsCollection = message.getOrderedParts(bodyPartsList);
+                        getPartsListFromSoapBody(bindingInput.getExtensibilityElements());
+                    partsCollection = message.getOrderedParts(bodyPartsList);
                 } else {
                     // i.e http binding
                     partsCollection = message.getParts().values();
@@ -1672,8 +1670,9 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 if (BINDING_TYPE_SOAP.equals(this.bindingType)) {
                     // first see the body parts list
                     List bodyPartsList =
-                            getPartsListFromSoapBody(bindingOutput.getExtensibilityElements());
-                        partsCollection = message.getOrderedParts(bodyPartsList);
+                        getPartsListFromSoapBody(bindingOutput.getExtensibilityElements());
+                    partsCollection = message.getOrderedParts(bodyPartsList);
+
                 } else {
                     // i.e if http binding
                     partsCollection = message.getParts().values();
@@ -2160,7 +2159,7 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
             if (log.isDebugEnabled()) {
                 log.debug("Reading 1.1 WSDL with base uri = " + getBaseUri());
                 log.debug("  the document base uri = " + getDocumentBaseUri());
-                log.debug("  the stack at this point is: " + stackToString());
+                log.trace("  the stack at this point is: " + stackToString());
             }
             def = reader.readWSDL(getBaseUri(), doc);
             def.setDocumentBaseURI(getDocumentBaseUri());
@@ -2331,6 +2330,10 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
 
                 String soapActionURI = soapOperation.getSoapActionURI();
                 
+                if (this.isCodegen && ((soapActionURI == null) || (soapActionURI.equals("")))) {
+                    soapActionURI = axisBindingOperation.getAxisOperation().getInputAction();
+                }
+                
                 if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled())
                     log.debug("WSDL Binding Operation: " + axisBindingOperation.getName() +
                             ", SOAPAction: " + soapActionURI);
@@ -2357,6 +2360,9 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 }
 
                 String soapAction = soapOperation.getSoapActionURI();
+                if (this.isCodegen && ((soapAction == null) || (soapAction.equals("")))) {
+                    soapAction = axisBindingOperation.getAxisOperation().getInputAction();
+                }
                 
                 if (LoggingControl.debugLoggingAllowed && log.isDebugEnabled())
                     log.debug("WSDL Binding Operation: " + axisBindingOperation.getName() +
@@ -2747,62 +2753,62 @@ public class WSDL11ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
      * @param origin
      */
     private void copyExtensionAttributes(Map extAttributes,
-                                         AxisDescription description, String origin) {
+			AxisDescription description, String origin) {
 
-        QName key;
-        QName value;
+		QName key;
+		QName value;
 
-        for (Iterator iterator = extAttributes.keySet().iterator(); iterator
-                .hasNext();) {
-            key = (QName) iterator.next();
+		for (Iterator iterator = extAttributes.keySet().iterator(); iterator
+				.hasNext();) {
+			key = (QName) iterator.next();
 
-            if (Constants.URI_POLICY_NS.equals(key.getNamespaceURI())
-                && "PolicyURIs".equals(key.getLocalPart())) {
+			if (Constants.URI_POLICY_NS.equals(key.getNamespaceURI())
+					&& "PolicyURIs".equals(key.getLocalPart())) {
 
-                value = (QName) extAttributes.get(key);
-                String policyURIs = value.getLocalPart();
+				value = (QName) extAttributes.get(key);
+				String policyURIs = value.getLocalPart();
 
-                if (policyURIs.length() != 0) {
-                    String[] uris = policyURIs.split(" ");
+				if (policyURIs.length() != 0) {
+					String[] uris = policyURIs.split(" ");
 
-                    PolicyReference ref;
-                    for (int i = 0; i < uris.length; i++) {
-                        ref = new PolicyReference();
-                        ref.setURI(uris[i]);
+					PolicyReference ref;
+					for (int i = 0; i < uris.length; i++) {
+						ref = new PolicyReference();
+						ref.setURI(uris[i]);
 
-                        if (PORT_TYPE.equals(origin)
-                                || PORT_TYPE_OPERATION.equals(origin)
-                                || PORT_TYPE_OPERATION_INPUT.equals(origin) 
-                                || PORT_TYPE_OPERATION_OUTPUT.equals(origin)) {
-                            
-                            if (description != null) {
-                                PolicySubject subject = description.getPolicySubject();
-                                
-                                if (subject != null) {
-                                    subject.attachPolicyReference(ref);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+						if (PORT_TYPE.equals(origin)
+						        || PORT_TYPE_OPERATION.equals(origin)
+						        || PORT_TYPE_OPERATION_INPUT.equals(origin) 
+						        || PORT_TYPE_OPERATION_OUTPUT.equals(origin)) {
+                      
+						    if (description != null) {
+						        PolicySubject subject = description.getPolicySubject();
+                             
+						        if (subject != null) {
+						            subject.attachPolicyReference(ref);
+						        }
+						    }
+						}
+					}
+				}
+			}
+		}
+	}
 
     /**
-     * Process the policy definitions
-     *
-     * @param definition
-     */
+	 * Process the policy definitions
+	 * 
+	 * @param definition
+	 */
     private void processPoliciesInDefintion(Definition definition) {
         processPoliciesInDefintion(definition, new HashSet());
     }
 
     /**
-     * Process the policy definitions
-     *
-     * @param definition
-     */
+	 * Process the policy definitions
+	 * 
+	 * @param definition
+	 */
     private void processPoliciesInDefintion(Definition definition, Set visitedWSDLs) {
         visitedWSDLs.add(definition.getDocumentBaseURI());
         List extElements = definition.getExtensibilityElements();

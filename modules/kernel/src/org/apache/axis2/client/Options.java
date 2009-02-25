@@ -72,8 +72,8 @@ public class Options implements Externalizable, SafeSerializable {
      * setup for logging
      */
     private static final Log log = LogFactory.getLog(Options.class);
-    private static boolean DEBUG_ENABLED = log.isDebugEnabled();
-    private static boolean DEBUG_CALLSTACK_ON_SET = log.isDebugEnabled();
+    private static boolean DEBUG_ENABLED = log.isTraceEnabled();
+    private static boolean DEBUG_PROPERTY_SET = false;
 
     private static final String myClassName = "Options";
 
@@ -127,7 +127,7 @@ public class Options implements Externalizable, SafeSerializable {
     /**
      * @serial properties
      */
-    private Map properties;
+    private Map<String, Object> properties;
 
     // ==========================================================================
     //                  Parameters that can be set via Options
@@ -159,11 +159,11 @@ public class Options implements Externalizable, SafeSerializable {
     private String messageId;
 
     // Array of RelatesTo objects
-    private List relationships;
+    private List<RelatesTo> relationships;
 
     private EndpointReference replyTo;
 
-    private ArrayList referenceParameters;
+    private ArrayList<OMElement> referenceParameters;
 
     /**
      * This is used for sending and receiving messages.
@@ -333,16 +333,16 @@ public class Options implements Externalizable, SafeSerializable {
      *
      * @return copy of general properties
      */
-    public Map getProperties() {
+    public Map<String, Object> getProperties() {
         // make sure that the Options properties exists
         if (this.properties == null) {
-            this.properties = new HashMap();
+            this.properties = new HashMap<String, Object>();
         }
 
         if (parent == null) {
-            return new HashMap(properties);
+            return new HashMap<String, Object>(properties);
         } else {
-            Map props = parent.getProperties();
+            Map<String, Object> props = parent.getProperties();
             props.putAll(properties);
             return props;
         }
@@ -443,7 +443,7 @@ public class Options implements Externalizable, SafeSerializable {
         relationships = null;
     }
         else{
-            ArrayList arraylist = new ArrayList(list.length);
+            ArrayList<RelatesTo> arraylist = new ArrayList<RelatesTo>(list.length);
             for(int i = 0 ; i < list.length ; i++){
                    arraylist.add(list[i]);
             }
@@ -569,6 +569,10 @@ public class Options implements Externalizable, SafeSerializable {
      * @param parent (<code>null</code> if none)
      */
     public void setParent(Options parent) {
+        if (this == parent) {
+            throw new IllegalArgumentException("Invalid parent Options: they cannot be the same object");
+        }
+
         this.parent = parent;
     }
 
@@ -658,14 +662,14 @@ public class Options implements Externalizable, SafeSerializable {
      *
      * @param properties
      */
-    public void setProperties(Map properties) {
+    public void setProperties(Map<String, Object> properties) {
         
         if (this.properties != properties) {
             if (DEBUG_ENABLED) {
-                for (Iterator iterator = properties.entrySet().iterator();
+                for (Iterator<Entry<String, Object>> iterator = properties.entrySet().iterator();
                 iterator.hasNext();) {
-                    Entry entry = (Entry) iterator.next();
-                    debugPropertySet((String) entry.getKey(), entry.getValue());
+                    Entry<String, Object> entry = iterator.next();
+                    debugPropertySet(entry.getKey(), entry.getValue());
 
                 }
             }
@@ -860,7 +864,7 @@ public class Options implements Externalizable, SafeSerializable {
     public void setProperty(String propertyKey, Object property) {
         // make sure that the Options properties exists
         if (this.properties == null) {
-            this.properties = new HashMap();
+            this.properties = new HashMap<String, Object>();
         }
         properties.put(propertyKey, property);
         if (DEBUG_ENABLED) {
@@ -875,7 +879,7 @@ public class Options implements Externalizable, SafeSerializable {
      */
     public void addRelatesTo(RelatesTo relatesTo) {
         if (relationships == null) {
-            relationships = new ArrayList(5);
+            relationships = new ArrayList<RelatesTo>(5);
         }
         relationships.add(relatesTo);
     }
@@ -1025,7 +1029,7 @@ public class Options implements Externalizable, SafeSerializable {
      */
     public void addReferenceParameter(OMElement referenceParameter) {
         if (referenceParameters == null) {
-            referenceParameters = new ArrayList(5);
+            referenceParameters = new ArrayList<OMElement>(5);
         }
 
         referenceParameters.add(referenceParameter);
@@ -1639,7 +1643,7 @@ public class Options implements Externalizable, SafeSerializable {
      * @param value
      */
     private void debugPropertySet(String key, Object value) {
-        if (DEBUG_ENABLED) {
+        if (DEBUG_PROPERTY_SET) {
             String className = (value == null) ? "null" : value.getClass().getName();
             String classloader = "null";
             if(value != null) {
@@ -1661,9 +1665,7 @@ public class Options implements Externalizable, SafeSerializable {
             }
             log.debug("  Value Class = " + className);
             log.debug("  Value Classloader = " + classloader);
-            if (DEBUG_CALLSTACK_ON_SET) {
-                log.debug(  "Call Stack = " + JavaUtils.callStackToString());
-            }
+            log.debug(  "Call Stack = " + JavaUtils.callStackToString());
             log.debug("==================");
         }
     }

@@ -28,8 +28,13 @@
         <handler name="h6" class="org.apache.axis2.registry.Handler3">
             <order phase="NewPhase"/>
         </handler>
+         <handler name="h10" class="org.apache.axis2.registry.Handler3">
+            <order phaseLast="true" phase="NewPhase"/>
+        </handler>
+        <handler name="h11" class="org.apache.axis2.registry.Handler3">
+            <order after="h6" phase="NewPhase"/>
+        </handler>
     </InFlow>
-
     <OutFlow>
         <handler name="h3" class="org.apache.axis2.registry.Handler3">
             <order phase="OperationOutPhase"/>
@@ -52,7 +57,11 @@
         <messageReceiver class="org.apache.axis2.receivers.RawXMLINOutMessageReceiver"/>
         <parameter name="para1" locked="xsd:true">10</parameter>
     </operation>
-    <phase name="NewPhase" before="Dispatch" after="Security" flow="InFlow"/>
+
+    <!-- This checks that phases can be added, that comma-separated flow lists work, -->
+    <!-- and that case-insensitive comparisons are used for flow names.              -->
+    <phase name="NewPhase" before="Dispatch" after="Security" flow="InFlow,oUtFlOw"/>
+
     <phase name="NewPhase" before="Dispatch"  flow="InFaultFlow"/>
     <phase name="Security" flow="InFlow"/> <!-- Make sure duplicates are OK -->
 </module>

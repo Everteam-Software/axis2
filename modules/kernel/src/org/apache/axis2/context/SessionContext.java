@@ -72,8 +72,8 @@ public class SessionContext extends AbstractContext
 
 
     // TODO: investigate whether these collections need to be saved
-    private transient Map serviceContextMap = new HashMap();
-    private transient Map serviceGroupContextMap = new HashMap();
+    private transient Map<String, ServiceContext> serviceContextMap = new HashMap<String, ServiceContext>();
+    private transient Map<String, ServiceGroupContext> serviceGroupContextMap = new HashMap<String, ServiceGroupContext>();
 
     private String cookieID;
 
@@ -141,7 +141,7 @@ public class SessionContext extends AbstractContext
         return lastTouchedTime;
     }
 
-    public Iterator getServiceGroupContext() {
+    public Iterator<ServiceGroupContext> getServiceGroupContext() {
         if (serviceGroupContextMap != null) {
             if (serviceGroupContextMap.isEmpty()) {
                 return null;
@@ -155,7 +155,7 @@ public class SessionContext extends AbstractContext
     protected void finalize() throws Throwable {
         super.finalize();
         if (serviceGroupContextMap != null && !serviceGroupContextMap.isEmpty()) {
-            Iterator valuse = serviceGroupContextMap.values().iterator();
+            Iterator<ServiceGroupContext> valuse = serviceGroupContextMap.values().iterator();
             while (valuse.hasNext()) {
                 ServiceGroupContext serviceGroupContext = (ServiceGroupContext) valuse.next();
                 cleanupServiceContextes(serviceGroupContext);
@@ -164,7 +164,7 @@ public class SessionContext extends AbstractContext
     }
 
     private void cleanupServiceContextes(ServiceGroupContext serviceGroupContext) {
-        Iterator serviceContecxtes = serviceGroupContext.getServiceContexts();
+        Iterator<ServiceContext> serviceContecxtes = serviceGroupContext.getServiceContexts();
         while (serviceContecxtes.hasNext()) {
             ServiceContext serviceContext = (ServiceContext) serviceContecxtes.next();
             DependencyManager.destroyServiceObject(serviceContext);
@@ -181,7 +181,7 @@ public class SessionContext extends AbstractContext
      * <p/>
      * NOTE: Transient fields and static fields are not saved.
      *
-     * @param out The stream to write the object contents to
+     * @param o The stream to write the object contents to
      * @throws IOException
      */
     public void writeExternal(ObjectOutput o) throws IOException {
@@ -275,7 +275,7 @@ public class SessionContext extends AbstractContext
         //---------------------------------------------------------
         // properties
         //---------------------------------------------------------
-        properties = in.readHashMap();
+        properties = in.readMap(new HashMapUpdateLockable());
 
         //---------------------------------------------------------
         // "nested"
@@ -288,8 +288,8 @@ public class SessionContext extends AbstractContext
         // done
         //---------------------------------------------------------
 
-        serviceContextMap = new HashMap();
-        serviceGroupContextMap = new HashMap();
+        serviceContextMap = new HashMap<String, ServiceContext>();
+        serviceGroupContextMap = new HashMap<String, ServiceGroupContext>();
     }
 
     public ConfigurationContext getRootContext() {

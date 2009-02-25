@@ -72,6 +72,8 @@ public abstract class BlockImpl implements Block {
     protected OMElement omElement = null;
 
     protected QName qName;
+    private boolean noQNameAvailable = false;
+    
     protected BlockFactory factory;
     protected boolean consumed = false;
     protected Message parent;
@@ -162,11 +164,37 @@ public abstract class BlockImpl implements Block {
         // If the QName is not known, find it
         try {
             if (qName == null) {
+                // If a prior call discovered that this content has no QName, then return null
+                if (noQNameAvailable) {
+                    return null;
+                }
                 if (omElement == null) {
-                    XMLStreamReader newReader = _getReaderFromBO(busObject, busContext);
-                    busObject = null;
-                    StAXOMBuilder builder = new StAXOMBuilder(newReader);
-                    omElement = builder.getDocumentElement();
+                    try {
+                        XMLStreamReader newReader = _getReaderFromBO(busObject, busContext);
+                        busObject = null;
+                        StAXOMBuilder builder = new StAXOMBuilder(newReader);
+                        omElement = builder.getDocumentElement();
+                    } catch (Exception e) {
+                        // Some blocks may represent non-element data
+                        if (log.isDebugEnabled()) {
+                            log.debug("Exception occurred while obtaining QName:" + e);
+                        } 
+                        if (!isElementData()) {
+                            // If this block can hold non-element data, then accept
+                            // the fact that there is no qname and continue
+                            if (log.isDebugEnabled()) {
+                                log.debug("The block does not contain an xml element. Processing continues.");
+                            }
+                            // Indicate that the content has no QName
+                            // The exception is swallowed.
+                            noQNameAvailable = true;
+                            return null;
+                        }  else {
+                            // The content should contain xml.  
+                            // Rethrowing the exception.
+                            throw ExceptionFactory.makeWebServiceException(e);
+                        }
+                    }
                 }
                 qName = omElement.getQName();
             }
@@ -307,7 +335,7 @@ public abstract class BlockImpl implements Block {
             if (log.isDebugEnabled()) {
                 // The following stack trace consumes indicates where the message is consumed
                 log.debug("Message Block Monitor: Action=Consumed");
-                log.debug(JavaUtils.stackToString());
+                log.trace(JavaUtils.stackToString());
             }
         } else {
             consumed = false;

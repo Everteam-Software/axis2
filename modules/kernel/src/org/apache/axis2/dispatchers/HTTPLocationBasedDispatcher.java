@@ -64,14 +64,14 @@ public class HTTPLocationBasedDispatcher extends AbstractDispatcher {
                         .getProperty(WSDL2Constants.ENDPOINT_LOCAL_NAME);
                 // Here we check whether the request was dispatched to the correct endpoint. If it
                 // was we can dispatch the operation using the HTTPLocationDispatcher table of that
-                // specific endpoint.
+                // specific endpoint. 
                 if (axisEndpoint != null) {
                     Map httpLocationTable = (Map) axisEndpoint.getBinding()
                             .getProperty(WSDL2Constants.HTTP_LOCATION_TABLE);
                     if (httpLocationTable != null) {
                         return getOperationFromHTTPLocation(httpLocation, httpLocationTable);
                     }
-                }
+                } 
             } else {
                 log.debug("Attempt to check for Operation using HTTP Location failed");
                 return null;

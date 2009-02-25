@@ -25,11 +25,7 @@ import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.namespace.Constants;
 import org.apache.axis2.transport.http.HTTPConstants;
-import org.apache.axis2.transport.http.util.RESTUtil;
-import org.apache.axis2.wsdl.HTTPHeaderMessage;
-import org.apache.axis2.wsdl.SOAPHeaderMessage;
-import org.apache.axis2.wsdl.SOAPModuleMessage;
-import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.axis2.wsdl.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.woden.WSDLException;
@@ -217,6 +213,9 @@ public class WSDL20ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
             wsdlDescriptionParamter.setValue(description);
             axisService.addParameter(wsdlDescriptionParamter);
 
+            if (isCodegen) {
+                axisService.addParameter("isCodegen", Boolean.TRUE);
+            }
             if (description == null) {
                 return null;
             }
@@ -665,7 +664,7 @@ public class WSDL20ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 String httpLocationTemplete = httpLocation.getOriginalLocation();
                 axisBindingOperation
                         .setProperty(WSDL2Constants.ATTR_WHTTP_LOCATION, httpLocationTemplete);
-                httpLocationString = RESTUtil.getConstantFromHTTPLocation(httpLocationTemplete, HTTPConstants.HEADER_POST);
+                httpLocationString = WSDLUtil.getConstantFromHTTPLocation(httpLocationTemplete, HTTPConstants.HEADER_POST);
 
             }
 
@@ -872,7 +871,7 @@ public class WSDL20ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
                 String httpLocationTemplete = httpLocation.getOriginalLocation();
                 axisBindingOperation
                         .setProperty(WSDL2Constants.ATTR_WHTTP_LOCATION, httpLocationTemplete);
-                httpLocationString = RESTUtil.getConstantFromHTTPLocation(httpLocationTemplete, httpMethod);
+                httpLocationString = WSDLUtil.getConstantFromHTTPLocation(httpLocationTemplete, httpMethod);
 
             }
 
@@ -1221,7 +1220,7 @@ public class WSDL20ToAxisServiceBuilder extends WSDLToAxisServiceBuilder {
         }
         if (log.isDebugEnabled()) {
             log.debug("Reading 2.0 WSDL with wsdl uri = " + wsdlURI);
-            log.debug("  the stack at this point is: " + stackToString());
+            log.trace("  the stack at this point is: " + stackToString());
         }
         return reader.readWSDL(wsdlSource);
     }

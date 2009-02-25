@@ -19,7 +19,6 @@
 
 package org.apache.axis2.corba.idl.parser;
 
-import antlr.ASTVisitor;
 import antlr.collections.AST;
 import org.apache.axis2.corba.idl.types.ArrayType;
 import org.apache.axis2.corba.idl.types.CompositeDataType;
@@ -37,6 +36,7 @@ import org.apache.axis2.corba.idl.types.Typedef;
 import org.apache.axis2.corba.idl.types.UnionMember;
 import org.apache.axis2.corba.idl.types.UnionType;
 import org.apache.axis2.corba.idl.types.ValueType;
+import org.apache.axis2.corba.exceptions.InvalidIDLException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -48,9 +48,9 @@ import java.util.Map;
  * Date: Feb 11, 2007
  * Time: 10:06:23 PM
  */
-public class IDLVisitor implements ASTVisitor {
+public class IDLVisitor /*implements ASTVisitor*/ {
     private static final Log log = LogFactory.getLog(IDLVisitor.class);
-    private IDL idl = null;
+    private IDL idl = new IDL();
     private String module = "";
     private String moduleForInnerTypes = null;
     private static final String INNERTYPE_SUFFIX = "Package";
@@ -59,8 +59,11 @@ public class IDLVisitor implements ASTVisitor {
         return idl;
     }
 
-    public void visit(AST node) {
-        idl = new IDL();
+    public void setIDL(IDL idl) {
+        this.idl = idl;
+    }
+
+    public void visit(AST node) throws InvalidIDLException {
         while (node != null) {
             switch (node.getType()) {
 
@@ -72,6 +75,7 @@ public class IDLVisitor implements ASTVisitor {
                 case IDLTokenTypes.LITERAL_module: {
                     AST moduleName = node.getFirstChild();
                     IDLVisitor moduleVisitor = new IDLVisitor();
+                    moduleVisitor.setIDL(idl);
                     moduleVisitor.setModule(module + moduleName);
                     moduleVisitor.visit(moduleName.getNextSibling());
                     idl.addIDL(moduleVisitor.getIDL());
@@ -109,14 +113,14 @@ public class IDLVisitor implements ASTVisitor {
                 }
 
                 default: {
-                    log.error("Unsupported IDL token " + node);
+                    throw new InvalidIDLException("Unsupported IDL token " + node);
                 }
             }
             node = node.getNextSibling();
         }
     }
 
-    private Struct visitStruct(AST node) {
+    private Struct visitStruct(AST node) throws InvalidIDLException {
         AST structNode = node.getFirstChild();
         String structName = structNode.toString();
         Struct struct = new Struct();
@@ -125,7 +129,7 @@ public class IDLVisitor implements ASTVisitor {
         AST memberTypeNode = structNode.getNextSibling();
         while (memberTypeNode != null) {
             Member member = new Member();
-            DataType dataType = findDataType(memberTypeNode);
+            DataType dataType = findDataType(memberTypeNode, structName);
             AST memberNode = memberTypeNode.getNextSibling();
             String memberName = memberNode.getText();
             int dimensions = memberNode.getNumberOfChildren();
@@ -152,7 +156,13 @@ public class IDLVisitor implements ASTVisitor {
                 if (arrayType != null) {
                     arrayType.setDataType(dataType);
                 }
-                dataType = rootArrayType;
+//                dataType = rootArrayType;
+                Typedef typedef = new Typedef();
+                typedef.setDataType(rootArrayType);
+                typedef.setModule(module);
+                typedef.setName(structName + '_' + memberName);
+                idl.addType(typedef);
+                dataType = typedef;
             }
 
             member.setDataType(dataType);
@@ -163,11 +173,12 @@ public class IDLVisitor implements ASTVisitor {
         return struct;
     }
 
-    private ValueType visitValueType(AST node) {
+    private ValueType visitValueType(AST node) throws InvalidIDLException {
         AST valueNode = node.getFirstChild();
         ValueType value = new ValueType();
         value.setModule(module);
-        value.setName(valueNode.toString());
+        String valueName = valueNode.toString();
+        value.setName(valueName);
         AST memberModifierNode = valueNode.getNextSibling();
         while (memberModifierNode != null) {
             String memberModifierName = memberModifierNode.toString();
@@ -191,7 +202,7 @@ public class IDLVisitor implements ASTVisitor {
             Member memberType = new Member();
             memberType.setModifier(memberModifierName);
             AST memberTypeNode = memberModifierNode.getNextSibling();
-            memberType.setDataType(findDataType(memberTypeNode));
+            memberType.setDataType(findDataType(memberTypeNode, valueName));
             AST memberNode = memberTypeNode.getNextSibling();
             memberType.setName(memberNode.toString());
             value.addMember(memberType);
@@ -200,7 +211,7 @@ public class IDLVisitor implements ASTVisitor {
         return value;
     }
 
-    private Interface visitInterface(AST node) {
+    private Interface visitInterface(AST node) throws InvalidIDLException {
         Interface intf = new Interface();
         intf.setModule(module);
         AST interfaceNode = node.getFirstChild();
@@ -263,16 +274,17 @@ public class IDLVisitor implements ASTVisitor {
         return intf;
     }
 
-    private Operation visitGetAttribute(AST node) {
+    private Operation visitGetAttribute(AST node) throws InvalidIDLException {
         Operation operation = new Operation();
         AST type = node.getFirstChild();
-        operation.setReturnType(findDataType(type));
         AST name = type.getNextSibling();
-        operation.setName("_get_" + name.toString());
+        String attrName = name.toString();
+        operation.setReturnType(findDataType(type, attrName));
+        operation.setName("_get_" + attrName);
         return operation;
     }
 
-    private Operation visitSetAttribute(AST node) {
+    private Operation visitSetAttribute(AST node) throws InvalidIDLException {
         Operation operation = new Operation();
         AST type = node.getFirstChild();
         operation.setReturnType(PrimitiveDataType.getPrimitiveDataType("void"));
@@ -281,31 +293,33 @@ public class IDLVisitor implements ASTVisitor {
         operation.setName("_set_" + attrName);
         Member param = new Member();
         param.setName(attrName);
-        param.setDataType(findDataType(type));
+        param.setDataType(findDataType(type, attrName));
         operation.addParam(param);
         return operation;
     }
 
-    private Operation visitOperation(AST node) {
+    private Operation visitOperation(AST node) throws InvalidIDLException {
         Operation operation = new Operation();
-        operation.setName(node.toString());
+        String opName = node.toString();
+        operation.setName(opName);
         AST type = node.getFirstChild();
-        operation.setReturnType(findDataType(type));
+        operation.setReturnType(findDataType(type, opName));
         AST mode = type.getNextSibling();
         while(mode != null) {
             if (IDLTokenTypes.LITERAL_raises == mode.getType()) {
                 AST idlType = mode.getFirstChild();
                 while(idlType != null) {
-                    operation.addRaises((ExceptionType) findDataType(idlType));
+                    operation.addRaises((ExceptionType) findDataType(idlType, opName));
                     idlType = idlType.getNextSibling();
                 }
             } else {
                 Member param = new Member();
                 param.setMode(mode.toString());
                 AST idlType = mode.getFirstChild();
-                param.setDataType(findDataType(idlType));
                 AST paramName = idlType.getNextSibling();
-                param.setName(paramName.toString());
+                String paramNameStr = paramName.toString();
+                param.setDataType(findDataType(idlType, paramNameStr));
+                param.setName(paramNameStr);
                 operation.addParam(param);
             }
             mode = mode.getNextSibling();
@@ -313,7 +327,7 @@ public class IDLVisitor implements ASTVisitor {
         return operation;
     }
 
-    private ExceptionType visitException(AST node) {
+    private ExceptionType visitException(AST node) throws InvalidIDLException {
         ExceptionType raisesType = new ExceptionType();
         AST exNode = node.getFirstChild();
         String exName = exNode.toString();
@@ -322,7 +336,7 @@ public class IDLVisitor implements ASTVisitor {
         AST memberTypeNode = exNode.getNextSibling();
         while (memberTypeNode != null) {
             Member member = new Member();
-            member.setDataType(findDataType(memberTypeNode));
+            member.setDataType(findDataType(memberTypeNode, exName));
             AST memberNode = memberTypeNode.getNextSibling();
             member.setName(memberNode.toString());
             raisesType.addMember(member);
@@ -331,18 +345,68 @@ public class IDLVisitor implements ASTVisitor {
         return raisesType;
     }
 
-    private DataType findDataType(AST typeNode) {
-        return findDataType(typeNode, true);
+    private DataType findDataType(AST typeNode, String parentName) throws InvalidIDLException {
+        return findDataType(typeNode, parentName, true, false);
     }
-    private DataType findDataType(AST typeNode, boolean root) {
+    private DataType findDataType(AST typeNode, String parentName, boolean root, boolean noTypeDefForSeqs) throws InvalidIDLException {
         // Check for sequences
         if (typeNode.getType()==IDLTokenTypes.LITERAL_sequence) {
-            return visitAnonymousSequence(typeNode, root);
+            SequenceType sequenceType = visitAnonymousSequence(typeNode, parentName, root);
+            if (noTypeDefForSeqs) {
+                return sequenceType;
+            }
+            Typedef typedef = new Typedef();
+            typedef.setDataType(sequenceType);
+            typedef.setModule(module);
+            typedef.setName(parentName + '_' + sequenceType.getName());
+            idl.addType(typedef);
+            return typedef;
         }
 
         DataType dataType = null;
         Map compositeDataTypes = idl.getCompositeDataTypes();
-        String typeName = getTypeName(typeNode);
+
+        String typeName;
+        if (typeNode.getType() == IDLTokenTypes.LITERAL_unsigned) {
+            AST nextNode = typeNode.getNextSibling();
+            if (nextNode == null) {
+                throw new InvalidIDLException("'unsigned' without a data type");
+            } else if (nextNode.getType() == IDLTokenTypes.LITERAL_short) {
+                typeNode.setNextSibling(nextNode.getNextSibling());
+                typeNode.setFirstChild(nextNode.getFirstChild());
+                typeName = "ushort";
+            } else if (nextNode.getType() == IDLTokenTypes.LITERAL_long) {
+                AST nextToLong = nextNode.getNextSibling();
+                if (nextToLong == null) {
+                    throw new InvalidIDLException("an identifier is required after the 'long' keyword");
+                } else if (nextToLong.getType() == IDLTokenTypes.LITERAL_long) {
+                    typeNode.setNextSibling(nextToLong.getNextSibling());
+                    typeNode.setFirstChild(nextToLong.getFirstChild());
+                    typeName = "ulonglong";
+                } else {
+                    typeNode.setNextSibling(nextNode.getNextSibling());
+                    typeNode.setFirstChild(nextNode.getFirstChild());
+                    typeName = "ulong";
+                }
+            } else {
+                throw new InvalidIDLException("either 'long' or 'short' is expected after the 'unsigned' keyword");
+            }
+        } else if (typeNode.getType() == IDLTokenTypes.LITERAL_long) {
+            AST nextToLong = typeNode.getNextSibling();
+            if (nextToLong == null) {
+                throw new InvalidIDLException("an identifier is required after the 'long' keyword");
+            } else if (nextToLong.getType() == IDLTokenTypes.LITERAL_long) {
+                typeNode.setNextSibling(nextToLong.getNextSibling());
+                typeNode.setFirstChild(nextToLong.getFirstChild());
+                typeName = "longlong";
+            } else {
+                typeName = "long";
+            }
+        } else {
+            typeName = getTypeName(typeNode);    
+        }
+
+
         if (compositeDataTypes!=null) {
             if (!module.equals("")) {
                 if (!typeName.startsWith(module)) {
@@ -363,6 +427,8 @@ public class IDLVisitor implements ASTVisitor {
         if (dataType==null)
             dataType = PrimitiveDataType.getPrimitiveDataType(typeName);
 
+        if (dataType == null)
+            throw new InvalidIDLException("Invalid data type: " + typeName);
         return dataType;
     }
 
@@ -398,14 +464,14 @@ public class IDLVisitor implements ASTVisitor {
         return enumType;
     }
 
-    private UnionType visitUnion(AST node) {
+    private UnionType visitUnion(AST node) throws InvalidIDLException {
         UnionType unionType = new UnionType();
-        AST exNode = node.getFirstChild();
-        String exName = exNode.toString();
+        AST unNode = node.getFirstChild();
+        String unName = unNode.toString();
         unionType.setModule(module);
-        unionType.setName(exName);
-        AST switchTypeNode = exNode.getNextSibling();
-        unionType.setDiscriminatorType(findDataType(switchTypeNode));
+        unionType.setName(unName);
+        AST switchTypeNode = unNode.getNextSibling();
+        unionType.setDiscriminatorType(findDataType(switchTypeNode, unName));
         AST caseOrDefaultNode = switchTypeNode.getNextSibling();
         while (caseOrDefaultNode != null) {
             UnionMember unionMember = new UnionMember();
@@ -421,7 +487,7 @@ public class IDLVisitor implements ASTVisitor {
             }
 
 
-            unionMember.setDataType(findDataType(typeNode));
+            unionMember.setDataType(findDataType(typeNode, unName));
 
             AST memberNode = typeNode.getNextSibling();
             unionMember.setName(memberNode.toString());
@@ -431,7 +497,7 @@ public class IDLVisitor implements ASTVisitor {
         return unionType;
     }
 
-    private void visitAndAddTypedefs(AST node, String moduleName) {
+    private void visitAndAddTypedefs(AST node, String moduleName) throws InvalidIDLException {
         AST typedefNode = node.getFirstChild();
 
         DataType dataType;
@@ -440,7 +506,7 @@ public class IDLVisitor implements ASTVisitor {
         //    sequence = visitAnonymousSequence(typedefNode);
         //    dataType = sequence.getDataType();
         //} else {
-            dataType = findDataType(typedefNode);
+            dataType = findDataType(typedefNode, null, true, true);
         //}
         AST typedefNameNode = typedefNode.getNextSibling();
         AST dimensionNode;
@@ -482,15 +548,16 @@ public class IDLVisitor implements ASTVisitor {
         }
     }
 
-    private SequenceType visitAnonymousSequence(AST node, boolean root) {
+    private SequenceType visitAnonymousSequence(AST node, String parentName, boolean root) throws InvalidIDLException {
         AST typeNode = node.getFirstChild();
         SequenceType sequenceType = new SequenceType();
-        DataType dataType = findDataType(typeNode, false);
+        DataType dataType = findDataType(typeNode, parentName, false, false);
         sequenceType.setDataType(dataType);
         sequenceType.setElementModule(module);
         AST elementNode = node.getNextSibling();
         if (elementNode != null && root) {
             String elementName = elementNode.getText();
+            sequenceType.setName(elementName);
             SequenceType tempSeqType = sequenceType;
             int i = 1;
             DataType tempDataType;

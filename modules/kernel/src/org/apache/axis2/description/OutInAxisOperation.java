@@ -19,6 +19,10 @@
 
 package org.apache.axis2.description;
 
+import java.util.HashMap;
+
+import javax.xml.namespace.QName;
+
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
@@ -45,9 +49,6 @@ import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.xml.namespace.QName;
-import java.util.HashMap;
-
 public class OutInAxisOperation extends TwoChannelAxisOperation {
 
 	private static final Log log = LogFactory.getLog(OutInAxisOperation.class);
@@ -67,7 +68,7 @@ public class OutInAxisOperation extends TwoChannelAxisOperation {
 
     public void addMessageContext(MessageContext msgContext,
                                   OperationContext opContext) throws AxisFault {
-        HashMap mep = opContext.getMessageContexts();
+        HashMap<String, MessageContext> mep = opContext.getMessageContexts();
         MessageContext immsgContext = (MessageContext) mep
                 .get(MESSAGE_LABEL_IN_VALUE);
         MessageContext outmsgContext = (MessageContext) mep
@@ -450,7 +451,7 @@ class OutInAxisOperationClient extends OperationClient {
                         AxisFault fault = new AxisFault(body.getFault(), response);
                         if (callback != null) {
                             callback.onError(fault);
-                        } else {
+                        } else if (axisCallback != null) {
                             axisCallback.onError(fault);
                         }
 
@@ -458,7 +459,7 @@ class OutInAxisOperationClient extends OperationClient {
                         if (callback != null) {
                             AsyncResult asyncResult = new AsyncResult(response);
                             callback.onComplete(asyncResult);
-                        } else {
+                        } else if (axisCallback != null) {
                             axisCallback.onMessage(response);
                         }
 
@@ -468,13 +469,15 @@ class OutInAxisOperationClient extends OperationClient {
             } catch (Exception e) {
                 if (callback != null) {
                     callback.onError(e);
-                } else {
+                } else if (axisCallback != null) {
                     axisCallback.onError(e);
                 }
 
             } finally {
                 if (callback != null) {
                     callback.setComplete(true);
+                }else if (axisCallback != null) {
+                    axisCallback.onComplete();
                 }
             }
         }
