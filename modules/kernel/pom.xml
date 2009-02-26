@@ -29,6 +29,7 @@
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-kernel</artifactId>
+    <version>1.5-beta-2-i1</version>
     <name>Apache Axis2 - Kernel</name>
     <description>Core Parts of Axis 2.0. This includes Axis 2.0 engine, Client API, Addressing support, etc.,
     </description>
