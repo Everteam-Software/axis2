@@ -185,10 +185,10 @@ public class RPCUtil {
             }
             Object[] objectArray;
             if (inAxisMessage.isWrapped()) {
-                objectArray = RPCUtil.processRequest(methodElement,
+                objectArray = RPCUtil.processRequest(methodElement.getFirstElement(),
                         method, inMessage.getAxisService().getObjectSupplier());
             } else {
-                objectArray = RPCUtil.processRequest((OMElement) methodElement.getParent(),
+                objectArray = RPCUtil.processRequest(methodElement,
                         method, inMessage.getAxisService().getObjectSupplier());
             }
             return method.invoke(implClass, objectArray);
