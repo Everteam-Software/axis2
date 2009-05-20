@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
 public interface WSDL2Constants {
@@ -26,9 +27,11 @@ public interface WSDL2Constants {
     String URI_WSDL2_SOAP = "http://www.w3.org/ns/wsdl/soap";
     String URI_WSDL2_HTTP = "http://www.w3.org/ns/wsdl/http";
     String URI_WSDL2_EXTENSIONS = "http://www.w3.org/ns/wsdl-extensions";
+    String URI_WSDL2_RPC = "http://www.w3.org/ns/wsdl/rpc";
     String SOAP_PREFIX = "wsoap";
     String HTTP_PREFIX = "whttp";
     String WSDL_EXTENTION_PREFIX = "wsdlx";
+    String WSDL_RPC_PREFIX = "wrpc";
     String SOAP_ENV_PREFIX = "soap";
     String DEFAULT_TARGET_NAMESPACE_PREFIX = "axis2";
     String DOCUMENTATION = "documentation";
@@ -73,6 +76,7 @@ public interface WSDL2Constants {
     String ATTRIBUTE_AUTHENTICATION_TYPE = "authenticationType";
     String ATTRIBUTE_AUTHENTICATION_REALM = "authenticationRealm";
     String ATTRIBUTE_STYLE = "style";
+    String ATTRIBUTE_SIGNATURE = "signature";
     String OPERATION_STYLE = "operationStyle";
     String IN_PUT_LOCAL_NAME = "input";
     String OUT_PUT_LOCAL_NAME = "output";
@@ -116,11 +120,17 @@ public interface WSDL2Constants {
 
     String ATTR_WSDLX_SAFE = "wsdlx:safe";
 
+    String ATTR_WRPC_SIGNATURE = "wrpc:signature";
+
     String SOAP_VERSION_1_1 = "1.1";
     String SOAP_VERSION_1_2 = "1.2";
 
     String MESSAGE_LABEL_IN = "In";
     String MESSAGE_LABEL_OUT = "Out";
+
+    String RPC_IN = "#in";
+    String RPC_RETURN = "#return";
+    String RPC_INOUT = "#inout";
 
     String HTTP_LOCATION_TABLE = "HTTPLocationTable";
 

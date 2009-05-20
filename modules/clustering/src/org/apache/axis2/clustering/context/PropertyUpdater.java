@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context;
 
 import org.apache.axis2.context.AbstractContext;
@@ -36,7 +37,9 @@ public class PropertyUpdater implements Serializable {
     private Map properties;
 
     public void updateProperties(AbstractContext abstractContext) {
-        log.debug("Updating props in " + abstractContext);
+        if (log.isDebugEnabled()) {
+            log.debug("Updating props in " + abstractContext);
+        }
         if (abstractContext != null) {
             for (Iterator iter = properties.keySet().iterator(); iter.hasNext();) {
                 String key = (String) iter.next();
@@ -46,8 +49,10 @@ public class PropertyUpdater implements Serializable {
                     abstractContext.removePropertyNonReplicable(key);
                 } else {  // it is updated/added
                     abstractContext.setNonReplicableProperty(key, propDiff.getValue());
-                    log.debug("Added prop=" + key + ", value=" + propDiff.getValue() +
-                              " to context " + abstractContext);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Added prop=" + key + ", value=" + propDiff.getValue() +
+                                  " to context " + abstractContext);
+                    }
                 }
             }
         }

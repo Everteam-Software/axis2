@@ -16,13 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context.commands;
 
-import org.apache.axis2.context.ConfigurationContext;
-import org.apache.axis2.context.ServiceGroupContext;
 import org.apache.axis2.clustering.ClusteringFault;
 import org.apache.axis2.clustering.context.ContextClusteringCommand;
-import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.context.ConfigurationContext;
 
 /**
  *

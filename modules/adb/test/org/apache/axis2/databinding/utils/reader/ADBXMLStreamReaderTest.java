@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.databinding.utils.reader;
 
 import org.apache.axiom.attachments.ByteArrayDataSource;
@@ -28,7 +29,9 @@ import org.apache.axiom.om.impl.serialize.StreamingOMSerializer;
 import org.apache.axiom.om.util.Base64;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axis2.databinding.ADBBean;
+import org.apache.axis2.databinding.ADBException;
 import org.apache.axis2.databinding.utils.Constants;
+import org.apache.axis2.databinding.utils.writer.MTOMAwareXMLStreamWriter;
 import org.apache.axis2.util.StreamWrapper;
 import org.custommonkey.xmlunit.XMLTestCase;
 import org.w3c.dom.Document;
@@ -211,7 +214,7 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
             DummyADBBean dummyBean = new DummyADBBean();
             propertyList.add(dummyBean);
 
-            String[] array = new String[] { };
+            String[] array = new String[] {};
             propertyList.add(new QName("AdditionalDependent"));
             propertyList.add(array);
 
@@ -308,6 +311,21 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
 
         public XMLStreamReader getPullParser(QName adbBeanQName) {
             return new ADBXMLStreamReaderImpl(adbBeanQName, propertyList.toArray(), null);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter)
+                throws XMLStreamException, ADBException {
+            serialize(parentQName,factory,xmlWriter,false);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter,
+                              boolean serializeType)
+                throws XMLStreamException, ADBException {
+            throw new UnsupportedOperationException("Un implemented method");
         }
     }
 
@@ -406,10 +424,10 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
         try {
             String expectedXML =
                     "<ns1:TestComplexStringArrayScenario xmlns:ns1=\"http://testComplexStringArrayScenario.org\">" +
-                            "<StringInfo>Some Text 0</StringInfo>" +
-                            "<StringInfo>Some Text 1</StringInfo>" +
-                            "<StringInfo>Some Text 2</StringInfo>" +
-                            "<StringInfo>Some Text 3</StringInfo>" +
+                            "<StringInfo><array>Some Text 0</array>" +
+                            "<array>Some Text 1</array>" +
+                            "<array>Some Text 2</array>" +
+                            "<array>Some Text 3</array></StringInfo>" +
                             "</ns1:TestComplexStringArrayScenario>";
 
             ArrayList propertyList = new ArrayList();
@@ -447,10 +465,10 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
         try {
             String expectedXML =
                     "<ns1:TestComplexStringArrayScenario xmlns:ns1=\"http://testComplexStringArrayScenario.org\">" +
-                            "<StringInfo>Some Text 0</StringInfo>" +
-                            "<StringInfo xsi:nil=\"true\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"/>" +
-                            "<StringInfo>Some Text 2</StringInfo>" +
-                            "<StringInfo>Some Text 3</StringInfo>" +
+                            "<StringInfo><array>Some Text 0</array>" +
+                            "<array xsi:nil=\"true\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"/>" +
+                            "<array>Some Text 2</array>" +
+                            "<array>Some Text 3</array></StringInfo>" +
                             "</ns1:TestComplexStringArrayScenario>";
 
             ArrayList propertyList = new ArrayList();
@@ -497,10 +515,10 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
                             "<Age>25</Age>" +
                             "<Sex>Male</Sex>" +
                             "</Dependent>" +
-                            "<StringInfo>Some Text 0</StringInfo>" +
-                            "<StringInfo>Some Text 1</StringInfo>" +
-                            "<StringInfo>Some Text 2</StringInfo>" +
-                            "<StringInfo>Some Text 3</StringInfo>" +
+                            "<StringInfo><array>Some Text 0</array>" +
+                            "<array>Some Text 1</array>" +
+                            "<array>Some Text 2</array>" +
+                            "<array>Some Text 3</array></StringInfo>" +
                             "<Bar>Some More Text</Bar>" +
                             "</ns1:TestComplexStringArrayScenario>";
 
@@ -549,11 +567,11 @@ public class ADBXMLStreamReaderTest extends XMLTestCase {
             String expectedXML = "<ns1:TestComplexStringArrayScenario " +
                     "xmlns:ns1=\"http://testComplexStringArrayScenario.org\" " +
                     ">" +
-                    "<StringInfo>Some Text 0</StringInfo>" +
-                    "<StringInfo xsi:nil=\"true\" " +
-                    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"></StringInfo>" +
-                    "<StringInfo>Some Text 2</StringInfo>" +
-                    "<StringInfo>Some Text 3</StringInfo>" +
+                    "<StringInfo><array>Some Text 0</array>" +
+                    "<array xsi:nil=\"true\" " +
+                    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"></array>" +
+                    "<array>Some Text 2</array>" +
+                    "<array>Some Text 3</array></StringInfo>" +
                     "</ns1:TestComplexStringArrayScenario>";
 
             ArrayList propertyList = new ArrayList();

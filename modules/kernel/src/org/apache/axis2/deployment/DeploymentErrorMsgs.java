@@ -27,8 +27,9 @@ public class DeploymentErrorMsgs {
     public static final String BAD_PARAMETER_ARGUMENT = "badparaagu";
     public static final String CONFIG_NOT_FOUND = "confignotfound";
     public static final String CLASS_NOT_FOUND = "classnotfound";
-    public static final String DEPLOYING_MODULE = "deployeingmodule";
+    public static final String DEPLOYING_MODULE = "deployingmodule";
     public static final String DEPLOYING_WS = "deployingws";
+    public static final String DEPLOYING_POJO = "deployingpojo";
     public static final String ELEMENT_IS_NOT_ALLOWED = "elementisnotallow";
     public static final String ERROR_IN_LOADING_MESSAGE_RECEIVER = "errorinloadingmr";
     public static final String FLOWTYPE_IS_REQUIRED = "flowtypeisrequird";
@@ -66,4 +67,8 @@ public class DeploymentErrorMsgs {
     public static final String XML_STREAM_EXCEPTION = "StreamException";
     public static final String ERROR_LOADING_MESSAGE_BUILDER = "errorloadingbuilder";
     public static final String ERROR_LOADING_MESSAGE_FORMATTER = "errorloadingformatter";
+    public static final String DEPLOYING_EXCEPTION = "deployingexception";
+    public static final String STORING_FAULTY_SERVICE = "stroringfaultyservice";
+    public static final String JAXWS_JARS_MISSING = "jaxwsjarsmissing";
+    public static final String FAULTY_SERVICE_REMOVAL = "faultyserviceremoval";
 }

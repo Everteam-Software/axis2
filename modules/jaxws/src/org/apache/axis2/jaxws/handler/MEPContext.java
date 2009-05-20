@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -41,6 +42,10 @@ import java.util.Set;
  */
 public class MEPContext implements javax.xml.ws.handler.MessageContext {
 
+    // If this a request flow, then the MEP contains the request MC.
+    // If this a response flow, then the MEP contains both the request MC and the response MC.
+    // (Note that access to the requestMC properties is sometimes synchronized in the
+    // response flow.)
     protected MessageContext requestMC;
     protected MessageContext responseMC;
     
@@ -89,6 +94,10 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
     }
     
     public void setResponseMessageContext(MessageContext responseMC) {
+        if(this.responseMC != null) {
+            responseMC.setProperty(javax.xml.ws.handler.MessageContext.OUTBOUND_MESSAGE_ATTACHMENTS, 
+                    this.responseMC.getProperty(javax.xml.ws.handler.MessageContext.OUTBOUND_MESSAGE_ATTACHMENTS));
+        }
         // TODO does ApplicationAccessLocked mean anything here? -- method is protected, so probably not
         this.responseMC = responseMC;
         // if callers are being careful, the responseMC should not be set
@@ -149,21 +158,25 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         if (responseMC != null) {
             responseMC.getProperties().clear();
         }
-        requestMC.getProperties().clear();
+        synchronized (requestMC) {
+            requestMC.getProperties().clear();
+        }
     }
 
     public boolean containsKey(Object key) {
         if (isApplicationAccessLocked()) {
             return getApplicationScopedProperties().containsKey(key);
         }
-        if (responseMC != null) {
-            boolean containsKey = responseMC.getProperties().containsKey(key) || requestMC.getProperties().containsKey(key);
-            if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
-                return containsKey;
+        synchronized (requestMC) {
+            if (responseMC != null) {
+                boolean containsKey = responseMC.containsKey(key) || requestMC.containsKey(key);
+                if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
+                    return containsKey;
+                }
             }
-        }
-        if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
-            return requestMC.getProperties().containsKey(key);
+            if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
+                return requestMC.containsKey(key);
+            }
         }
         return false;
     }
@@ -173,7 +186,13 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             return getApplicationScopedProperties().containsValue(value);
         }
         if (responseMC != null) {
-            return responseMC.getProperties().containsValue(value) || requestMC.getProperties().containsValue(value);
+
+            if (responseMC.getProperties().containsValue(value)) {
+                return true; 
+            }
+            synchronized (requestMC) {
+                return requestMC.getProperties().containsValue(value);
+            }
         }
         return requestMC.getProperties().containsValue(value);
     }
@@ -185,7 +204,10 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             return getApplicationScopedProperties().entrySet();
         }
         HashMap tempProps = new HashMap();
-        tempProps.putAll(requestMC.getProperties());
+        
+        synchronized (requestMC) {
+            tempProps.putAll(requestMC.getProperties());
+        }
         if (responseMC != null) {
             tempProps.putAll(responseMC.getProperties());
         }
@@ -201,8 +223,10 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
                 }
             }
         }
-        if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
-            return requestMC.getProperty(key);
+        synchronized (requestMC) {
+            if ((getScope((String)key) == Scope.APPLICATION) || (!isApplicationAccessLocked())) {
+                return requestMC.getProperty(key);
+            }
         }
         return null;
     }
@@ -211,10 +235,12 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         if (isApplicationAccessLocked()) {
             return getApplicationScopedProperties().isEmpty();
         }
-        if (responseMC != null) {
-            return requestMC.getProperties().isEmpty() && requestMC.getProperties().isEmpty();
+        synchronized (requestMC) {
+            if (responseMC != null) {
+                return requestMC.getProperties().isEmpty() && requestMC.getProperties().isEmpty();
+            }
+            return requestMC.getProperties().isEmpty();
         }
-        return requestMC.getProperties().isEmpty();
     }
 
     public Set keySet() {
@@ -222,7 +248,9 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             return getApplicationScopedProperties().keySet();
         }
         HashMap tempProps = new HashMap();
-        tempProps.putAll(requestMC.getProperties());
+        synchronized (requestMC) {
+            tempProps.putAll(requestMC.getProperties());
+        }
         if (responseMC != null) {
             tempProps.putAll(responseMC.getProperties());
         }
@@ -236,13 +264,15 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         if (scopes.get(key) == null) {  // check the scopes object directly, not through getScope()!!
             setScope(key, Scope.HANDLER);
         }
-        if (requestMC.getProperties().containsKey(key)) {
+        synchronized (requestMC) {
+            if (requestMC.containsKey(key)) {
+                return requestMC.setProperty(key, value);
+            }
+            if (responseMC != null) {
+                return responseMC.setProperty(key, value);
+            }
             return requestMC.setProperty(key, value);
         }
-        if (responseMC != null) {
-            return responseMC.setProperty(key, value);
-        }
-        return requestMC.setProperty(key, value);
     }
 
     public void putAll(Map t) {
@@ -257,7 +287,9 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             responseMC.setProperties(t);
         }
         else {
-            requestMC.setProperties(t);
+            synchronized (requestMC) {
+                requestMC.setProperties(t);
+            }
         }
     }
 
@@ -270,15 +302,18 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         }
         
         // yes, remove from both and return the right object
+        // TODO This won't work because getProperties returns a temporary map
         Object retVal = null;
         if (responseMC != null) {
             retVal = responseMC.getProperties().remove(key);
         }
-        if (retVal == null) {
-            return requestMC.getProperties().remove(key);
-        }
-        else {
-            requestMC.getProperties().remove(key);
+        synchronized (requestMC) {
+            if (retVal == null) {
+                return requestMC.getProperties().remove(key);
+            }
+            else {
+                requestMC.getProperties().remove(key);
+            }
         }
         return retVal;
     }
@@ -291,7 +326,9 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
         // The properties must be combined together because some
         // keys may be the same on the request and the response.
         HashMap tempProps = new HashMap();
-        tempProps.putAll(requestMC.getProperties());
+        synchronized (requestMC) {
+            tempProps.putAll(requestMC.getProperties());
+        }
         if (responseMC != null) {
             tempProps.putAll(responseMC.getProperties());
         }
@@ -303,7 +340,9 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
             return getApplicationScopedProperties().values();
         }
         HashMap tempProps = new HashMap();
-        tempProps.putAll(requestMC.getProperties());
+        synchronized (requestMC) {
+            tempProps.putAll(requestMC.getProperties());
+        }
         if (responseMC != null) {
             tempProps.putAll(responseMC.getProperties());
         }
@@ -352,21 +391,22 @@ public class MEPContext implements javax.xml.ws.handler.MessageContext {
      */
     public Map<String, Object> getApplicationScopedProperties() {
         Map<String, Object> tempMap = new HashMap<String, Object>();
-        // better performance:
         if (!scopes.containsValue(Scope.APPLICATION)) {
             return tempMap;
         }
-        for(Iterator it = requestMC.getProperties().keySet().iterator(); it.hasNext();) {
-            String key = (String)it.next();
-            if ((getScope(key).equals(Scope.APPLICATION) && (requestMC.getProperties().containsKey(key)))) {
-                tempMap.put(key, get(key));
+        synchronized (requestMC) {
+            for(Iterator it = requestMC.getProperties().entrySet().iterator(); it.hasNext();) {
+                Entry entry = (Entry)it.next();
+                if (getScope((String)entry.getKey()).equals(Scope.APPLICATION)) {
+                    tempMap.put((String)entry.getKey(), entry.getValue());
+                }
             }
         }
         if (responseMC != null) {
-            for(Iterator it = responseMC.getProperties().keySet().iterator(); it.hasNext();) {
-                String key = (String)it.next();
-                if ((getScope(key).equals(Scope.APPLICATION) && (responseMC.getProperties().containsKey(key)))) {
-                    tempMap.put(key, get(key));
+            for(Iterator it = responseMC.getProperties().entrySet().iterator(); it.hasNext();) {
+                Entry entry = (Entry)it.next();
+                if (getScope((String)entry.getKey()).equals(Scope.APPLICATION)) {
+                    tempMap.put((String)entry.getKey(), entry.getValue());
                 }
             }
         }

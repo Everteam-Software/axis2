@@ -16,19 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.innerparticles;
 
 import com.mynamespace.testinnerparticle.*;
-import org.apache.axiom.om.OMElement;
+import junit.framework.TestCase;
 import org.apache.axiom.om.OMAbstractFactory;
+import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axis2.databinding.ADBException;
 
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-
-import junit.framework.TestCase;
-
 import java.io.ByteArrayInputStream;
 
 
@@ -304,6 +303,38 @@ public class InnerParticlesTest extends TestCase {
         } catch (XMLStreamException e) {
             fail();
         } catch (Exception e) {
+            fail();
+        }
+    }
+
+    public void testTestComplexTypeElement(){
+        TestComplexTypeElement testComplexTypeElement = new TestComplexTypeElement();
+
+        TestComplexType testComplexType = new TestComplexType();
+        testComplexTypeElement.setTestComplexTypeElement(testComplexType);
+
+        TestElement_type0 testElement_type0 = new TestElement_type0();
+        testElement_type0.setParam("param");
+        testComplexType.setTestElement(testElement_type0);
+
+        TestComplexTypeSequence_type0 testComplexTypeSequence_type0 = new TestComplexTypeSequence_type0();
+        testComplexType.setTestComplexTypeSequence_type0(testComplexTypeSequence_type0);
+
+        try {
+            OMElement omElement = testComplexTypeElement.getOMElement(
+                    TestComplexTypeElement.MY_QNAME,OMAbstractFactory.getOMFactory());
+            String omElementString = omElement.toStringWithConsume();
+            System.out.println("OM String ==> " + omElementString);
+            XMLStreamReader xmlReader = StAXUtils.createXMLStreamReader(
+                    new ByteArrayInputStream(omElementString.getBytes()));
+            TestComplexTypeElement result = TestComplexTypeElement.Factory.parse(xmlReader);
+            assertEquals(result.getTestComplexTypeElement().getTestElement().getParam(),"param");
+        } catch (ADBException e) {
+            fail();
+        } catch (XMLStreamException e) {
+            fail();
+        } catch (Exception e) {
+            e.printStackTrace();
             fail();
         }
     }

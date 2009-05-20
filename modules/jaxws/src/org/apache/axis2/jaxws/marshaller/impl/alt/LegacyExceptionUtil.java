@@ -63,7 +63,6 @@ import java.util.Set;
  *
  */
 
-/** @author scheu */
 class LegacyExceptionUtil {
 
     private static Log log = LogFactory.getLog(LegacyExceptionUtil.class);
@@ -114,7 +113,11 @@ class LegacyExceptionUtil {
             Class faultBeanClass = null;
             if (faultBeanName != null && faultBeanName.length() > 0) {
                 try {
-                    faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName);
+                    try {
+                        faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName);
+                    } catch (ClassNotFoundException e){
+                        faultBeanClass = MethodMarshallerUtils.loadClass(faultBeanName, fd.getOperationDescription().getEndpointInterfaceDescription().getEndpointDescription().getAxisService().getClassLoader());
+                    }
                 } catch (Throwable throwable) {
                     if (log.isDebugEnabled()) {
                         log.debug("Cannot load fault bean class = " + faultBeanName +
@@ -134,7 +137,7 @@ class LegacyExceptionUtil {
 
                 // Get the map of child objects
                 Map<String, Object> childObjects = getChildObjectsMap(t, pdMap);
-
+                Map<String, Class> declaringClass = new HashMap<String, Class>();
                 List<String> childNames = new ArrayList<String>(childObjects.keySet());
 
                 if (log.isErrorEnabled()) {
@@ -145,19 +148,13 @@ class LegacyExceptionUtil {
                 Map<String, PropertyDescriptorPlus> pdMapForBean =
                         marshalDesc.getPropertyDescriptorMap(faultBeanClass);
                 faultBean =
-                        wrapperTool.wrap(faultBeanClass, childNames, childObjects, pdMapForBean);
+                        wrapperTool.wrap(faultBeanClass, childNames, childObjects, declaringClass, pdMapForBean);
                 if (log.isErrorEnabled()) {
                     log.debug("Completed creation of the fault bean.");
                 }
             } else {
-                //if (log.isErrorEnabled()) {
-                //    log.debug("The fault bean could not be loaded...Fallback to using the fault exception: " + t.getClass());
-                //}
-                //return t;
-                throw ExceptionFactory
-                        .makeWebServiceException(Messages.getMessage("faultProcessingNotSupported",
-                                                                     "the @WebFault faultbean is missing for " +
-                                                                             t.getClass()));
+                throw ExceptionFactory.makeWebServiceException(
+                		Messages.getMessage("faultProcessingNotSupported",t.getClass().getName()));
             }
 
         } catch (Exception e) {

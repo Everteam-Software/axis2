@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.context.factory;
 
 import org.apache.axis2.jaxws.context.WebServiceContextImpl;
+import org.apache.axis2.jaxws.context.utils.ContextUtils;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.handler.LogicalMessageContext;
-import org.apache.axis2.jaxws.handler.MEPContext;
 import org.apache.axis2.jaxws.handler.SoapMessageContext;
 
 import javax.xml.ws.WebServiceContext;
@@ -45,7 +46,9 @@ public class MessageContextFactory {
      */
     public static SoapMessageContext createSoapMessageContext(
             org.apache.axis2.jaxws.core.MessageContext jaxwsMessageContext) {
-        return new SoapMessageContext(jaxwsMessageContext);
+        SoapMessageContext soapCtx = new SoapMessageContext(jaxwsMessageContext);
+        ContextUtils.addProperties(soapCtx, jaxwsMessageContext);
+        return soapCtx;
     }
     
     /**

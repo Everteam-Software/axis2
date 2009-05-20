@@ -16,8 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.server.endpoint.injection.impl;
 
+import org.apache.axis2.java.security.AccessController;
+import org.apache.axis2.jaxws.context.WebServiceContextImpl;
+import org.apache.axis2.jaxws.i18n.Messages;
+import org.apache.axis2.jaxws.injection.ResourceInjectionException;
+import org.apache.axis2.jaxws.server.endpoint.injection.WebServiceContextInjector;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import javax.annotation.Resource;
+import javax.xml.ws.WebServiceContext;
+import javax.xml.ws.handler.MessageContext;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
@@ -27,18 +39,6 @@ import java.lang.reflect.Modifier;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.annotation.Resource;
-import javax.xml.ws.WebServiceContext;
-import javax.xml.ws.handler.MessageContext;
-
-import org.apache.axis2.java.security.AccessController;
-import org.apache.axis2.jaxws.context.WebServiceContextImpl;
-import org.apache.axis2.jaxws.i18n.Messages;
-import org.apache.axis2.jaxws.injection.ResourceInjectionException;
-import org.apache.axis2.jaxws.server.endpoint.injection.WebServiceContextInjector;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 public class WebServiceContextInjectorImpl implements WebServiceContextInjector {
     private static final Log log = LogFactory.getLog(WebServiceContextInjectorImpl.class);
@@ -126,8 +126,7 @@ public class WebServiceContextInjectorImpl implements WebServiceContextInjector 
       */
     public void injectOnClass(Object resource, Object instance, Class clazz)
             throws ResourceInjectionException {
-        throw new UnsupportedOperationException(
-                "WebServiceContext Injeciton on Class not yet supported");
+        throw new UnsupportedOperationException(Messages.getMessage("injectOnClsErr"));
 
     }
 

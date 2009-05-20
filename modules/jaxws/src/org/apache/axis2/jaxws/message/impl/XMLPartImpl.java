@@ -16,9 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
+import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.OMElement;
+import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.factory.SAAJConverterFactory;
 import org.apache.axis2.jaxws.message.util.SAAJConverter;
@@ -75,7 +78,9 @@ public class XMLPartImpl extends XMLPartBase {
 
     @Override
     protected OMElement _convertSE2OM(SOAPEnvelope se) throws WebServiceException {
-        return getSAAJConverter().toOM(se);
+        Attachments attachments = (parent == null) ? 
+                null : parent.attachments;
+        return getSAAJConverter().toOM(se, attachments);
     }
 
     @Override

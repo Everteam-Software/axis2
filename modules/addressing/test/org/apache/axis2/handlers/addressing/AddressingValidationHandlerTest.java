@@ -23,6 +23,7 @@ import junit.framework.TestCase;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.AddressingConstants;
+import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
@@ -33,7 +34,7 @@ import org.apache.axis2.handlers.util.TestUtil;
 import javax.xml.namespace.QName;
 
 public class AddressingValidationHandlerTest extends TestCase implements AddressingConstants {
-    AddressingInHandler inHandler = new AddressingFinalInHandler();
+    AddressingInHandler inHandler = new AddressingInHandler();
     AddressingValidationHandler validationHandler = new AddressingValidationHandler();
     String addressingNamespace = AddressingConstants.Final.WSA_NAMESPACE;
     String versionDirectory = "final";
@@ -48,7 +49,7 @@ public class AddressingValidationHandlerTest extends TestCase implements Address
         String testfile = directory + "/" + versionDirectory + "/" + testName;
 
         MessageContext mc = new MessageContext();
-
+        mc.setConfigurationContext(ConfigurationContextFactory.createEmptyConfigurationContext());
         StAXSOAPModelBuilder omBuilder = testUtil.getOMBuilder(testfile);
         mc.setEnvelope(omBuilder.getSOAPEnvelope());
 
@@ -75,17 +76,6 @@ public class AddressingValidationHandlerTest extends TestCase implements Address
         catch (AxisFault af) {
             //Test passed.
         }
-    }
-
-    public void testValidateActionFlag() throws Exception {
-        MessageContext mc = testAddressingMessage("valid-messages", "soapmessage.xml");
-
-        // Tell validation handler NOT to check action dispatch
-        mc.setProperty(AddressingConstants.ADDR_VALIDATE_ACTION, Boolean.FALSE);
-
-        // Even though this message has an action that will not dispatch to an
-        // AxisOperation, this shouldn't throw a fault.
-        validationHandler.invoke(mc);
     }
 
     public void testMessageWithOmittedMessageIDInOnlyMEP() throws Exception {

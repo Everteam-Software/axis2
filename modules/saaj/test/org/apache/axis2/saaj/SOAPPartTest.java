@@ -16,11 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import junit.framework.TestCase;
+import org.apache.axiom.soap.impl.dom.soap11.SOAP11Factory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -28,6 +31,7 @@ import javax.xml.soap.MessageFactory;
 import javax.xml.soap.Name;
 import javax.xml.soap.SOAPBody;
 import javax.xml.soap.SOAPElement;
+import javax.xml.soap.SOAPEnvelope;
 import javax.xml.soap.SOAPHeader;
 import javax.xml.soap.SOAPHeaderElement;
 import javax.xml.soap.SOAPMessage;
@@ -185,5 +189,101 @@ public class SOAPPartTest extends TestCase {
         } catch (Exception e) {
             fail("Unexpected Exception " + e);
         }
+    }
+    
+    /**
+     * Check parent processing of SOAPMessage
+     */
+    public void test_parentAccess1() throws Exception {
+
+        MessageFactory mf = MessageFactory.newInstance();
+        SOAPMessage m = mf.createMessage();
+        SOAPPart sp = m.getSOAPPart();
+        Node node = sp.getParentNode();
+        assertTrue(node == null);
+        
+        SOAPElement e = sp.getParentElement();
+        assertTrue(node == null);
+    }
+    
+    /**
+     * Check parent processing of SOAPMessage
+     */
+    public void test_parentAccess2() throws Exception {
+
+        MessageFactory mf = MessageFactory.newInstance();
+        SOAPMessage m = mf.createMessage();
+        SOAPPart sp = m.getSOAPPart();
+        SOAPEnvelope se = sp.getEnvelope();
+        Node node = se.getParentNode();
+        assertTrue(node == sp);
+        node = node.getParentNode();
+        assertTrue(node == null);
+
+        SOAPElement e = se.getParentElement();
+        assertTrue(node == null);
+    }
+    
+    /**
+     * Check parent processing of SOAPMessage
+     */
+    public void test_parentAccess3() throws Exception {
+
+        SOAP11Factory axiomSF = new SOAP11Factory();
+        org.apache.axiom.soap.SOAPEnvelope axiomSE = axiomSF.createSOAPEnvelope();
+        org.apache.axiom.soap.SOAPMessage axiomSM = axiomSF.createSOAPMessage(axiomSE, null);
+        
+        SOAPEnvelopeImpl se = 
+            new SOAPEnvelopeImpl((org.apache.axiom.soap.impl.dom.SOAPEnvelopeImpl)axiomSE);
+        SOAPMessageImpl sm = new SOAPMessageImpl(se);
+        SOAPPartImpl sp = new SOAPPartImpl(sm, se);
+        
+        Node node = se.getParentNode();
+        assertTrue(node == sp);
+        node = node.getParentNode();
+        assertTrue(node == null);
+
+        SOAPElement e = se.getParentElement();
+        assertTrue(node == null);
+    }
+    
+    public void testNodeTypes() throws Exception {
+        MessageFactory fact = MessageFactory.newInstance();
+        SOAPMessage message = fact.createMessage();
+        SOAPPart soapPart = message.getSOAPPart();     
+
+        assertTrue("first child", soapPart.getFirstChild() instanceof SOAPEnvelope);
+        assertTrue("last child", soapPart.getLastChild() instanceof SOAPEnvelope);
+                
+        NodeList nodes = soapPart.getChildNodes();
+        
+        assertEquals(1, nodes.getLength());
+        for (int i = 0; i < nodes.getLength(); i++) {
+            assertTrue(nodes.item(i) instanceof SOAPEnvelope);
+        }             
+    }
+    
+    public void testRemoveChild1() throws Exception {
+        MessageFactory fact = MessageFactory.newInstance();
+        SOAPMessage message = fact.createMessage();
+        SOAPPart soapPart = message.getSOAPPart();  
+                                
+        assertTrue("soap env before", soapPart.getFirstChild() instanceof SOAPEnvelope);
+        
+        soapPart.removeChild(soapPart.getFirstChild());
+        
+        assertTrue("soap env after", soapPart.getFirstChild() == null);
+    }
+    
+    public void testRemoveChild2() throws Exception {
+        MessageFactory fact = MessageFactory.newInstance();
+        SOAPMessage message = fact.createMessage();
+        SOAPPart soapPart = message.getSOAPPart();  
+                                
+        assertTrue("soap env before", soapPart.getFirstChild() instanceof SOAPEnvelope);
+        
+        soapPart.removeChild(soapPart.getEnvelope());
+        
+        assertTrue("soap env after", soapPart.getFirstChild() == null);
     }
 }

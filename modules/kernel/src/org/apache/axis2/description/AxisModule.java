@@ -1,18 +1,21 @@
 /*
-* Copyright 2004,2005 The Apache Software Foundation.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
 
 package org.apache.axis2.description;
@@ -63,7 +66,7 @@ public class AxisModule implements ParameterInclude {
     private String version;
 
     // to store module operations , which are suppose to be added to a service if it is engaged to a service
-    private HashMap operations = new HashMap();
+    private HashMap<QName, AxisOperation> operations = new HashMap<QName, AxisOperation>();
     private AxisConfiguration parent;
 
     /*
@@ -80,6 +83,7 @@ public class AxisModule implements ParameterInclude {
     public static final String VERSION_SNAPSHOT = "SNAPSHOT";
     public static final String MODULE_SERVICE = "moduleService";
 
+    private PolicySubject policySubject = new PolicySubject();
 
     /**
      * Constructor ModuleDescription.
@@ -160,7 +164,7 @@ public class AxisModule implements ParameterInclude {
         return name;
     }
 
-    public HashMap getOperations() {
+    public HashMap<QName, AxisOperation> getOperations() {
         return operations;
     }
 
@@ -178,7 +182,7 @@ public class AxisModule implements ParameterInclude {
         return parameters.getParameter(name);
     }
 
-    public ArrayList getParameters() {
+    public ArrayList<Parameter> getParameters() {
         return parameters.getParameters();
     }
 
@@ -258,6 +262,10 @@ public class AxisModule implements ParameterInclude {
             policyInclude = new PolicyInclude();
         }
         return policyInclude;
+    }
+    
+    public PolicySubject getPolicySubject() {
+    	return policySubject;
     }
 
     public String getModuleDescription() {

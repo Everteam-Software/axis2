@@ -1,18 +1,21 @@
 @echo off
 
-REM  Copyright 2001,2004-2005 The Apache Software Foundation
-REM
-REM  Licensed under the Apache License, Version 2.0 (the "License");
-REM  you may not use this file except in compliance with the License.
-REM  You may obtain a copy of the License at
-REM
-REM      http://www.apache.org/licenses/LICENSE-2.0
-REM
-REM  Unless required by applicable law or agreed to in writing, software
-REM  distributed under the License is distributed on an "AS IS" BASIS,
-REM  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-REM  See the License for the specific language governing permissions and
-REM  limitations under the License.
+REM  Licensed to the Apache Software Foundation (ASF) under one
+REM  or more contributor license agreements. See the NOTICE file
+REM  distributed with this work for additional information
+REM  regarding copyright ownership. The ASF licenses this file
+REM  to you under the Apache License, Version 2.0 (the
+REM  "License"); you may not use this file except in compliance
+REM  with the License. You may obtain a copy of the License at
+REM  
+REM  http://www.apache.org/licenses/LICENSE-2.0
+REM  
+REM  Unless required by applicable law or agreed to in writing,
+REM  software distributed under the License is distributed on an
+REM  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+REM  KIND, either express or implied. See the License for the
+REM  specific language governing permissions and limitations
+REM  under the License.
 
 rem ---------------------------------------------------------------------------
 rem Startup script for the WSDLJava
@@ -45,7 +48,7 @@ goto end
 rem check the AXIS2_HOME environment variable
 if not "%AXIS2_HOME%" == "" goto gotHome
 set AXIS2_HOME=%CURRENT_DIR%
-if exist "%AXIS2_HOME%\bin\start.bat" goto okHome
+if exist "%AXIS2_HOME%\bin\axis2.bat" goto okHome
 
 rem guess the home. Jump one directory up to check if that is the home
 cd ..

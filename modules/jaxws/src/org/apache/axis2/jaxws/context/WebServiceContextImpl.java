@@ -16,14 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.context;
 
+import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.addressing.util.EndpointReferenceUtils;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.w3c.dom.Element;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.xml.namespace.QName;
+import javax.xml.ws.EndpointReference;
 import javax.xml.ws.WebServiceContext;
 import javax.xml.ws.handler.MessageContext;
+import javax.xml.ws.wsaddressing.W3CEndpointReference;
 import java.security.Principal;
 
 public class WebServiceContextImpl implements WebServiceContext {
@@ -91,4 +99,35 @@ public class WebServiceContextImpl implements WebServiceContext {
         this.soapMessageContext = soapMessageContext;
     }
 
+    public <T extends EndpointReference> T getEndpointReference(Class<T> clazz, Element... referenceParameters) {
+        EndpointReference jaxwsEPR = null;
+        String addressingNamespace = EndpointReferenceUtils.getAddressingNamespace(clazz);
+        
+        if (soapMessageContext != null) {
+            QName service = (QName) soapMessageContext.get(MessageContext.WSDL_SERVICE);
+            QName endpoint = (QName) soapMessageContext.get(MessageContext.WSDL_PORT);
+            
+            org.apache.axis2.addressing.EndpointReference axis2EPR =
+                EndpointReferenceUtils.createAxis2EndpointReference(null, service, endpoint, null, addressingNamespace);
+            
+            try {
+                EndpointReferenceUtils.addReferenceParameters(axis2EPR, referenceParameters);
+                jaxwsEPR = EndpointReferenceUtils.convertFromAxis2(axis2EPR, addressingNamespace);
+            }
+            catch (Exception e) {
+                throw ExceptionFactory.makeWebServiceException(
+                       Messages.getMessage("endpointRefConstructionFailure3", e.toString()));
+            }
+        }
+        else {
+            throw new IllegalStateException(
+                      Messages.getMessage("webServiceContextErr1"));
+        }
+        
+        return clazz.cast(jaxwsEPR);
+    }
+
+    public EndpointReference getEndpointReference(Element... referenceParameters) {
+        return getEndpointReference(W3CEndpointReference.class, referenceParameters);
+    }
 }

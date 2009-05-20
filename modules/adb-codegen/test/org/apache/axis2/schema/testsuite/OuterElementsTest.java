@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.testsuite;
 
 import org.apache.axiom.om.OMAbstractFactory;
@@ -146,12 +147,12 @@ public class OuterElementsTest extends AbstractTest {
     }
 
     public void testAnyType() {
-        OMElement returnObject;
+        Object returnObject;
         try {
             returnObject = testAnyType(null, NILLABLE_TRUE);
-            assertTrue(isOMElementsEqual(returnObject, null));
-            returnObject = testAnyType(getOMElement(), NILLABLE_TRUE);
-            assertTrue(isOMElementsEqual(returnObject, getOMElement()));
+            assertTrue(isObjectsEqual(returnObject, null));
+            returnObject = testAnyType(new Double(23.45), NILLABLE_TRUE);
+            assertTrue(isObjectsEqual(returnObject, new Double(23.45)));
         } catch (Exception e) {
             fail();
         }
@@ -164,16 +165,16 @@ public class OuterElementsTest extends AbstractTest {
         }
 
         try {
-            returnObject = testAnyType(getOMElement(), NILLABLE_FALSE);
-            assertTrue(isOMElementsEqual(returnObject, getOMElement()));
+            returnObject = testAnyType(new Double(23.45), NILLABLE_FALSE);
+            assertTrue(isObjectsEqual(returnObject, new Double(23.45)));
         } catch (Exception e) {
             fail();
         }
     }
 
-    private OMElement testAnyType(OMElement innerElement, int type) throws Exception {
+    private Object testAnyType(Object innerElement, int type) throws Exception {
         OMElement omElement;
-        OMElement returnString = null;
+        Object returnObject = null;
         String omElementString;
 
         switch (type) {
@@ -185,7 +186,7 @@ public class OuterElementsTest extends AbstractTest {
                 System.out.println("OMElement ==> " + omElementString);
                 XMLStreamReader xmlReader =
                         StAXUtils.createXMLStreamReader(new ByteArrayInputStream(omElementString.getBytes()));
-                returnString = OuterTestAnyType1.Factory.parse(xmlReader).getOuterTestAnyType1();
+                returnObject = OuterTestAnyType1.Factory.parse(xmlReader).getOuterTestAnyType1();
                 break;
             }
 
@@ -197,11 +198,11 @@ public class OuterElementsTest extends AbstractTest {
                 System.out.println("OMElement ==> " + omElementString);
                 XMLStreamReader xmlReader =
                         StAXUtils.createXMLStreamReader(new ByteArrayInputStream(omElementString.getBytes()));
-                returnString = OuterTestAnyType2.Factory.parse(xmlReader).getOuterTestAnyType2();
+                returnObject = OuterTestAnyType2.Factory.parse(xmlReader).getOuterTestAnyType2();
                 break;
             }
         }
-        return returnString;
+        return returnObject;
     }
 
     public void testBookInformation() {

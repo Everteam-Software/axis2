@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl.codegen.extension;
 
 import org.apache.axis2.util.PrettyPrinter;
@@ -46,8 +47,10 @@ public class JavaPrettyPrinterExtension extends AbstractPrettyPrinterExtension {
             prettifyFile(file);
         } else if (file.isDirectory()) {
             File[] childFiles = file.listFiles();
-            for (int i = 0; i < childFiles.length; i++) {
-                prettify(childFiles[i], configuration);
+            if (childFiles != null) {
+                for (int i = 0; i < childFiles.length; i++) {
+                    prettify(childFiles[i], configuration);
+                }
             }
         }
     }

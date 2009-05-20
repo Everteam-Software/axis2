@@ -19,6 +19,8 @@
 
 package org.apache.axis2.phaserule;
 
+import java.util.List;
+
 import org.apache.axis2.AbstractTestCase;
 import org.apache.axis2.description.HandlerDescription;
 import org.apache.axis2.description.PhaseRule;
@@ -27,8 +29,6 @@ import org.apache.axis2.engine.DispatchPhase;
 import org.apache.axis2.engine.Handler;
 import org.apache.axis2.engine.Phase;
 import org.apache.axis2.phaseresolver.PhaseHolder;
-
-import java.util.ArrayList;
 
 public class PreDispatchPhaseRuleTest extends AbstractTestCase {
 
@@ -43,7 +43,7 @@ public class PreDispatchPhaseRuleTest extends AbstractTestCase {
         //TODO Fix me
         phaserul = new PreDispatchPhaseRuleTest("");
         axisSytem = new AxisConfiguration();
-        ArrayList inPhase = axisSytem.getInFlowPhases();
+        List inPhase = axisSytem.getInFlowPhases();
         Phase transportIN = new Phase("TransportIn");
         Phase preDispatch = new Phase("PreDispatch");
         DispatchPhase dispatchPhase = new DispatchPhase();
@@ -120,5 +120,61 @@ public class PreDispatchPhaseRuleTest extends AbstractTestCase {
             HandlerDescription metadata = (HandlerDescription) oh.get(i);
             System.out.println("Name:" + metadata.getName().getLocalPart());
         }*/
+    }
+
+    public void testPhaseLastAndAfter() throws Exception {
+
+        Phase phase = new Phase();
+
+        //////////////// handler 1 //////////////////////////
+        PhaseRuleHandler h1 = new PhaseRuleHandler("a");
+        HandlerDescription hd1 = new HandlerDescription("a");
+        h1.init(hd1);
+        hd1.setHandler(h1);
+        phase.addHandler(hd1);
+        /////////////////////////////////////////////////////
+
+        //////////////// handler 4 //////////////////////////
+        PhaseRule rule4 = new PhaseRule();
+        rule4.setPhaseLast(true);
+
+        PhaseRuleHandler h4 = new PhaseRuleHandler("d");
+        HandlerDescription hd4 = new HandlerDescription("d");
+        h4.init(hd4);
+
+        hd4.setHandler(h4);
+        hd4.setRules(rule4);
+        phase.addHandler(hd4);
+        ////////////////////////////////////////////////////
+
+        //////////////// handler 2 //////////////////////////
+        PhaseRule rule2 = new PhaseRule();
+        rule2.setAfter("a");
+
+        HandlerDescription hd2 = new HandlerDescription("b");
+        PhaseRuleHandler h2 = new PhaseRuleHandler("b");
+        h2.init(hd2);
+
+        hd2.setHandler(h2);
+        hd2.setRules(rule2);
+        phase.addHandler(hd2);
+        //////////////////////////////////////////////////////
+
+        //////////////// handler 3 //////////////////////////
+        PhaseRule rule3 = new PhaseRule();
+        rule3.setAfter("b");
+
+        HandlerDescription hd3 = new HandlerDescription("c");
+        PhaseRuleHandler h3 = new PhaseRuleHandler("c");
+        h3.init(hd3);
+
+        hd3.setHandler(h3);
+        hd3.setRules(rule3);
+        try {
+            phase.addHandler(hd3);
+        } catch (Exception e) {
+            fail("Adding handlers with after attribute to the phase behaviour failed");
+        }
+        //////////////////////////////////////////////////////
     }
 }

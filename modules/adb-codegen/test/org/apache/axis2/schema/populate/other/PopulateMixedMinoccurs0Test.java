@@ -16,22 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.populate.other;
 
 import junit.framework.TestCase;
+import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axis2.schema.populate.Util;
 
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import javax.xml.stream.XMLInputFactory;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.beans.IntrospectionException;
 import java.beans.BeanInfo;
+import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.ByteArrayInputStream;
-
-import org.apache.axiom.om.util.StAXUtils;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 public class PopulateMixedMinoccurs0Test extends TestCase {
 
@@ -81,7 +81,7 @@ public class PopulateMixedMinoccurs0Test extends TestCase {
     private void populateAndAssert(String s,int count) throws XMLStreamException, ClassNotFoundException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, IntrospectionException {
         XMLStreamReader reader = StAXUtils.createXMLStreamReader(new ByteArrayInputStream(s.getBytes()));
         Class clazz = Class.forName("org.recursion1.StringListResponseElement");
-        Class innerClazz = clazz.getDeclaredClasses()[0];
+        Class innerClazz = Util.getFactory(clazz);
         Method parseMethod = innerClazz.getMethod("parse", new Class[]{XMLStreamReader.class});
         Object obj = parseMethod.invoke(null, new Object[]{reader});
 

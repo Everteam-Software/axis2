@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ideaplugin.bean;
 
 import org.apache.tools.ant.Project;
@@ -24,11 +25,6 @@ import org.apache.tools.ant.taskdefs.Jar;
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Author: Deepal Jayasinghe
- * Date: Sep 23, 2005
- * Time: 8:48:21 PM
- */
 public class JarFileWriter extends Jar {
 
 

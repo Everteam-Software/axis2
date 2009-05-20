@@ -16,17 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.engine;
 
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.clustering.ClusterManager;
+import org.apache.axis2.clustering.ClusteringConstants;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
-import org.apache.axis2.AxisFault;
 import org.apache.axis2.description.AxisService;
 
 /**
  * This class provide a very convenient way of creating server and deploying services.
  * Once someone call start method it will fire up configuration context and start up the listeners.
- *  One can provide repository location and axis.xml as system properties.
+ * One can provide repository location and axis.xml as system properties.
  */
 
 public class AxisServer {
@@ -39,9 +42,10 @@ public class AxisServer {
 
     /**
      * If you do not want Axis2 to start the server automatically then pass the "false" else "true"
+     *
      * @param startOnDeploy : boolean
      */
-    public AxisServer(boolean startOnDeploy){
+    public AxisServer(boolean startOnDeploy) {
         this.startOnDeploy = startOnDeploy;
         listenerManager = new ListenerManager();
     }
@@ -56,17 +60,18 @@ public class AxisServer {
 
     /**
      * Will make Java class into a web service
+     *
      * @param serviceClassName : Actual class you want to make as a web service
      * @throws AxisFault : If something went wrong
      */
-    public void deployService(String serviceClassName) throws AxisFault{
-        if(configContext==null){
+    public void deployService(String serviceClassName) throws AxisFault {
+        if (configContext == null) {
             configContext = getConfigurationContext();
         }
         AxisConfiguration axisConfig = configContext.getAxisConfiguration();
-        AxisService service = AxisService.createService(serviceClassName,axisConfig);
+        AxisService service = AxisService.createService(serviceClassName, axisConfig);
         axisConfig.addService(service);
-        if(startOnDeploy){
+        if (startOnDeploy) {
             start();
         }
     }
@@ -74,13 +79,25 @@ public class AxisServer {
     /**
      * Will create a configuration context from the avialable data and then it
      * will start the listener manager
+     *
      * @throws AxisFault if something went wrong
      */
-    protected void start()throws AxisFault {
-        if(configContext==null){
+    protected void start() throws AxisFault {
+        if (configContext == null) {
             configContext = getConfigurationContext();
         }
-        if(!started){
+        if (!started) {
+
+            ClusterManager clusterManager =
+                    configContext.getAxisConfiguration().getClusterManager();
+            String avoidInit = ClusteringConstants.Parameters.AVOID_INITIATION;
+            if (clusterManager != null &&
+                clusterManager.getParameter(avoidInit) != null &&
+                ((String) clusterManager.getParameter(avoidInit).getValue()).equalsIgnoreCase("true")) {
+                clusterManager.setConfigurationContext(configContext);
+                clusterManager.init();
+            }
+
             listenerManager.startSystem(configContext);
             started = true;
         }
@@ -88,10 +105,11 @@ public class AxisServer {
 
     /**
      * Stop the server, automatically terminates the listener manager as well.
+     *
      * @throws AxisFault
      */
-    public void stop() throws AxisFault{
-        if(configContext!=null){
+    public void stop() throws AxisFault {
+        if (configContext != null) {
             configContext.terminate();
         }
     }
@@ -112,7 +130,7 @@ public class AxisServer {
      * @throws AxisFault
      */
     public ConfigurationContext getConfigurationContext() throws AxisFault {
-        if(configContext == null){
+        if (configContext == null) {
             configContext = createDefaultConfigurationContext();
         }
         return configContext;
@@ -120,6 +138,7 @@ public class AxisServer {
 
     /**
      * Users extending this class can override this method to supply a custom ConfigurationContext
+     *
      * @return ConfigurationContext
      * @throws AxisFault
      */

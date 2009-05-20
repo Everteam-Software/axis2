@@ -28,7 +28,9 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
     private Class type;
     private Class value;
     private String mappedName = "";
-
+    
+    // TODO: Remove the String versions of the Class attributes when the associated deprecated 
+    // methods are removed.
     private String typeString = "";
     private String valueString = "";
 
@@ -37,6 +39,31 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
 
     }
 
+    private WebServiceRefAnnot(
+            String name,
+            String wsdlLocation,
+            Class type,
+            Class value,
+            String mappedName) {
+        this.name = name;
+        this.wsdlLocation = wsdlLocation;
+        this.type = type;
+        this.value = value;
+        this.mappedName = mappedName;
+    }
+
+    /**
+     * 
+     * @deprecated The String values for type and value shouldn't be used.  Use {@link #WebServiceRefAnnot(String, String, Class, Class, String)}
+     * 
+     * @param name
+     * @param wsdlLocation
+     * @param type
+     * @param value
+     * @param mappedName
+     * @param typeString
+     * @param valueString
+     */
     private WebServiceRefAnnot(
             String name,
             String wsdlLocation,
@@ -58,6 +85,35 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
         return new WebServiceRefAnnot();
     }
 
+    public static WebServiceRefAnnot createWebServiceRefAnnotImpl(
+            String name,
+            String wsdlLocation,
+            Class type,
+            Class value,
+            String mappedName) {
+        return new WebServiceRefAnnot(name,
+                                      wsdlLocation,
+                                      type,
+                                      value,
+                                      mappedName);
+    }
+
+    /**
+     * 
+     * @deprecated The String values for type and value should not be used.  Use {@link #createWebServiceRefAnnotImpl(String, String, Class, Class, String)}
+     * 
+     *  There shouldn't be both a class and String for type and value; there isn't on the actual 
+     *  annotation.
+     * 
+     * @param name
+     * @param wsdlLocation
+     * @param type
+     * @param value
+     * @param mappedName
+     * @param typeString
+     * @param valueString
+     * @return
+     */
     public static WebServiceRefAnnot createWebServiceRefAnnotImpl(
             String name,
             String wsdlLocation,
@@ -102,12 +158,17 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
         return wsdlLocation;
     }
 
-    /** @return Returns the typeString. */
+    /** 
+     * @deprecated Use {@link #type()} 
+     * @return Returns the typeString. 
+     */
     public String getTypeString() {
         return typeString;
     }
 
-    /** @return Returns the valueString. */
+    /**
+     * @deprecated Use {@link #value()} 
+     * @return Returns the valueString. */
     public String getValueString() {
         return valueString;
     }
@@ -142,12 +203,16 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
         return wsdlLocation;
     }
 
-    /** @param typeString The typeString to set. */
+    /** 
+     * @deprecated Use {@link #setType(Class)}
+     * @param typeString The typeString to set. */
     public void setTypeString(String typeString) {
         this.typeString = typeString;
     }
 
-    /** @param valueString The valueString to set. */
+    /**
+     * @deprecated {@link #setValue(Class)} 
+     * @param valueString The valueString to set. */
     public void setValueString(String valueString) {
         this.valueString = valueString;
     }
@@ -170,10 +235,14 @@ public class WebServiceRefAnnot implements javax.xml.ws.WebServiceRef {
         sb.append(newLine);
         sb.append("@WebServiceRef.mappedName= " + mappedName);
         sb.append(newLine);
-        sb.append("@WebServiceRef.type= " + typeString);
+        sb.append("@WebServiceRef.typeString= " + typeString);
         sb.append(newLine);
-        sb.append("@WebServiceRef.value= " + valueString);
+        sb.append("@WebServiceRef.type= " + ((type != null) ? type.toString() : null));
         sb.append(newLine);
-		return sb.toString();
+        sb.append("@WebServiceRef.valueString= " + valueString);
+        sb.append(newLine);
+        sb.append("@WebServiceRef.value= " + ((value != null) ? value.toString() : null));
+        sb.append(newLine);
+        return sb.toString();
 	}
 }

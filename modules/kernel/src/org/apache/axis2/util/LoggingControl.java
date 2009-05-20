@@ -19,6 +19,10 @@
 
 package org.apache.axis2.util;
 
+import java.security.PrivilegedAction;
+
+import org.apache.axis2.java.security.AccessController;
+
 /**
  * This class provides a more efficient means of control over logging than
  * do most providers of the Common's logging API at the cost of runtime
@@ -35,6 +39,20 @@ public class LoggingControl {
      * or
      * if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled())...
      */
-    public static final boolean debugLoggingAllowed =
-            (System.getProperty("Axis2.prohibitDebugLogging") == null);
+    public static final boolean debugLoggingAllowed;
+
+    static {
+        String prop = null;
+        try {
+            // need doPriv to get system prop with J2S enabled
+            prop = (String) AccessController.doPrivileged(new PrivilegedAction<String>() {
+                public String run() {
+                    return System.getProperty("Axis2.prohibitDebugLogging");
+                }
+            });
+        } catch (SecurityException SE) {
+            //do nothing
+        }
+        debugLoggingAllowed = prop == null;
+    }
 }

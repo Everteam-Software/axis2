@@ -16,23 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.util.impl;
 
+import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.OMElement;
-import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.OMException;
-import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.impl.dom.ElementImpl;
+import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
+import org.apache.axiom.soap.impl.builder.MTOMStAXSOAPModelBuilder;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.message.util.SAAJConverter;
 import org.apache.axis2.jaxws.message.util.SOAPElementReader;
 import org.apache.axis2.jaxws.utility.SAAJFactory;
-import org.apache.axis2.util.XMLUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.w3c.dom.Node;
@@ -52,17 +54,15 @@ import javax.xml.soap.SOAPMessage;
 import javax.xml.soap.SOAPPart;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import javax.xml.ws.WebServiceException;
-import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.stream.StreamResult;
-import java.util.Iterator;
-import java.io.ByteArrayOutputStream;
+import javax.xml.ws.WebServiceException;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.Iterator;
 
 /** SAAJConverterImpl Provides an conversion methods between OM<->SAAJ */
 public class SAAJConverterImpl implements SAAJConverter {
@@ -118,18 +118,28 @@ public class SAAJConverterImpl implements SAAJConverter {
     /* (non-Javadoc)
       * @see org.apache.axis2.jaxws.message.util.SAAJConverter#toOM(javax.xml.soap.SOAPEnvelope)
       */
-    public org.apache.axiom.soap.SOAPEnvelope toOM(SOAPEnvelope saajEnvelope)
+    public org.apache.axiom.soap.SOAPEnvelope toOM(SOAPEnvelope saajEnvelope) {
+        return toOM(saajEnvelope, null);
+    }
+    public org.apache.axiom.soap.SOAPEnvelope toOM(SOAPEnvelope saajEnvelope, 
+                                                   Attachments attachments)
             throws WebServiceException {
     	if (log.isDebugEnabled()) {
-    		log.debug("Converting SAAJ SOAPEnvelope to an OM SOAPEnvelope");
+    	    log.debug("Converting SAAJ SOAPEnvelope to an OM SOAPEnvelope");
     	}    	
     	
     	// Before we do the conversion, we have to fix the QNames for fault elements
         _fixFaultElements(saajEnvelope);        
         // Get a XMLStreamReader backed by a SOAPElement tree
         XMLStreamReader reader = new SOAPElementReader(saajEnvelope);
+        
         // Get a SOAP OM Builder.  Passing null causes the version to be automatically triggered
-        StAXSOAPModelBuilder builder = new StAXSOAPModelBuilder(reader, null);
+        StAXSOAPModelBuilder builder = null;
+        if (attachments == null) {
+            builder = new StAXSOAPModelBuilder(reader, null);
+        } else {
+            builder = new MTOMStAXSOAPModelBuilder(reader, attachments, null);
+        }
         // Create and return the OM Envelope
         org.apache.axiom.soap.SOAPEnvelope omEnvelope = builder.getSOAPEnvelope();
         
@@ -300,10 +310,12 @@ public class SAAJConverterImpl implements SAAJConverter {
                     case XMLStreamReader.ATTRIBUTE: {
                         String eventName = "ATTRIBUTE";
                         this._unexpectedEvent(eventName);
+                        break;
                     }
                     case XMLStreamReader.NAMESPACE: {
                         String eventName = "NAMESPACE";
                         this._unexpectedEvent(eventName);
+                        break;
                     }
                     case XMLStreamReader.END_ELEMENT: {
                         if (parent instanceof SOAPEnvelope) {
@@ -506,9 +518,6 @@ public class SAAJConverterImpl implements SAAJConverter {
     }
 
     private void _unexpectedEvent(String event) throws WebServiceException {
-        // Review We need NLS for this message, but this code will probably
-        // be added to JAX-WS.  So for now we there is no NLS.
-        // TODO NLS
         throw ExceptionFactory
                 .makeWebServiceException(Messages.getMessage("SAAJConverterErr2", event));
     }

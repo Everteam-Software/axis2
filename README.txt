@@ -5,6 +5,30 @@ http://ws.apache.org/axis2
 ------------------------------------------------------
 
 ___________________
+Building
+===================
+
+We use Maven 2 (http://maven.apache.org) to build, and you'll find a
+pom.xml in each module, as well as at the top level.  Use "mvn install"
+(or "mvn clean install" to clean up first) to build.
+
+IMPORTANT: the *first* time you build a given version of Axis2, you will not
+be able to do a regular "mvn install" from the top level - this is because
+we have a couple of custom Maven plugins that (due to some dependency-
+resolution issues in Maven) must be built and installed in your local
+repository before a build will succeed.  This means you need to do one
+of the following:
+
+  1) Use ant (http://ant.apache.org) to build the first time.  There is
+     a build.xml at the top level which automatically builds the plugins
+     first and then runs a regular "mvn install".
+     
+  2) Manually "mvn install" both of the plugins in the following places:
+     
+     modules/tool/axis2-mar-maven-plugin
+     modules/tool/axis2-aar-maven-plugin
+
+___________________
 Documentation
 ===================
  
@@ -19,10 +43,9 @@ To deploy a new Web service in Axis2 the following three steps must
 be performed:
   1) Create the Web service implementation class, supporting classes 
      and the services.xml file, 
-  2) Create the service archive. I.e. archive the class files using the 
-     jar tool with the services.xml file in the META-INF directory. The
-     archive should have the extension .aar.
-  3) Drop the aar file to the $AXIS2_HOME/WEB-INF/services directory
+  2) Archive the class files into a jar with the services.xml file in 
+     the META-INF directory
+  3) Drop the jar file to the $AXIS2_HOME/WEB-INF/services directory
      where $AXIS2_HOME represents the install directory of your Axis2 
      runtime. (In the case of a servelet container this would be the
      "axis2" directory inside "webapps".)

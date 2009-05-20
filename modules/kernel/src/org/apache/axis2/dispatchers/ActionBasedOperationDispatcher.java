@@ -19,8 +19,6 @@
 
 package org.apache.axis2.dispatchers;
 
-import javax.xml.namespace.QName;
-
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisOperation;
@@ -29,6 +27,8 @@ import org.apache.axis2.description.HandlerDescription;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import javax.xml.namespace.QName;
 
 public class ActionBasedOperationDispatcher extends AbstractOperationDispatcher {
 
@@ -44,6 +44,12 @@ public class ActionBasedOperationDispatcher extends AbstractOperationDispatcher 
                     action);
         }
         if (action != null) {
+            // REVIEW: Should we FIRST try to find an operation that explicitly mapped this 
+            // SOAPAction as an alias by calling: 
+            // AxisOperation op = service.getOperationByAction(action);
+            // And THEN, if we didn't find an explicit mapping of this action, see if there's an 
+            // operation that has the same name as the action, and route to that by calling:
+            // service.getOperationBySOAPAction(action);
             AxisOperation op = service.getOperationBySOAPAction(action);
             if (op == null) {
                 op = service.getOperationByAction(action);

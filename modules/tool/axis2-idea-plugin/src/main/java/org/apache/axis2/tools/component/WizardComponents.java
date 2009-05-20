@@ -16,11 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tools.component;
 
 import javax.swing.*;
-import java.util.List;
 import java.beans.PropertyChangeListener;
+import java.util.List;
 
 /**
  * this interface extends from wizard interface

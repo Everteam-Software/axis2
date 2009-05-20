@@ -16,12 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description.java2wsdl;
 
 import org.apache.axiom.om.OMElement;
 
 import javax.xml.namespace.QName;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Hashtable;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
 
 public class TypeTable {
     
@@ -63,7 +69,7 @@ public class TypeTable {
         simpleTypetoxsd.put("byte",
                 new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "byte", "xs"));
         simpleTypetoxsd.put("char",
-                ANY_TYPE);
+                new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "string", "xs"));
         simpleTypetoxsd.put("java.lang.Integer",
                 new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "int", "xs"));
         simpleTypetoxsd.put("java.lang.Double",
@@ -81,13 +87,13 @@ public class TypeTable {
         simpleTypetoxsd.put("java.lang.Short",
                 new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "short", "xs"));
         simpleTypetoxsd.put("java.util.Date",
-                new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "dateTime", "xs"));
+                new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "date", "xs"));
         simpleTypetoxsd.put("java.util.Calendar",
                 new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "dateTime", "xs"));
 
         // SQL date time
          simpleTypetoxsd.put("java.sql.Date",
-                new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "dateTime", "xs"));
+                new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "date", "xs"));
          simpleTypetoxsd.put("java.sql.Time",
                 new QName(Java2WSDLConstants.URI_2001_SCHEMA_XSD, "time", "xs"));
         simpleTypetoxsd.put("java.sql.Timestamp",

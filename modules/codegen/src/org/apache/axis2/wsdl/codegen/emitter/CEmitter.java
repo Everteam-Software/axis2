@@ -16,16 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl.codegen.emitter;
 
+import org.apache.axis2.description.AxisBindingOperation;
 import org.apache.axis2.description.AxisMessage;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.PolicyInclude;
 import org.apache.axis2.util.JavaUtils;
 import org.apache.axis2.util.PolicyUtil;
 import org.apache.axis2.util.Utils;
+import org.apache.axis2.wsdl.HTTPHeaderMessage;
 import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.axis2.wsdl.WSDLUtil;
+import org.apache.axis2.wsdl.WSDLConstants;
+import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.wsdl.SOAPHeaderMessage;
+import org.apache.axis2.wsdl.codegen.CodeGenConfiguration;
 import org.apache.axis2.wsdl.codegen.CodeGenerationException;
+import org.apache.axis2.wsdl.codegen.writer.CBuildScriptWriter;
 import org.apache.axis2.wsdl.codegen.writer.CServiceXMLWriter;
 import org.apache.axis2.wsdl.codegen.writer.CSkelHeaderWriter;
 import org.apache.axis2.wsdl.codegen.writer.CSkelSourceWriter;
@@ -43,7 +52,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+
+import com.ibm.wsdl.util.xml.DOM2Writer;
 
 public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
     protected static final String C_STUB_PREFIX = "axis2_stub_";
@@ -76,6 +86,8 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
         }
     }
 
+
+
     /**
      * Emit the skeltons
      *
@@ -88,13 +100,30 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
 
             // write a Service Skeleton for this particular service.
             writeCServiceSkeleton();
+            //create the build script
+            emitBuildScript();
 
             writeServiceXml();
+            
         }
         catch (Exception e) {
             e.printStackTrace();
         }
     }
+    /**
+     * Emit the build script
+     *
+     * @throws CodeGenerationException
+     */
+    public void emitBuildScript() throws CodeGenerationException {
+        try {
+        	writeBuildScript();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Writes the Stub.
@@ -112,7 +141,7 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
                                       codeGenConfiguration.getOutputLanguage());
 
         writeFile(interfaceImplModel, writerHStub);
-
+                    
 
         CStubSourceWriter writerCStub =
                 new CStubSourceWriter(getOutputDirectory(codeGenConfiguration.getOutputLocation(),
@@ -121,8 +150,6 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
 
         writeFile(interfaceImplModel, writerCStub);
     }
-
-
     /**
      * Writes the Skel.
      *
@@ -163,10 +190,26 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
     }
 
     /**
-     * Write the service XML
+     * Write the Build Script
      *
      * @throws Exception
      */
+
+    protected void writeBuildScript() throws Exception {
+        if (this.codeGenConfiguration.isGenerateDeployementDescriptor()) {
+
+            // Write the service xml in a folder with the
+            Document buildXMLModel = createDOMDocumentForBuildScript(this.codeGenConfiguration);
+            FileWriter buildXmlWriter =
+                    new CBuildScriptWriter(
+                            getOutputDirectory(this.codeGenConfiguration.getOutputLocation(),
+                                               codeGenConfiguration.getSourceLocation()),
+                            this.codeGenConfiguration.getOutputLanguage());
+
+            writeFile(buildXMLModel, buildXmlWriter);
+        }
+    }
+
     protected void writeServiceXml() throws Exception {
         if (this.codeGenConfiguration.isGenerateDeployementDescriptor()) {
 
@@ -181,7 +224,6 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
             writeFile(serviceXMLModel, serviceXmlWriter);
         }
     }
-
     /** Creates the DOM tree for implementations. */
     protected Document createDOMDocumentForInterfaceImplementation() throws Exception {
 
@@ -253,7 +295,7 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
         rootElement.appendChild(getUniqueListofFaults(doc));
 
         /////////////////////////////////////////////////////
-        //System.out.println(DOM2Writer.nodeToString(rootElement));
+        // System.out.println(DOM2Writer.nodeToString(rootElement));
         /////////////////////////////////////////////////////
 
 
@@ -321,6 +363,38 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
 
     }
 
+    protected Document createDOMDocumentForBuildScript(CodeGenConfiguration codegen) {
+    	 Document doc = getEmptyDocument();
+         Element rootElement = doc.createElement("interface");
+
+         String serviceCName = makeCClassName(axisService.getName());
+        // String skelName = C_SKEL_PREFIX + serviceCName + C_SKEL_SUFFIX;
+         addAttribute(doc,"servicename",serviceCName,rootElement);
+        //if user specify a location for the source
+         if(codegen.isSetoutputSourceLocation()){
+             String outputLocation = codegen.getOutputLocation().getPath();
+             String  targetsourceLocation = codegen.getSourceLocation();
+             addAttribute(doc,"option","1",rootElement);
+             addAttribute(doc,"outputlocation",outputLocation,rootElement);
+             addAttribute(doc,"targetsourcelocation",targetsourceLocation,rootElement);
+         }
+        else
+         {
+            addAttribute(doc,"option","0",rootElement);
+         }
+        fillSyncAttributes(doc, rootElement);
+         loadOperations(doc, rootElement, null);
+         // add SOAP version
+         addSoapVersion(doc, rootElement);
+         
+         //attach a list of faults
+         rootElement.appendChild(getUniqueListofFaults(doc));
+
+         doc.appendChild(rootElement);
+         return doc;
+
+    }
+    
     /**
      * @param word
      * @return Returns character removed string.
@@ -348,10 +422,15 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
         Element methodElement;
         String portTypeName = makeCClassName(axisService.getName());
 
-        Iterator operations = axisService.getOperations();
+        Iterator bindingOperations = this.axisBinding.getChildren();
         boolean opsFound = false;
-        while (operations.hasNext()) {
-            AxisOperation axisOperation = (AxisOperation)operations.next();
+        AxisOperation axisOperation = null;
+        AxisBindingOperation axisBindingOperation = null;
+
+        while (bindingOperations.hasNext()) {
+
+            axisBindingOperation = (AxisBindingOperation) bindingOperations.next();
+            axisOperation = axisBindingOperation.getAxisOperation();
 
             // populate info holder with mep information. This will used in determining which
             // message receiver to use, etc.,
@@ -392,11 +471,11 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
                              methodElement);
 
 
-                addSOAPAction(doc, methodElement, axisOperation.getName());
+                addSOAPAction(doc, methodElement, axisBindingOperation.getName());
                 //add header ops for input
-                addHeaderOperations(soapHeaderInputParameterList, axisOperation, true);
+                addHeaderOperations(soapHeaderInputParameterList, axisBindingOperation, true);
                 //add header ops for output
-                addHeaderOperations(soapHeaderOutputParameterList, axisOperation, false);
+                addHeaderOperations(soapHeaderOutputParameterList, axisBindingOperation, false);
 
                 PolicyInclude policyInclude = axisOperation.getPolicyInclude();
                 Policy policy = policyInclude.getPolicy();
@@ -410,9 +489,9 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
                 }
 
                 methodElement.appendChild(
-                        getInputElement(doc, axisOperation, soapHeaderInputParameterList));
+                        getInputElement(doc, axisBindingOperation, soapHeaderInputParameterList));
                 methodElement.appendChild(
-                        getOutputElement(doc, axisOperation, soapHeaderOutputParameterList));
+                        getOutputElement(doc, axisBindingOperation, soapHeaderOutputParameterList));
                 methodElement.appendChild(getFaultElement(doc, axisOperation));
 
                 rootElement.appendChild(methodElement);
@@ -447,9 +526,9 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
                                  methodElement);
 
 
-                    addSOAPAction(doc, methodElement, axisOperation.getName());
-                    addHeaderOperations(soapHeaderInputParameterList, axisOperation, true);
-                    addHeaderOperations(soapHeaderOutputParameterList, axisOperation, false);
+                    addSOAPAction(doc, methodElement, axisBindingOperation.getName());
+                    addHeaderOperations(soapHeaderInputParameterList, axisBindingOperation, true);
+                    addHeaderOperations(soapHeaderOutputParameterList, axisBindingOperation, false);
 
                     /*
                      * Setting the policy of the operation
@@ -469,10 +548,10 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
 
 
                     methodElement.appendChild(getInputElement(doc,
-                                                              axisOperation,
+                                                              axisBindingOperation,
                                                               soapHeaderInputParameterList));
                     methodElement.appendChild(getOutputElement(doc,
-                                                               axisOperation,
+                                                               axisBindingOperation,
                                                                soapHeaderOutputParameterList));
                     methodElement.appendChild(getFaultElement(doc,
                                                               axisOperation));
@@ -547,20 +626,13 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
             addAttribute(doc, "primitive", "yes", paramElement);
         }
 
-        // the following methods are moved from addOurs functioin
-        Map typeMap = CTypeInfo.getTypeMap();
-        Iterator it = typeMap.keySet().iterator();
+        // the new trick to identify adb types
         boolean isOurs = true;
-        while (it.hasNext()) {
-            if (it.next().equals(typeMappingStr)) {
-                isOurs = false;
-                break;
-            }
-        }
 
-        if (isOurs && typeMappingStr.length() != 0 && !typeMappingStr.equals("void") &&
+        if (typeMappingStr.length() != 0 && !typeMappingStr.equals("void") &&
                 !typeMappingStr.equals(C_DEFAULT_TYPE)) {
             addAttribute(doc, "ours", "yes", paramElement);
+            isOurs = true;
         } else {
             isOurs = false;
         }
@@ -583,8 +655,6 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
     protected void addCSpecifcAttributes(Document doc, AxisOperation operation, Element param,
                                          String messageType) {
         String typeMappingStr;
-        Map typeMap = CTypeInfo.getTypeMap();
-        Iterator typeMapIterator = typeMap.keySet().iterator();
         AxisMessage message;
 
         if (messageType.equals(WSDLConstants.MESSAGE_LABEL_IN_VALUE))
@@ -609,17 +679,9 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
         }
 
         addAttribute(doc, "caps-type", paramType.toUpperCase(), param);
-        boolean isOurs = true;
-        while (typeMapIterator.hasNext()) {
-            if (typeMapIterator.next().equals(typeMapping)) {
-                isOurs = false;
-                break;
-            }
-        }
 
-        if (isOurs && !paramType.equals("") && !paramType.equals("void") &&
-                !paramType.equals("org.apache.axiom.om.OMElement") &&
-                !typeMappingStr.equals(C_DEFAULT_TYPE)) {
+        if (!paramType.equals("") && !paramType.equals("void") &&
+                !typeMappingStr.equals(C_DEFAULT_TYPE) && typeMappingStr.contains("adb_")) {
             addAttribute(doc, "ours", "yes", param);
         }
     }
@@ -670,6 +732,179 @@ public class CEmitter extends AxisServiceBasedMultiLanguageEmitter {
         return outputDir;
     }
 
+    /**
+     * @param doc
+     * @param parameters
+     * @param location
+     */
+    protected List getParameterElementList(Document doc, List parameters, String location) {
+        List parameterElementList = new ArrayList();
+
+        if ((parameters != null) && !parameters.isEmpty()) {
+            int count = parameters.size();
+
+            for (int i = 0; i < count; i++) {
+                Element param = doc.createElement("param");
+                SOAPHeaderMessage header = (SOAPHeaderMessage) parameters.get(i);
+                QName name = header.getElement();
+
+                addAttribute(doc, "name", this.mapper.getParameterName(name), param);
+
+                String typeMapping = this.mapper.getTypeMappingName(name);
+                String typeMappingStr = (typeMapping == null)
+                        ? ""
+                        : typeMapping;
+
+                addAttribute(doc, "type", typeMappingStr, param);
+                addAttribute(doc, "location", location, param);
+                if (header.isMustUnderstand()) {
+                    addAttribute(doc, "mustUnderstand", "true", param);
+                }
+
+                if (name != null) {
+                    Element qNameElement = doc.createElement("qname");
+                    addAttribute(doc, "nsuri", name.getNamespaceURI(), qNameElement);
+                    addAttribute(doc, "localname", name.getLocalPart(), qNameElement);
+                    param.appendChild(qNameElement);
+                }
+                parameterElementList.add(param);
+
+                // the new trick to identify adb types
+                boolean isOurs = true;
+
+                if (typeMappingStr.length() != 0 && !typeMappingStr.equals("void") &&
+                        !typeMappingStr.equals(C_DEFAULT_TYPE)) {
+                    addAttribute(doc, "ours", "yes", param);
+                    isOurs = true;
+                } else {
+                    isOurs = false;
+                }
+
+                if (isOurs) {
+                    typeMappingStr = C_OUR_TYPE_PREFIX + typeMappingStr + C_OUR_TYPE_SUFFIX;
+                }
+
+                addAttribute(doc, "axis2-type", typeMappingStr, param);
+
+            }
+        }
+        return parameterElementList;
+    }
+
+    /**
+     * Finds the output element.
+     *
+     * @param doc
+     * @param bindingOperation
+     * @param headerParameterQNameList
+     */
+    protected Element getOutputElement(Document doc,
+                                       AxisBindingOperation bindingOperation,
+                                       List headerParameterQNameList) {
+        AxisOperation operation = bindingOperation.getAxisOperation();
+        Element outputElt = doc.createElement("output");
+        String mep = operation.getMessageExchangePattern();
+
+
+        if (WSDLUtil.isOutputPresentForMEP(mep)) {
+
+            Element param = getOutputParamElement(doc, operation);
+
+            if (param != null) {
+                outputElt.appendChild(param);
+            }
+
+            List outputElementList = getParameterElementList(doc, headerParameterQNameList,
+                    WSDLConstants.SOAP_HEADER);
+            outputElementList.addAll(getParameterElementListForHttpHeader(doc,
+                    (ArrayList) getBindingPropertyFromMessage(
+                            WSDL2Constants.ATTR_WHTTP_HEADER,
+                            operation.getName(),
+                            WSDLConstants.WSDL_MESSAGE_DIRECTION_OUT),
+                    WSDLConstants.HTTP_HEADER));
+
+            for (int i = 0; i < outputElementList.size(); i++) {
+                outputElt.appendChild((Element) outputElementList.get(i));
+            }
+
+            /*
+            * Setting the effective policy for the output message.
+            */
+            Policy policy = getBindingPolicyFromMessage(bindingOperation,
+                    WSDLConstants.WSDL_MESSAGE_DIRECTION_OUT);
+
+            if (policy != null) {
+                try {
+                    addAttribute(doc, "policy",
+                            PolicyUtil.getSafeString(PolicyUtil.policyComponentToString(policy)),
+                            outputElt);
+                } catch (Exception ex) {
+                    throw new RuntimeException("can't serialize the policy ..");
+                }
+            }
+        }
+        return outputElt;
+    }
+
+    /**
+     * Get the input element
+     *
+     * @param doc
+     * @param bindingOperation
+     * @param headerParameterQNameList
+     * @return DOM element
+     */
+    protected Element getInputElement(Document doc,
+                                      AxisBindingOperation bindingOperation,
+                                      List headerParameterQNameList) {
+        AxisOperation operation = bindingOperation.getAxisOperation();
+        Element inputElt = doc.createElement("input");
+        String mep = operation.getMessageExchangePattern();
+
+        if (WSDLUtil.isInputPresentForMEP(mep)) {
+
+            Element[] param = getInputParamElement(doc, operation);
+            for (int i = 0; i < param.length; i++) {
+                inputElt.appendChild(param[i]);
+            }
+
+            List parameterElementList = getParameterElementList(doc, headerParameterQNameList,
+                    WSDLConstants.SOAP_HEADER);
+            parameterElementList.addAll(getParameterElementListForHttpHeader(doc,
+                    (ArrayList) getBindingPropertyFromMessage(
+                            WSDL2Constants.ATTR_WHTTP_HEADER,
+                            operation.getName(),
+                            WSDLConstants.WSDL_MESSAGE_DIRECTION_IN),
+                    WSDLConstants.HTTP_HEADER));
+            parameterElementList.addAll(getParameterElementListForSOAPModules(doc,
+                    (ArrayList) getBindingPropertyFromMessage(
+                            WSDL2Constants.ATTR_WSOAP_MODULE,
+                            operation.getName(),
+                            WSDLConstants.WSDL_MESSAGE_DIRECTION_IN)));
+
+            for (int i = 0; i < parameterElementList.size(); i++) {
+                inputElt.appendChild((Element) parameterElementList.get(i));
+            }
+
+            /*
+            * Setting the effective policy of input message
+            */
+            Policy policy = getBindingPolicyFromMessage(bindingOperation,
+                    WSDLConstants.WSDL_MESSAGE_DIRECTION_IN);
+
+            if (policy != null) {
+                try {
+                    addAttribute(doc, "policy",
+                            PolicyUtil.getSafeString(PolicyUtil.policyComponentToString(policy)),
+                            inputElt);
+                } catch (Exception ex) {
+                    throw new RuntimeException("can't serialize the policy ..");
+                }
+            }
+
+        }
+        return inputElt;
+    }
 
 }
 

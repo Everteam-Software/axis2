@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
 import junit.framework.TestCase;
@@ -47,7 +48,7 @@ public class WSDLToAllServicesBuilderTest extends TestCase {
 
     protected void setUp() throws Exception {
         configContext =
-                ConfigurationContextFactory.createConfigurationContextFromFileSystem(null, null);
+                ConfigurationContextFactory.createEmptyConfigurationContext();
         lm = new ListenerManager();
         lm.init(configContext);
         lm.start();

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context.commands;
 
 import org.apache.axis2.clustering.context.ContextClusteringCommand;
@@ -42,7 +43,7 @@ public abstract class UpdateContextCommand extends ContextClusteringCommand {
     public void addProperty(PropertyDifference diff) {
         if (propertyUpdater.getProperties() == null) {
             propertyUpdater.setProperties(new HashMap());
-        }
+        }                                        
         propertyUpdater.addContextProperty(diff);
     }
 }

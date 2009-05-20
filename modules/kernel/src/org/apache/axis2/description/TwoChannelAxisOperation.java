@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
 import org.apache.axiom.om.util.UUIDGenerator;
@@ -95,7 +96,7 @@ public abstract class TwoChannelAxisOperation extends AxisOperation {
 
     public void addFaultMessageContext(MessageContext msgContext, OperationContext opContext)
             throws AxisFault {
-        HashMap mep = opContext.getMessageContexts();
+        HashMap<String, MessageContext> mep = opContext.getMessageContexts();
         MessageContext faultMessageCtxt = (MessageContext) mep.get(MESSAGE_LABEL_FAULT_VALUE);
 
         if (faultMessageCtxt != null) {

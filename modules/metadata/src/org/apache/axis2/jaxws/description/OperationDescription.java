@@ -65,6 +65,8 @@ public interface OperationDescription {
      */
     public static final String HEADER_PARAMETER_QNAMES = "org.apache.axis2.jaxws.description.OperationDescription.headerParameterQNames";
     
+    public static final String AXIS_OPERATION_PARAMETER = "org.apache.axis2.jaxws.description.OperationDescription.axisOperationParameter";
+    
     public EndpointInterfaceDescription getEndpointInterfaceDescription();
 
     public FaultDescription[] getFaultDescriptions();
@@ -87,7 +89,6 @@ public interface OperationDescription {
     public String getJavaDeclaringClassName();
 
     public String[] getJavaParameters();
-    // TODO: Fix up the difference between getSEIMethod and getMethodFromServiceImpl when java reflection is removed.
 
     /**
      * Client side and non-DBC service side only! Return the SEI method for which a
@@ -187,7 +188,6 @@ public interface OperationDescription {
 
     public String[] getParamNames();
 
-    // TODO: These should return Enums defined on this interface, not from the Annotation
     public javax.jws.soap.SOAPBinding.ParameterStyle getSoapBindingParameterStyle();
 
     public javax.jws.soap.SOAPBinding.Style getSoapBindingStyle();
@@ -212,6 +212,11 @@ public interface OperationDescription {
      * @return OperationDescription corresponding to the sync operation, or null (see note above).
      */
     public OperationDescription getSyncOperation();
+
+    /**
+     * @return Attachment Description for the return type or null
+     */
+    public AttachmentDescription getResultAttachmentDescription();
     
     /**
     * Returns the namespace of binding input message for the operation
@@ -224,7 +229,23 @@ public interface OperationDescription {
     public String getBindingOutputNamespace();
     
     /**
-    * @return Attachment Description for the return type or null
-    */
-    public AttachmentDescription getResultAttachmentDescription();
+     * @return a boolean indicator of nested swaRef attachments on the request.
+     */
+    public boolean hasRequestSwaRefAttachments();
+    
+    /**
+     * @param sets the indicator of nested request swaRef attachments.
+     */
+    public void setHasRequestSwaRefAttachments(boolean b);
+    
+    /**
+     * @return a boolean indicator of nested swaRef attachments on the response.
+     */
+    public boolean hasResponseSwaRefAttachments();
+    
+    /**
+     * @param sets the indicator of nested response swaRef attachments.
+     */
+    public void setHasResponseSwaRefAttachments(boolean b);
+    
 }

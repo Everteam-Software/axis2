@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.rpc.receivers.ejb;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.MessageContext;
-import org.apache.axis2.rpc.receivers.RPCInOutAsyncMessageReceiver;
 import org.apache.axis2.rpc.receivers.RPCMessageReceiver;
 
 /**

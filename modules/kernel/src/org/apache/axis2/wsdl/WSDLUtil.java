@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl;
 
 import org.apache.axis2.description.WSDL2Constants;
@@ -76,6 +77,17 @@ public class WSDLUtil {
                                      String suffix,
                                      String partName) {
         return new QName(opName + suffix, partName);
+    }
+
+    public static String getConstantFromHTTPLocation(String httpLocation, String httpMethod) {
+        if (httpLocation.charAt(0) != '?') {
+            httpLocation = "/" + httpLocation;
+        }
+        int index = httpLocation.indexOf("{");
+        if (index > -1) {
+            httpLocation = httpLocation.substring(0, index);
+        }
+        return httpMethod + httpLocation;
     }
 
 }

@@ -20,28 +20,34 @@
 
 package org.apache.axis2.engine;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.xml.namespace.QName;
+
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.client.async.Callback;
+import org.apache.axis2.Constants;
 import org.apache.axis2.client.async.AxisCallback;
+import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.TransportOutDescription;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.engine.Handler.InvocationResponse;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.TransportSender;
 import org.apache.axis2.util.CallbackReceiver;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.axis2.util.MessageContextBuilder;
+import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
-import javax.xml.namespace.QName;
-import java.util.ArrayList;
-import java.util.Iterator;
 
 /**
  * There is one engine for the Server and the Client. the send() and receive()
@@ -57,38 +63,58 @@ public class AxisEngine {
     private static boolean RESUMING_EXECUTION = true;
     private static boolean NOT_RESUMING_EXECUTION = false;
 
-    /**
-     * Constructor AxisEngine
-     */
-    public AxisEngine(ConfigurationContext engineContext) {
-    }
-
     private static void checkMustUnderstand(MessageContext msgContext) throws AxisFault {
+        List<QName> unprocessed = null;
         SOAPEnvelope envelope = msgContext.getEnvelope();
         if (envelope.getHeader() == null) {
             return;
         }
-
         // Get all the headers targeted to us
-        Iterator headerBlocks = envelope.getHeader().getHeadersToProcess(null);
-
+        Iterator headerBlocks = envelope.getHeader().getHeadersToProcess((RolePlayer)msgContext.getConfigurationContext().getAxisConfiguration().getParameterValue("rolePlayer"));
         while (headerBlocks.hasNext()) {
             SOAPHeaderBlock headerBlock = (SOAPHeaderBlock) headerBlocks.next();
-
+            QName headerName = headerBlock.getQName();
             // if this header block has been processed or mustUnderstand isn't
             // turned on then its cool
             if (headerBlock.isProcessed() || !headerBlock.getMustUnderstand()) {
                 continue;
             }
 
+            if(LoggingControl.debugLoggingAllowed && log.isDebugEnabled()){
+                log.debug("MustUnderstand header not processed or registered as understood"+headerName);
+            }
+            if(isReceiverMustUnderstandProcessor(msgContext)){
+                if(unprocessed == null){
+                    unprocessed = new ArrayList<QName>();
+                }
+                if(!unprocessed.contains(headerName)){
+                    unprocessed.add(headerName);
+                }
+                continue;
+            }
             // Oops, throw an appropriate MustUnderstand fault!!
             QName faultQName = headerBlock.getVersion().getMustUnderstandFaultCode();
             throw new AxisFault(Messages.getMessage("mustunderstandfailed",
-                                                    headerBlock.getNamespace().getNamespaceURI(),
-                                                    headerBlock.getLocalName()), faultQName);
+                headerBlock.getNamespace().getNamespaceURI(),
+                headerBlock.getLocalName()), faultQName);
         }
+        if(unprocessed !=null && unprocessed.size()>0){
+            //Adding HeaderQNames that failed MU check as AxisService Parameter
+            //They will be examined later by MessageReceivers.
+            if(log.isDebugEnabled()){
+                log.debug("Adding Unprocessed headers to MessageContext.");
+            }
+            msgContext.setProperty(Constants.UNPROCESSED_HEADER_QNAMES, unprocessed);           
+        }       
     }
 
+    private static boolean isReceiverMustUnderstandProcessor(MessageContext msgContext){
+        MessageReceiver receiver = null;
+        if(msgContext.isServerSide()){
+            receiver = msgContext.getAxisOperation().getMessageReceiver();
+        }
+        return (receiver!=null && receiver.getClass().getName().endsWith("JAXWSMessageReceiver"));
+    }
     /**
      * This method is called to handle any error that occurs at inflow or outflow. But if the
      * method is called twice, it implies that sending the error handling has failed, in which case
@@ -116,7 +142,7 @@ public class AxisEngine {
             log.trace(msgContext.getLogIDString() + " receive:" + msgContext.getMessageID());
         }
         ConfigurationContext confContext = msgContext.getConfigurationContext();
-        ArrayList preCalculatedPhases;
+        List<Phase> preCalculatedPhases;
         if (msgContext.isFault() || msgContext.isProcessingFault()) {
             preCalculatedPhases = confContext.getAxisConfiguration().getInFaultFlowPhases();
             msgContext.setFLOW(MessageContext.IN_FAULT_FLOW);
@@ -127,7 +153,9 @@ public class AxisEngine {
         // Set the initial execution chain in the MessageContext to a *copy* of what
         // we got above.  This allows individual message processing to change the chain without
         // affecting later messages.
-        msgContext.setExecutionChain((ArrayList) preCalculatedPhases.clone());
+        ArrayList<Handler> executionChain = new ArrayList<Handler>();
+        executionChain.addAll(preCalculatedPhases);
+        msgContext.setExecutionChain(executionChain);
         try {
             InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
 
@@ -149,6 +177,26 @@ public class AxisEngine {
                 return pi;
             } else if (pi.equals(InvocationResponse.ABORT)) {
                 flowComplete(msgContext);
+                // Undo any partial work.
+                // Remove the incoming message context
+                if (log.isDebugEnabled()) {
+                    log.debug("InvocationResponse is aborted.  " +
+                                "The incoming MessageContext is removed, " +
+                                "and the OperationContext is marked as incomplete");
+                }
+				AxisOperation axisOp = msgContext.getAxisOperation();
+                if(axisOp!=null){
+					String mepURI  = axisOp.getMessageExchangePattern();
+					if (WSDL2Constants.MEP_URI_OUT_IN.equals(mepURI)) {
+						OperationContext opCtx = msgContext.getOperationContext();
+						if (opCtx != null) {
+							opCtx.removeMessageContext(WSDLConstants.MESSAGE_LABEL_IN_VALUE);
+						}
+					}
+				}
+				else{
+					log.debug("Could not clean up op ctx for " + msgContext);
+				}
                 return pi;
             } else {
                 String errorMsg =
@@ -158,6 +206,7 @@ public class AxisEngine {
             }
         }
         catch (AxisFault e) {
+            log.error(e.getMessage(), e);
             msgContext.setFailureReason(e);
             flowComplete(msgContext);
             throw e;
@@ -166,16 +215,6 @@ public class AxisEngine {
         return InvocationResponse.CONTINUE;
     }
 
-    private static void processFault(MessageContext msgContext, AxisFault e) {
-        try {
-            MessageContext faultMC = MessageContextBuilder.createFaultMessageContext(msgContext, e);
-
-            // Figure out where this goes
-            sendFault(faultMC);
-        } catch (AxisFault axisFault) {
-            log.error(axisFault.getMessage(), axisFault);
-        }
-    }
 
     /**
      * Take the execution chain from the msgContext , and then take the current Index
@@ -238,7 +277,7 @@ public class AxisEngine {
     }
 
     private static void flowComplete(MessageContext msgContext) {
-        Iterator invokedPhaseIterator = msgContext.getExecutedPhases();
+        Iterator<Handler> invokedPhaseIterator = msgContext.getExecutedPhases();
 
         while (invokedPhaseIterator.hasNext()) {
             Handler currentHandler = ((Handler) invokedPhaseIterator.next());
@@ -462,8 +501,72 @@ public class AxisEngine {
             }
         }
 
-        msgContext.setExecutionChain((ArrayList) msgContext.getConfigurationContext()
-                .getAxisConfiguration().getOutFaultFlowPhases().clone());
+        ArrayList<Handler> executionChain = new ArrayList<Handler>(msgContext.getConfigurationContext()
+                .getAxisConfiguration().getOutFaultFlowPhases());
+        msgContext.setExecutionChain(executionChain);
+        msgContext.setFLOW(MessageContext.OUT_FAULT_FLOW);
+        InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
+
+        if (pi.equals(InvocationResponse.CONTINUE)) {
+            // Actually send the SOAP Fault
+            TransportOutDescription transportOut = msgContext.getTransportOut();
+            if (transportOut == null) {
+                throw new AxisFault("Transport out has not been set");
+            }
+            TransportSender sender = transportOut.getSender();
+
+            sender.invoke(msgContext);
+            flowComplete(msgContext);
+        } else if (pi.equals(InvocationResponse.SUSPEND)) {
+        } else if (pi.equals(InvocationResponse.ABORT)) {
+            flowComplete(msgContext);
+        } else {
+            String errorMsg =
+                    "Unrecognized InvocationResponse encountered in AxisEngine.sendFault()";
+            log.error(msgContext.getLogIDString() + " " + errorMsg);
+            throw new AxisFault(errorMsg);
+        }
+    }
+
+    /**
+     * here we assume that it is resume from an operation level handler
+     * @param msgContext
+     * @throws AxisFault
+     */
+    public static void resumeSendFault(MessageContext msgContext) throws AxisFault{
+        if (LoggingControl.debugLoggingAllowed && log.isTraceEnabled()) {
+            log.trace(msgContext.getLogIDString() + " resumeSendFault:" + msgContext.getMessageID());
+        }
+        OperationContext opContext = msgContext.getOperationContext();
+
+        if (opContext != null) {
+
+            try {
+                InvocationResponse pi = invoke(msgContext, RESUMING_EXECUTION);
+
+                if (pi.equals(InvocationResponse.SUSPEND)) {
+                    log.warn(msgContext.getLogIDString() +
+                            " The resumption of this flow may function incorrectly, as the OutFaultFlow will not be used");
+                    return;
+                } else if (pi.equals(InvocationResponse.ABORT)) {
+                    flowComplete(msgContext);
+                    return;
+                } else if (!pi.equals(InvocationResponse.CONTINUE)) {
+                    String errorMsg =
+                            "Unrecognized InvocationResponse encountered in AxisEngine.sendFault()";
+                    log.error(msgContext.getLogIDString() + " " + errorMsg);
+                    throw new AxisFault(errorMsg);
+                }
+            } catch (AxisFault e) {
+                msgContext.setFailureReason(e);
+                flowComplete(msgContext);
+                throw e;
+            }
+        }
+
+        ArrayList<Handler> executionChain = new ArrayList<Handler>(msgContext.getConfigurationContext()
+                .getAxisConfiguration().getOutFaultFlowPhases());
+        msgContext.setExecutionChain(executionChain);
         msgContext.setFLOW(MessageContext.OUT_FAULT_FLOW);
         InvocationResponse pi = invoke(msgContext, NOT_RESUMING_EXECUTION);
 
@@ -506,7 +609,7 @@ public class AxisEngine {
         private TransportSender sender;
 
         public TransportNonBlockingInvocationWorker(MessageContext msgctx,
-                                                    TransportSender sender) {
+            TransportSender sender) {
             this.msgctx = msgctx;
             this.sender = sender;
         }
@@ -525,11 +628,20 @@ public class AxisEngine {
                             Object callback = ((CallbackReceiver) msgReceiver)
                                     .lookupCallback(msgctx.getMessageID());
                             if (callback == null) return; // TODO: should we log this??
-
+                            
                             if (callback instanceof Callback) {
+                                // Instances of Callback only expect onComplete to be called
+                                // for a successful MEP.  Errors are reported through the
+                                // Async Response object, which the Callback implementations 
+                                // all use.
                                 ((Callback)callback).onError(e);
                             } else {
+                                // The AxisCallback (which is OutInAxisOperationClient$SyncCallBack
+                                // used to support async-on-the-wire under a synchronous API 
+                                // operation) need to be told the MEP is complete after being told
+                                // of the error.
                                 ((AxisCallback)callback).onError(e);
+                                ((AxisCallback)callback).onComplete();
                             }
                         }
                     }

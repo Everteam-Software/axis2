@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
@@ -23,34 +24,85 @@
     <parent>
         <groupId>org.apache.axis2</groupId>
         <artifactId>axis2-parent</artifactId>
-        <version>1.3</version>
+        <version>1.5</version>
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
     <artifactId>axis2-webapp</artifactId>
     <packaging>war</packaging>
-    <name>Apache Axis 2.0 - Web Application module</name>
+    <name>Apache Axis2 - Web Application module</name>
     <dependencies>
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -58,23 +110,74 @@
             <artifactId>axis2-jibx</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -82,46 +185,160 @@
             <artifactId>axis2-java2wsdl</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.jms</groupId>
+                    <artifactId>jms</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.jdmk</groupId>
+                    <artifactId>jmxtools</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.jmx</groupId>
+                    <artifactId>jmxri</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -129,23 +346,78 @@
             <artifactId>axis2-spring</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -153,23 +425,74 @@
             <artifactId>axis2-fastinfoset</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -177,23 +500,74 @@
             <artifactId>axis2-jaxws</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -201,23 +575,74 @@
             <artifactId>axis2-jaxbri</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -225,23 +650,74 @@
             <artifactId>axis2-xmlbeans</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -249,23 +725,74 @@
             <artifactId>axis2-json</artifactId>
             <version>${version}</version>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -274,23 +801,74 @@
             <version>${version}</version>
             <type>mar</type>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -299,23 +877,74 @@
             <version>${version}</version>
             <type>mar</type>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -324,48 +953,151 @@
             <version>${version}</version>
             <type>mar</type>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.axis2</groupId>
             <artifactId>mex</artifactId>
             <version>${version}</version>
-            <type>mar</type>
+            <type>jar</type>
+            <classifier>impl</classifier>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -374,23 +1106,149 @@
             <version>${version}</version>
             <type>mar</type>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-corba</artifactId>
+            <version>${version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -399,44 +1257,100 @@
             <version>${version}</version>
             <type>aar</type>
             <exclusions>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant</artifactId></exclusion>
-                <exclusion><groupId>org.apache.ant</groupId><artifactId>ant-launcher</artifactId></exclusion>
-                <exclusion><groupId>aopalliance</groupId><artifactId>aopalliance</artifactId></exclusion>
-                <exclusion><groupId>org.apache.bcel</groupId><artifactId>bcel</artifactId></exclusion>
-                <exclusion><groupId>com.sun.xml.fastinfoset</groupId><artifactId>FastInfoset</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-activation_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-javamail_1.4_spec</artifactId></exclusion>
-                <exclusion><groupId>org.apache.geronimo.specs</groupId><artifactId>geronimo-jms_1.1_spec</artifactId></exclusion>
-                <exclusion><groupId>jakarta-regexp</groupId><artifactId>jakarta-regexp</artifactId></exclusion>
-                <exclusion><groupId>javax.xml.bind</groupId><artifactId>jsr173_api</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-context</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-core</artifactId></exclusion>
-                <exclusion><groupId>org.springframework</groupId><artifactId>spring-web</artifactId></exclusion>
-                <exclusion><groupId>xerces</groupId><artifactId>xmlParserAPIs</artifactId></exclusion>
-                <exclusion><groupId>rhino</groupId><artifactId>js</artifactId></exclusion>
-                <exclusion><groupId>bsf</groupId><artifactId>bsf</artifactId></exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.ant</groupId>
+                    <artifactId>ant-launcher</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>aopalliance</groupId>
+                    <artifactId>aopalliance</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.bcel</groupId>
+                    <artifactId>bcel</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.xml.fastinfoset</groupId>
+                    <artifactId>FastInfoset</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-activation_1.1_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.geronimo.specs</groupId>
+                    <artifactId>geronimo-javamail_1.4_spec</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta-regexp</groupId>
+                    <artifactId>jakarta-regexp</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jsr173_api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-beans</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-context</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>xerces</groupId>
+                    <artifactId>xmlParserAPIs</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>rhino</groupId>
+                    <artifactId>js</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>bsf</groupId>
+                    <artifactId>bsf</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>servlet-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>xml-resolver</groupId>
+            <artifactId>xml-resolver</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.apache.axis2</groupId>
-            <artifactId>axis2-clustering</artifactId>
+            <artifactId>axis2-mtompolicy</artifactId>
             <version>${version}</version>
-            <type>jar</type>
         </dependency>
         <dependency>
-	    <groupId>org.apache.axis2</groupId>
-	    <artifactId>axis2-mtompolicy</artifactId>
-	    <version>${version}</version>
-	    <type>jar</type>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
         </dependency>
         <dependency>
-	    <groupId>org.apache.geronimo.specs</groupId>
-	    <artifactId>geronimo-jms_1.1_spec</artifactId>
-	    <version>${geronimo.spec.jms.version}</version>
-	    <type>jar</type>
-	</dependency>
-
+            <groupId>org.apache.axis2</groupId>
+            <artifactId>axis2-jaxws-mar</artifactId>
+            <version>${version}</version>
+            <type>mar</type>
+        </dependency>
     </dependencies>
     <build>
         <finalName>axis2-${version}</finalName>
@@ -444,7 +1358,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-war-plugin</artifactId>
-                <version>2.0.2</version>
+                <version>${maven.war.version}</version>
                 <configuration>
                     <warName>axis2</warName>
                     <archive>
@@ -460,6 +1374,13 @@
                             </includes>
                         </resource>
                         <resource>
+                            <directory>${basedir}/../jaxws-mar/target</directory>
+                            <targetPath>WEB-INF/modules</targetPath>
+                            <includes>
+                                <include>axis2-jaxws-mar*.mar</include>
+                            </includes>
+                        </resource>
+                        <resource>
                             <directory>${basedir}/../soapmonitor/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
@@ -472,9 +1393,12 @@
                             <includes>
                                 <include>soapmonitor*.jar</include>
                             </includes>
+                            <excludes>
+                                <exclude>*sources.jar</exclude>
+                            </excludes>
                         </resource>
                         <resource>
-                            <directory>${basedir}/../mex-mar/target</directory>
+                            <directory>${basedir}/../mex/target</directory>
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>mex*.mar</include>
@@ -492,6 +1416,13 @@
                             <targetPath>WEB-INF/modules</targetPath>
                             <includes>
                                 <include>*scripting*.mar</include>
+                            </includes>
+                        </resource>
+                        <resource>
+                            <directory>${basedir}/../mtompolicy-mar/target</directory>
+                            <targetPath>WEB-INF/modules</targetPath>
+                            <includes>
+                                <include>*mtompolicy*.mar</include>
                             </includes>
                         </resource>
                         <resource>

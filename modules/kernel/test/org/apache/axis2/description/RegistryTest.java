@@ -29,7 +29,7 @@ import org.apache.axis2.handlers.AbstractHandler;
 import javax.xml.namespace.QName;
 
 public class RegistryTest extends AbstractTestCase {
-    private AxisConfiguration reg = new AxisConfiguration();
+    private AxisConfiguration axisConfiguration = new AxisConfiguration();
     AxisService service = new AxisService("Service1");
 
     public RegistryTest(String testName) {
@@ -43,13 +43,13 @@ public class RegistryTest extends AbstractTestCase {
     }
 
     public void testService() throws AxisFault {
-        reg.addService(service);
+        axisConfiguration.addService(service);
         testParameteInClude(service);
     }
 
     public void testModule() throws AxisFault {
         AxisModule module = new AxisModule("module1");
-        module.setParent(reg);
+        module.setParent(axisConfiguration);
         testParameteInClude(module);
         testFlowIncludeTest(module);
     }

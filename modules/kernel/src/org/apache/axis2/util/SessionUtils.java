@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.util;
 
 import org.apache.axis2.Constants;
@@ -33,7 +34,7 @@ public class SessionUtils {
      * @return scope for the service group
      */
     public static String calculateMaxScopeForServiceGroup(AxisServiceGroup axisServiceGroup) {
-        Iterator servics = axisServiceGroup.getServices();
+        Iterator<AxisService> servics = axisServiceGroup.getServices();
         int maxScope = 1;
         while (servics.hasNext()) {
             AxisService axisService = (AxisService) servics.next();

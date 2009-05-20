@@ -22,7 +22,7 @@ package org.apache.axis2.description;
 import org.apache.axis2.AxisFault;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.woden.wsdl20.Endpoint;
+import org.apache.woden.WSDLException;
 import org.apache.woden.wsdl20.Service;
 
 import java.io.InputStream;
@@ -37,7 +37,7 @@ public class WSDL20ToAllAxisServicesBuilder extends WSDL20ToAxisServiceBuilder {
     protected static final Log log =
             LogFactory.getLog(WSDL20ToAllAxisServicesBuilder.class);
 
-    private ArrayList axisServices = null;
+    private ArrayList<AxisService> axisServices = null;
 
     /**
      * Class constructor.
@@ -46,7 +46,12 @@ public class WSDL20ToAllAxisServicesBuilder extends WSDL20ToAxisServiceBuilder {
      */
     public WSDL20ToAllAxisServicesBuilder(InputStream in) {
         super(in, null, null);
-        axisServices = new ArrayList();   // create an empty ArrayList
+        axisServices = new ArrayList<AxisService>();   // create an empty ArrayList
+    }
+
+    public WSDL20ToAllAxisServicesBuilder(String wsdlUri, String endpointName) throws WSDLException {
+        super(wsdlUri, null, endpointName);
+        axisServices = new ArrayList<AxisService>();   // create an empty ArrayList
     }
 
     /**
@@ -63,7 +68,7 @@ public class WSDL20ToAllAxisServicesBuilder extends WSDL20ToAxisServiceBuilder {
      *         pair.  The format of the name is "<wsdl service name>#<wsdl endpoint name>"
      * @throws AxisFault
      */
-    public List populateAllServices() throws AxisFault {
+    public List<AxisService> populateAllServices() throws AxisFault {
         try {
             if (log.isDebugEnabled()) {
                 log.debug("Entry: populateAllServices");

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.tribes;
 
 import org.apache.catalina.tribes.Member;
@@ -24,19 +25,32 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
- * 
+ * Membership changes are notified using this class
  */
 public class TribesMembershipListener implements MembershipListener {
 
     private static Log log = LogFactory.getLog(TribesMembershipListener.class);
+    private MembershipManager membershipManager;
+
+    public TribesMembershipListener(MembershipManager membershipManager) {
+        this.membershipManager = membershipManager;
+    }
 
     public void memberAdded(Member member) {
-        log.info("New member " + TribesUtil.getHost(member) + " joined cluster.");
-       //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
+        if (membershipManager.memberAdded(member)) {
+            log.info("New member " + TribesUtil.getName(member) + " joined cluster.");
+            /*if (TribesUtil.toAxis2Member(member).isActive()) {
+            } else {
+            }*/
+        }
+        //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
     }
 
     public void memberDisappeared(Member member) {
-        log.info("Member " + TribesUtil.getHost(member) + " left cluster");
+        log.info("Member " + TribesUtil.getName(member) + " left cluster");
+        membershipManager.memberDisappeared(member);
+
 //        System.err.println("++++++ IS COORD="+TribesClusterManager.nbc.isCoordinator());
+        
     }
 }

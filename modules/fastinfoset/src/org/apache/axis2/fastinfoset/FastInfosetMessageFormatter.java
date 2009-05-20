@@ -19,15 +19,7 @@
 
 package org.apache.axis2.fastinfoset;
 
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.Iterator;
-
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
-
+import com.sun.xml.fastinfoset.stax.StAXDocumentSerializer;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axis2.AxisFault;
@@ -37,15 +29,17 @@ import org.apache.axis2.transport.MessageFormatter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.sun.xml.fastinfoset.stax.StAXDocumentSerializer;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Iterator;
 
-/**
- * @author Sanjaya Karunasena (sanjayak@yahoo.com)
- * @date Feb 06, 2007
- */
 public class FastInfosetMessageFormatter implements MessageFormatter {
 
-	private Log logger = LogFactory.getLog(FastInfosetMessageFormatter.class);
+	private static Log logger = LogFactory.getLog(FastInfosetMessageFormatter.class);
 	
 	/**
 	 * Fast Infoset message formatter doesn't need to handle SOAP. Hence do nothing.

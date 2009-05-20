@@ -16,14 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
 
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.jaxws.catalog.JAXWSCatalogManager;
 import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
+
 import javax.xml.namespace.QName;
+import javax.xml.ws.handler.PortInfo;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A ServiceDescription corresponds to a Service under which there can be a collection of enpdoints.
@@ -63,11 +68,15 @@ import java.util.List;
  */
 
 public interface ServiceDescription {
-    public abstract EndpointDescription[] getEndpointDescriptions();
+    
+	public abstract EndpointDescription[] getEndpointDescriptions();
 
     public abstract Collection<EndpointDescription> getEndpointDescriptions_AsCollection();
 
     public abstract EndpointDescription getEndpointDescription(QName portQName);
+
+    // Called the client-side to retrieve defined and dynamic ports
+    public abstract EndpointDescription getEndpointDescription(QName portQName, Object serviceDelegateKey);
 
     /**
      * Return the EndpointDescriptions corresponding to the SEI class.  Note that Dispatch endpoints
@@ -80,24 +89,132 @@ public interface ServiceDescription {
 
     public abstract ConfigurationContext getAxisConfigContext();
 
-    public abstract ServiceClient getServiceClient(QName portQName);
+    public abstract ServiceClient getServiceClient(QName portQName, Object serviceDelegateKey);
 
     public abstract QName getServiceQName();
 
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.  If the
+     * key is non-null then it is used to look for handler chain configuration information in the
+     * sparse metadata.  The order in which the configuration information is resolved is:
+     * 1) Look in sparse composite if the key is not null
+     * 2) Look in the composite
+     * 3) Look for a HandlerChain annotation and read in the file it specifies  
+     * 
+     * @param serviceDelegateKey May be null.  If non-null, used to look for service-delegate
+     *     specific sparse composite information.
+     * @return A HandlerChainsType object or null
+     */
+    public abstract HandlerChainsType getHandlerChain(Object serviceDelegateKey);
+    
+    /**
+     * Return the handler chain configuration information as a HandlerChainsType object.
+     * This is the same as calling getHandlerChain(null).
+     * @see #getHandlerChain(Object)
+     */
     public abstract HandlerChainsType getHandlerChain();
+    
     /**
      * Returns a list of the ports for this serivce.  The ports returned are the - Ports declared
      * ports for this Service.  They can be delcared in the WSDL or via annotations. - Dynamic ports
      * added to the service
      *
+     * @param serviceDelegateKey This should always be non-null when called via ServiceDelegate and is
+     *                            used to help retrieve dynamic ports per client
+
      * @return
      */
-    public List<QName> getPorts();
+    public List<QName> getPorts(Object serviceDelegateKey);
 
     public ServiceRuntimeDescription getServiceRuntimeDesc(String name);
 
     public void setServiceRuntimeDesc(ServiceRuntimeDescription ord);
     
     public boolean isServerSide();
+    
+    /**
+     * Answer if MTOM is enabled for the service represented by this Service Description.  This
+     * is currently only supported on the service-requester side; it is not supported on the 
+     * service-provider side.  If the key is non-null, it is used to look up an sparse metadata
+     * that may have been specified when the Service Description was created.
+     *  
+     * @param key If non-null, used to look up any sparse metadata that may have been specified
+     *     when the service was created.
+     * @return TRUE if mtom was enabled either in the sparse metadata or in the composite; FALSE
+     *     othewise.
+     */
+    public boolean isMTOMEnabled(Object key);
+    
+    /**
+     * Answer if MTOM is enabled for the service represented by this Service Description  
+     * and the service-endpoint-interface indicated. This is currently only supported on the 
+     * service-requester side; it is not supported on the service-provider side.  If the key is 
+     * non-null, it is used to look up an sparse metadata that may have been specified when the 
+     * Service Description was created. If the seiClass is non-null it is used to further scope
+     * the enablement of MTOM to a specific SEI.
+     *  
+     * @param key If non-null, used to look up any sparse metadata that may have been specified
+     *     when the service was created.
+     * @param seiClass Represents client service-endpoint-interface class.
+     * 
+     * @return TRUE if mtom was enabled either in the sparse metadata or in the composite; FALSE
+     *     othewise.
+     */
+    public boolean isMTOMEnabled(Object key, Class seiClass);
+    
+    public QName getPreferredPort(Object key);
+    
+    public JAXWSCatalogManager getCatalogManager();
+
+    /**
+     * Answer information for resolved handlers for the given port.  This information is set
+     * when the handler resolver initially resolves the handlers based on the handler 
+     * configuration information.  It is cached on the service description for performance 
+     * so that subsequent queries by other handler resolvers for the same port do not have to
+     * re-resolve the information from the handler configuration information.  
+     * 
+     * @param portInfo Port for which the handler information is desired
+     * @return An object containing information for the resolved handlers, or null if no 
+     *     information is found in the cache.
+     */
+    public ResolvedHandlersDescription getResolvedHandlersDescription(PortInfo portInfo);
+
+    /**
+     * Cache information for handlers which have been resolved for this port. This information is set
+     * when the handler resolver initially resolves the handlers based on the handler 
+     * configuration information.  It is cached on the service description for performance 
+     * so that subsequent queries by other handler resolvers for the same port do not have to
+     * re-resolve the information from the handler configuration information.
+     *   
+     * @param portInfo Port for which the handler information should be cached
+     * @param resolvedHandlersInfo An object containing information for the resolved handlers
+     */
+    public void setResolvedHandlersDescription(PortInfo portInfo, ResolvedHandlersDescription resolvedHandlersInfo);
+    
+    /**
+     * Check into releasing resources related to this ServiceDescription.  Those resources include
+     * this ServiceDescription instance, the EndpointDescription instances it owns and their
+     * associated AxisService and related objects.  
+     * 
+     * NOTE: This should only be called on ServiceDescrpition instances that are owned by
+     * client ServiceDelegate instances; it SHOULD NOT be called on server-side 
+     * ServiceDescriptions since those are built during server start and their life-cycle is
+     * the life-cycle of the server.
+     * 
+     * @param delegate The ServiceDelegate instance that owns this ServiceDescription.
+     */
+    public void releaseResources(Object delegate);
+        
+    /**
+     * This method is responsible for querying the metadata for properties associated with
+     * a given BindingProvider instance. This is only applicable for the requestor-side, and
+     * the properties are scoped at the port level.
+     * @param serviceDelegateKey This should always be non-null when called via ServiceDelegate and is
+     *                            used to help retrieve dynamic ports per client
+     * @param key This should always be non-null and is used to retrieve properties for a given
+     *            client-side port
+     * @return 
+     */
+    public Map<String, Object> getBindingProperties(Object serviceDelegateKey, String key);
 
 }

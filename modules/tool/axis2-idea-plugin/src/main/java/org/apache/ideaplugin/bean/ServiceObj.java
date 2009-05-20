@@ -16,15 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ideaplugin.bean;
 
 import java.util.ArrayList;
 
-/**
- * Author: Deepal Jayasinghe
- * Date: Sep 22, 2005
- * Time: 11:11:48 PM
- */
 public class ServiceObj {
     private String serviceName;
     private String serviceClass;

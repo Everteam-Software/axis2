@@ -16,12 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.util;
 
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axiom.om.impl.llom.OMSourcedElementImpl;
 import org.apache.axiom.soap.SOAP11Constants;
+import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPFactory;
@@ -34,11 +36,15 @@ import org.apache.axiom.soap.SOAPFaultRole;
 import org.apache.axiom.soap.SOAPFaultSubCode;
 import org.apache.axiom.soap.SOAPFaultText;
 import org.apache.axiom.soap.SOAPFaultValue;
+import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.message.Block;
+import org.apache.axis2.jaxws.message.Message;
+import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.XMLFault;
 import org.apache.axis2.jaxws.message.XMLFaultCode;
 import org.apache.axis2.jaxws.message.XMLFaultReason;
+import org.apache.axis2.jaxws.message.factory.MessageFactory;
 import org.apache.axis2.jaxws.message.factory.OMBlockFactory;
 import org.apache.axis2.jaxws.message.factory.SAAJConverterFactory;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
@@ -80,10 +86,23 @@ public class XMLFaultUtils {
      * @return true if the SOAPEnvelope contains a SOAPFault
      */
     public static boolean isFault(SOAPEnvelope envelope) {
-        SOAPBody body = envelope.getBody();
-        if (body != null) {
-            return (body.hasFault() || body.getFault() != null);
-        }
+        return envelope.hasFault();
+    }
+    
+    /**
+     * @param block representing a message payload
+     * @return true if the localname & namespace represent a SOAP 1.1 or SOAP 1.2 fault.
+     */
+    public static boolean containsFault(Block b) {
+        if (b != null) {
+            QName qn = b.getQName();
+            if (qn != null &&
+                qn.getLocalPart().equals(org.apache.axiom.soap.SOAPConstants.SOAPFAULT_LOCAL_NAME)
+                && (qn.getNamespaceURI().equals(SOAP11Constants.SOAP_ENVELOPE_NAMESPACE_URI)
+                    || qn.getNamespaceURI().equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI))) {
+                return true;
+            }
+        }        
         return false;
     }
 
@@ -331,7 +350,33 @@ public class XMLFaultUtils {
         return xmlFault;
     }
 
-
+    public static XMLFault createXMLFault(Block b, Protocol p) {
+        // Because of the requirement that we have a full SOAP envelope structure as
+        // the input to the StAXSOAPModelBuilder, we have to have a dummy envelope
+        // that wraps our fault.  This will allow the Axiom SOAPFault object to
+        // be created.        
+        Message m = null;
+        try {
+            MessageFactory mf = (MessageFactory) FactoryRegistry.getFactory(MessageFactory.class);
+            m = mf.create(p);
+            m.setBodyBlock(b);
+        } catch (XMLStreamException e) {
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
+        
+        SOAPEnvelope dummyEnv = (SOAPEnvelope) m.getAsOMElement();        
+        
+        StAXSOAPModelBuilder builder = new StAXSOAPModelBuilder(dummyEnv.getXMLStreamReaderWithoutCaching());
+        SOAPEnvelope newEnv = (SOAPEnvelope) builder.getDocumentElement();
+        
+        SOAPBody body = newEnv.getBody();
+        SOAPFault fault = body.getFault();
+        
+        Block[] details = getDetailBlocks(fault);
+        
+        return XMLFaultUtils.createXMLFault(fault, details);
+    }
+    
     private static Block[] getDetailBlocks(SOAPFault soapFault) throws WebServiceException {
         try {
             Block[] blocks = null;
@@ -339,11 +384,11 @@ public class XMLFaultUtils {
             if (detail != null) {
                 // Create a block for each element
                 OMBlockFactory bf =
-                        (OMBlockFactory)FactoryRegistry.getFactory(OMBlockFactory.class);
+                        (OMBlockFactory) FactoryRegistry.getFactory(OMBlockFactory.class);
                 ArrayList<Block> list = new ArrayList<Block>();
                 Iterator it = detail.getChildElements();
                 while (it.hasNext()) {
-                    OMElement om = (OMElement)it.next();
+                    OMElement om = (OMElement) it.next();
                     Block b = bf.createFrom(om, null, om.getQName());
                     list.add(b);
                 }
@@ -591,7 +636,7 @@ public class XMLFaultUtils {
                 try {
                     converter.toSAAJ(blocks[i].getOMElement(), detail);
                 } catch (XMLStreamException xse) {
-                    ExceptionFactory.makeWebServiceException(xse);
+                    throw ExceptionFactory.makeWebServiceException(xse);
                 }
             }
 

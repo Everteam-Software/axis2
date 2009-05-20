@@ -19,20 +19,27 @@
 
 package org.apache.axis2.description;
 
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.xml.namespace.QName;
+
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
+import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.engine.Handler;
 import org.apache.axis2.phaseresolver.PhaseResolver;
+import org.apache.axis2.util.PolicyUtil;
 import org.apache.axis2.wsdl.SOAPHeaderMessage;
+import org.apache.neethi.Policy;
+import org.apache.neethi.PolicyComponent;
 import org.apache.ws.commons.schema.XmlSchema;
 import org.apache.ws.commons.schema.XmlSchemaElement;
 import org.apache.ws.commons.schema.XmlSchemaImport;
 import org.apache.ws.commons.schema.XmlSchemaInclude;
 import org.apache.ws.commons.schema.XmlSchemaObjectCollection;
-
-import javax.xml.namespace.QName;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 
 /**
@@ -41,7 +48,7 @@ import java.util.List;
  */
 public class AxisMessage extends AxisDescription {
 
-    private ArrayList handlerChain;
+    private ArrayList<Handler> handlerChain;
     private String name;
     private ArrayList soapHeaders;
 
@@ -52,14 +59,17 @@ public class AxisMessage extends AxisDescription {
     private String messagePartName;
 
     // To store deploy-time module refs
-    private ArrayList modulerefs;
+    private ArrayList<String> modulerefs;
     private String partName = Java2WSDLConstants.PARAMETERS;
 
     // private PolicyInclude policyInclude;
 
     //To chcek whether the message is wrapped or unwrapped
     private boolean wrapped = true;
-
+    
+    private Policy effectivePolicy = null;
+    private Date lastPolicyCalcuatedTime = null;
+    
     public String getMessagePartName() {
 		return messagePartName;
 	}
@@ -70,11 +80,11 @@ public class AxisMessage extends AxisDescription {
 
 	public AxisMessage() {
         soapHeaders = new ArrayList();
-        handlerChain = new ArrayList();
-        modulerefs = new ArrayList();
+        handlerChain = new ArrayList<Handler>();
+        modulerefs = new ArrayList<String>();
     }
 
-    public ArrayList getMessageFlow() {
+    public ArrayList<Handler> getMessageFlow() {
         return handlerChain;
     }
 
@@ -96,7 +106,7 @@ public class AxisMessage extends AxisDescription {
         }
     }
 
-    public void setMessageFlow(ArrayList operationFlow) {
+    public void setMessageFlow(ArrayList<Handler> operationFlow) {
         this.handlerChain = operationFlow;
     }
 
@@ -202,7 +212,7 @@ public class AxisMessage extends AxisDescription {
         phaseResolver.engageModuleToMessage(this, axisModule);
     }
 
-    public ArrayList getModulerefs() {
+    public ArrayList<String> getModulerefs() {
         return modulerefs;
     }
 
@@ -231,4 +241,79 @@ public class AxisMessage extends AxisDescription {
     public void setWrapped(boolean wrapped) {
         this.wrapped = wrapped;
     }
+    
+    public Policy getEffectivePolicy() {
+		if (lastPolicyCalcuatedTime == null || isPolicyUpdated()) {
+			effectivePolicy = calculateEffectivePolicy();
+		}
+		return effectivePolicy;
+	}
+
+	public Policy calculateEffectivePolicy() {
+		PolicySubject policySubject = null;
+		ArrayList<PolicyComponent> policyList = new ArrayList<PolicyComponent>();
+
+		// AxisMessage
+		policySubject = getPolicySubject();
+		policyList.addAll(policySubject.getAttachedPolicyComponents());
+
+		// AxisOperation
+		AxisOperation axisOperation = getAxisOperation();
+		if (axisOperation != null) {
+			policyList.addAll(axisOperation.getPolicySubject()
+					.getAttachedPolicyComponents());
+		}
+
+		// AxisService
+		AxisService axisService = (axisOperation == null) ? null
+				: axisOperation.getAxisService();
+		if (axisService != null) {
+			policyList.addAll(axisService.getPolicySubject()
+					.getAttachedPolicyComponents());
+		}
+
+		// AxisConfiguration
+		AxisConfiguration axisConfiguration = (axisService == null) ? null
+				: axisService.getAxisConfiguration();
+		if (axisConfiguration != null) {
+			policyList.addAll(axisConfiguration.getPolicySubject()
+					.getAttachedPolicyComponents());
+		}
+
+		Policy result = PolicyUtil.getMergedPolicy(policyList, axisService);
+		lastPolicyCalcuatedTime = new Date();
+		return result;
+	}
+
+	public boolean isPolicyUpdated() {
+		// AxisMessage
+		if (getPolicySubject().getLastUpdatedTime().after(
+				lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisOperation
+		AxisOperation axisOperation = (AxisOperation) parent;
+		if (axisOperation != null
+				&& axisOperation.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisService
+		AxisService axisService = (axisOperation == null) ? null
+				: axisOperation.getAxisService();
+		if (axisService != null
+				&& axisService.getPolicySubject().getLastUpdatedTime().after(
+						lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		// AxisConfiguration
+		AxisConfiguration axisConfiguration = (axisService == null) ? null
+				: axisService.getAxisConfiguration();
+		if (axisConfiguration != null
+				&& axisConfiguration.getPolicySubject().getLastUpdatedTime()
+						.after(lastPolicyCalcuatedTime)) {
+			return true;
+		}
+		return false;
+	}
 }

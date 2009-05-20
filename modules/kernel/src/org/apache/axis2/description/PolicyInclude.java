@@ -21,7 +21,9 @@ package org.apache.axis2.description;
 
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.util.AxisPolicyLocator;
+import org.apache.axis2.util.PolicyUtil;
 import org.apache.neethi.Policy;
+import org.apache.neethi.PolicyComponent;
 import org.apache.neethi.PolicyReference;
 import org.apache.neethi.PolicyRegistry;
 import org.apache.neethi.PolicyRegistryImpl;
@@ -77,7 +79,7 @@ public class PolicyInclude {
 
     private AxisDescription description;
 
-    private Hashtable wrapperElements = new Hashtable();
+    private Hashtable<String, Wrapper> wrapperElements = new Hashtable<String, Wrapper>();
 
     public PolicyInclude() {
         reg = new PolicyRegistryImpl();
@@ -102,6 +104,16 @@ public class PolicyInclude {
         return reg;
     }
 
+    /**
+	 * @param policy
+	 * @see org.apache.axis2.description.PolicySubject#attachPolicy(Policy)
+	 * @see org.apache.axis2.description.PolicySubject#clear()
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #attachPolicy(Policy)} Use
+	 *             {@link PolicySubject #clear()} beforehand effective policy of
+	 *             {@link AxisDescription} has to be set as the argument.
+	 * 
+	 */
     public void setPolicy(Policy policy) {
         wrapperElements.clear();
 
@@ -115,8 +127,17 @@ public class PolicyInclude {
         } else {
             wrapperElements.put(policy.getId(), wrapper);
         }
+        
+        if (description != null) {
+			description.getPolicySubject().clear();
+			description.getPolicySubject().attachPolicy(policy);
+		}
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #updatePolicy(Policy)}.
+	 */
     public void updatePolicy(Policy policy) {
         String key;
 
@@ -127,10 +148,29 @@ public class PolicyInclude {
 
         Wrapper wrapper = (Wrapper) wrapperElements.get(key);
         wrapper.value = policy;
+        
+        if (description != null) {
+			description.getPolicySubject().updatePolicy(policy);
+		}
     }
 
+    /**
+	 * @deprecated As of 1.4 release. You can't override a policies that
+	 *             applicable for the current policy scope via
+	 *             {@link PolicyInclude #setEffectivePolicy(Policy)}. In case
+	 *             you need to make a policy the only policy that is within the
+	 *             policy cache of an {@link AxisDescription} please use
+	 *             {@link PolicySubject #clear()} and
+	 *             {@link PolicySubject #attachPolicy(Policy)} accordingly.
+	 * 
+	 */
     public void setEffectivePolicy(Policy effectivePolicy) {
         this.effectivePolicy = effectivePolicy;
+        
+        if (description != null && effectivePolicy != null) {
+			description.getPolicySubject().clear();
+			description.getPolicySubject().attachPolicy(effectivePolicy);
+		}
     }
 
     public void setDescription(AxisDescription description) {
@@ -152,7 +192,7 @@ public class PolicyInclude {
     private void calculatePolicy() {
 
         Policy result = null;
-        Iterator iterator = wrapperElements.values().iterator();
+        Iterator<Wrapper> iterator = wrapperElements.values().iterator();
 
         while (iterator.hasNext()) {
             Object policyElement = ((Wrapper) iterator.next()).getValue();
@@ -202,30 +242,72 @@ public class PolicyInclude {
         setEffectivePolicy(result);
     }
 
+    /**
+	 * @deprecated As of 1.4 release. If you need to calculate merged policy of
+	 *             all policies that are in the policy cache of
+	 *             {@link AxisDescription}, use
+	 *             {@link PolicySubject #getAttachedPolicyComponents() and {@link org.PolicyUtil #getMergedPolicy(List, AxisDescription)}}
+	 */
     public Policy getPolicy() {
+    	if (description != null) {
+			ArrayList<PolicyComponent> policyList = new ArrayList<PolicyComponent>(description.getPolicySubject()
+					.getAttachedPolicyComponents());
+			return PolicyUtil.getMergedPolicy(policyList, description);
+		}
+    	
         calculatePolicy();
         return policy;
     }
 
+    /**
+	 * @deprecated As of 1.4 release. Use
+	 *             {@link AxisMessage #getEffectivePolicy()} or
+	 *             {@link AxisBindingMessage #getEffectivePolicy()} when
+	 *             applicable.
+	 */
     public Policy getEffectivePolicy() {
+    	if (description != null) {
+			if (description instanceof AxisMessage) {
+				return ((AxisMessage) description).getEffectivePolicy();
+			} else if (description instanceof AxisBindingMessage) {
+				return ((AxisBindingMessage) description).getEffectivePolicy();
+			}
+		}
+    	
         calculateEffectivePolicy();
         return effectivePolicy;
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #getAttachedPolicyComponents()}
+	 */
     public ArrayList getPolicyElements() {
+    	if (description != null) {
+			return new ArrayList<PolicyComponent>(description.getPolicySubject()
+					.getAttachedPolicyComponents());
+		}
+    	
         ArrayList policyElementsList = new ArrayList();
-        Iterator policyElementIterator = wrapperElements.values().iterator();
+        Iterator<Wrapper> policyElementIterator = wrapperElements.values().iterator();
 
         while (policyElementIterator.hasNext()) {
             policyElementsList
-                    .add(((Wrapper) policyElementIterator.next()).getValue());
+                    .add(policyElementIterator.next().getValue());
         }
         return policyElementsList;
     }
 
+    /**
+	 * @deprecated As of 1.4 release. The policy element type is no longer
+	 *             required since we maintain a complete binding description
+	 *             hierarchy for the static description the service. Hence use
+	 *             {@link PolicySubject #getAttachedPolicyComponents()} on
+	 *             appropriate description object.
+	 */
     public ArrayList getPolicyElements(int type) {
         ArrayList policyElementList = new ArrayList();
-        Iterator wrapperElementIterator = wrapperElements.values().iterator();
+        Iterator<Wrapper> wrapperElementIterator = wrapperElements.values().iterator();
         Wrapper wrapper;
 
         while (wrapperElementIterator.hasNext()) {
@@ -238,14 +320,34 @@ public class PolicyInclude {
         return policyElementList;
     }
 
+    /**
+	 * @deprecated As of 1.4 release. Use ServiceData.xml or Axis2 DataLocators
+	 *             to configure policies that are stored separately.
+	 */
     public void registerPolicy(String key, Policy policy) {
         reg.register(key, policy);
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #getAttachedPolicyComponent(String)}
+	 */
     public Policy getPolicy(String key) {
+    	if (description != null) {
+			PolicyComponent result = description.getPolicySubject()
+					.getAttachedPolicyComponent(key);
+			if (result != null && result instanceof Policy) {
+				return (Policy) result;
+			}
+		}
+    	
         return reg.lookup(key);
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #attachPolicy(Policy)}
+	 */
     public void addPolicyElement(int type, Policy policy) {
 
         String key;
@@ -259,11 +361,24 @@ public class PolicyInclude {
         Wrapper wrapper = new Wrapper(type, policy);
         wrapperElements.put(key, wrapper);
         reg.register(key, policy);
+        
+        if (description != null) {
+			description.getPolicySubject().attachPolicy(policy);
+		}
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #attachPolicyReference(PolicyReference)}
+	 */
     public void addPolicyRefElement(int type, PolicyReference policyReference) {
         Wrapper wrapper = new Wrapper(type, policyReference);
         wrapperElements.put(policyReference.getURI(), wrapper);
+        
+        if (description != null) {
+			description.getPolicySubject().attachPolicyReference(
+					policyReference);
+		}
     }
 
     class Wrapper {
@@ -292,17 +407,40 @@ public class PolicyInclude {
         }
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #detachPolicyComponent(String)}
+	 */
     public void removePolicyElement(String policyURI) {
         wrapperElements.remove(policyURI);
         reg.remove(policyURI);
+        
+        if (description != null) {
+			description.getPolicySubject().detachPolicyComponent(policyURI);
+		}
     }
 
+    /**
+	 * @deprecated As of 1.4 release, replaced by {@link PolicySubject #clear()}
+	 */
     public void removeAllPolicyElements() {
         wrapperElements.clear();
+        
+        if (description != null) {
+			description.getPolicySubject().clear();
+		}
     }
     
+    /**
+	 * @deprecated As of 1.4 release, replaced by
+	 *             {@link PolicySubject #getAttachedPolicyComponents()}
+	 */
     public List getAttachedPolicies() {
-    
+    	if (description != null) {
+			return new ArrayList(description.getPolicySubject()
+					.getAttachedPolicyComponents());
+		}
+    	
         ArrayList  arrayList = new ArrayList();
         
         for (Iterator iterator = wrapperElements.values().iterator(); iterator.hasNext();) {

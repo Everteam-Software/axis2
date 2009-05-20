@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.wsdl.util;
 
 import org.apache.axis2.util.CommandLineOption;
@@ -62,6 +63,10 @@ public class WSDL2JavaOptionsValidator implements CommandLineOptionConstants, Op
                     WSDL2JavaConstants.OUTPUT_LOCATION_OPTION_LONG.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.OVERRIDE_OPTION.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.OVERRIDE_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.EXCEPTION_BASE_CLASS_OPTION.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.EXCEPTION_BASE_CLASS_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.OVERRIDE_ABSOLUTE_ADDRESS_OPTION.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.OVERRIDE_ABSOLUTE_ADDRESS_OPTION_LONG.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.PACKAGE_OPTION.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.PACKAGE_OPTION_LONG.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.PORT_NAME_OPTION.equalsIgnoreCase(optionType) ||
@@ -89,6 +94,16 @@ public class WSDL2JavaOptionsValidator implements CommandLineOptionConstants, Op
                     WSDL2JavaConstants.WSDL_LOCATION_URI_OPTION.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.WSDL_VERSION_OPTION.equalsIgnoreCase(optionType) ||
                     WSDL2JavaConstants.WSDL_VERSION_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.HTTP_PROXY_HOST_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.HTTP_PROXY_PORT_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.EXCLUDE_PAKAGES_OPTION.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.EXCLUDE_PAKAGES_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.SKELTON_INTERFACE_NAME_OPTION.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.SKELTON_INTERFACE_NAME_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.SKELTON_CLASS_NAME_OPTION.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.SKELTON_CLASS_NAME_OPTION_LONG.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.USE_OPERATION_NAME.equalsIgnoreCase(optionType) ||
+                    WSDL2JavaConstants.USE_OPERATION_NAME_LONG.equalsIgnoreCase(optionType) ||
                     XMLBeansExtension.XSDCONFIG_OPTION.equalsIgnoreCase(optionType) ||
                     XMLBeansExtension.XSDCONFIG_OPTION_LONG.equalsIgnoreCase(optionType)
             );

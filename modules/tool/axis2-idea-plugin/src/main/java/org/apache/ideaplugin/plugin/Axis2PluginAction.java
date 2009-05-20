@@ -16,20 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ideaplugin.plugin;
 
-import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.ActionPlaces;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.DataConstants;
+import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
 
-/**
- * Author: Deepal Jayasinghe
- * Date: Sep 24, 2005
- * Time: 10:22:08 AM
- */
 public class Axis2PluginAction extends AnAction {
 
     private ImageIcon myIcon;

@@ -16,18 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.attachments;
-
-import java.awt.*;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.imageio.ImageIO;
-import javax.imageio.stream.FileImageInputStream;
-import javax.imageio.stream.ImageInputStream;
-import javax.xml.bind.JAXBContext;
 
 import junit.framework.TestCase;
 import org.apache.axiom.om.OMAbstractFactory;
@@ -47,12 +37,21 @@ import org.apache.axis2.jaxws.message.databinding.JAXBBlockContext;
 import org.apache.axis2.jaxws.message.factory.BlockFactory;
 import org.apache.axis2.jaxws.message.factory.JAXBBlockFactory;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
-import org.apache.axis2.jaxws.provider.DataSourceImpl;
+import org.apache.axis2.jaxws.providerapi.DataSourceImpl;
 import org.apache.axis2.jaxws.registry.FactoryRegistry;
-import org.apache.axis2.jaxws.TestLogger;
+import org.apache.axis2.jaxws.unitTest.TestLogger;
 import org.test.mtom.ImageDepot;
 import org.test.mtom.ObjectFactory;
 import org.test.mtom.SendImage;
+
+import javax.activation.DataHandler;
+import javax.activation.DataSource;
+import javax.imageio.ImageIO;
+import javax.imageio.stream.FileImageInputStream;
+import javax.imageio.stream.ImageInputStream;
+import java.awt.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 
 public class MTOMSerializationTests extends TestCase {
 
@@ -160,9 +159,63 @@ public class MTOMSerializationTests extends TestCase {
                
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         soapOM.serializeAndConsume(baos, format);
+        String outputText = baos.toString();
+        // Make sure the attachment is serialized
+        assertTrue(outputText.indexOf("Content-Type: image/jpeg") > 0);
 
         TestLogger.logger.debug("==================================");
-        TestLogger.logger.debug(baos.toString());
+        TestLogger.logger.debug(outputText);
+        TestLogger.logger.debug("==================================");
+    }
+    
+    public void testMTOMAttachmentWriter2() throws Exception {
+        TestLogger.logger.debug("---------------------------------------");
+        TestLogger.logger.debug("test: " + getName());
+        
+        //Create a DataHandler with the String DataSource object
+        DataHandler dataHandler = new DataHandler(imageDS);
+                        
+        //Store the data handler in ImageDepot bean
+        ImageDepot imageDepot = new ObjectFactory().createImageDepot();
+        imageDepot.setImageData(dataHandler);
+        
+        //JAXBContext jbc = JAXBContext.newInstance("org.test.mtom");
+        JAXBBlockContext context = new JAXBBlockContext(SendImage.class.getPackage().getName());
+        
+        //Create a request bean with imagedepot bean as value
+        ObjectFactory factory = new ObjectFactory();
+        SendImage request = factory.createSendImage();
+        request.setInput(imageDepot);
+        
+        BlockFactory blkFactory = (JAXBBlockFactory) FactoryRegistry.getFactory(JAXBBlockFactory.class);
+        Block block = blkFactory.createFrom(request, context, null);
+        
+        MessageFactory msgFactory = (MessageFactory) FactoryRegistry.getFactory(MessageFactory.class);
+        Message msg = msgFactory.create(Protocol.soap11);
+        
+        msg.setBodyBlock(block);
+        
+        msg.setMTOMEnabled(true);
+        
+        // Convert message to SAAJ to simulate an outbound handler
+        msg.getAsSOAPMessage();
+        
+        // Now convert it back to AXIOM
+        
+        SOAPEnvelope soapOM = (SOAPEnvelope) msg.getAsOMElement();
+        
+        OMOutputFormat format = new OMOutputFormat();
+        format.setDoOptimize(true);
+        format.setSOAP11(true);
+               
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        soapOM.serializeAndConsume(baos, format);
+        String outputText = baos.toString();
+        // Make sure the attachment is serialized
+        assertTrue(outputText.indexOf("Content-Type: image/jpeg") > 0);
+
+        TestLogger.logger.debug("==================================");
+        TestLogger.logger.debug(outputText);
         TestLogger.logger.debug("==================================");
     }
     

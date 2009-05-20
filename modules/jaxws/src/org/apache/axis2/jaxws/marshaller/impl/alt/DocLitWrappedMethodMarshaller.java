@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -87,6 +88,12 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                     MethodMarshallerUtils.getMarshalDesc(endpointDesc);
             TreeSet<String> packages = marshalDesc.getPackages();
             String packagesKey = marshalDesc.getPackagesKey();
+            
+            // Remember this unmarshal information so that we can speed up processing
+            // the next time.
+            MethodMarshallerUtils.registerUnmarshalInfo(message.getMessageContext(),
+                                                        packages,
+                                                        packagesKey);
 
             // Determine if a returnValue is expected.
             // The return value may be an child element
@@ -101,6 +108,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // In usage=WRAPPED, there will be a single JAXB block inside the body.
             // Get this block
             JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
             Block block = message.getBodyBlock(blockContext, factory);
@@ -211,10 +219,15 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                     MethodMarshallerUtils.getMarshalDesc(endpointDesc);
             TreeSet<String> packages = marshalDesc.getPackages();
             String packagesKey = marshalDesc.getPackagesKey();
+            
+            MethodMarshallerUtils.registerUnmarshalInfo(message.getMessageContext(),
+                                                        packages,
+                                                        packagesKey);
 
             // In usage=WRAPPED, there will be a single JAXB block inside the body.
             // Get this block
             JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
             Block block = message.getBodyBlock(blockContext, factory);
@@ -332,14 +345,18 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Create the inputs to the wrapper tool
             ArrayList<String> nameList = new ArrayList<String>();
             Map<String, Object> objectList = new HashMap<String, Object>();
+            Map<String, Class>  declaredClassMap = new HashMap<String, Class>();
 
             for (PDElement pde : pdeList) {
                 String name = pde.getParam().getParameterName();
-
+                
                 // The object list contains type rendered objects
                 Object value = pde.getElement().getTypeValue();
+                Class dclClass = pde.getParam().getParameterActualType();
+                
                 nameList.add(name);
                 objectList.put(name, value);
+                declaredClassMap.put(name, dclClass);
             }
 
             // Add the return object to the nameList and objectList
@@ -348,13 +365,19 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
                 String name = operationDesc.getResultName();
                 nameList.add(name);
                 objectList.put(name, returnObject);
+                declaredClassMap.put(name, returnType);
             }
 
             // Now create the single JAXB element
             String wrapperName = marshalDesc.getResponseWrapperClassName(operationDesc);
-            Class cls = MethodMarshallerUtils.loadClass(wrapperName);
+            Class cls;
+            try {
+                cls = MethodMarshallerUtils.loadClass(wrapperName);
+            } catch (ClassNotFoundException e){
+                cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
+            }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
-            Object object = wrapperTool.wrap(cls, nameList, objectList,
+            Object object = wrapperTool.wrap(cls, nameList, objectList, declaredClassMap,
                                              marshalDesc.getPropertyDescriptorMap(cls));
 
             QName wrapperQName = new QName(operationDesc.getResponseWrapperTargetNamespace(),
@@ -364,13 +387,19 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             if (!marshalDesc.getAnnotationDesc(cls).hasXmlRootElement()) {
                 object = new JAXBElement(wrapperQName, cls, object);
             }
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             // Put the object into the message
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
-
+            JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             Block block = factory.createFrom(object,
-                                             new JAXBBlockContext(packages, packagesKey),
+                                             blockContext,
                                              wrapperQName);
             m.setBodyBlock(block);
 
@@ -407,7 +436,7 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             //   3) The name of the data block (m:operation) is defined by the schema and match the name of the operation.
             //      This is called the wrapper element.  The wrapper element has a corresponding JAXB element pojo.
             //   4) The parameters (m:param) are child elements of the wrapper element.
-
+            
             // Get the operation information
             ParameterDescription[] pds = operationDesc.getParameterDescriptions();
 
@@ -430,21 +459,29 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             // Create the inputs to the wrapper tool
             ArrayList<String> nameList = new ArrayList<String>();
             Map<String, Object> objectList = new HashMap<String, Object>();
+            Map<String, Class> declaredClassMap = new HashMap<String, Class>();
 
             for (PDElement pv : pvList) {
                 String name = pv.getParam().getParameterName();
 
                 // The object list contains type rendered objects
                 Object value = pv.getElement().getTypeValue();
+                Class dclClass = pv.getParam().getParameterActualType();
                 nameList.add(name);
                 objectList.put(name, value);
+                declaredClassMap.put(name, dclClass);
             }
 
             // Now create the single JAXB element 
             String wrapperName = marshalDesc.getRequestWrapperClassName(operationDesc);
-            Class cls = MethodMarshallerUtils.loadClass(wrapperName);
+            Class cls;
+            try {
+                cls = MethodMarshallerUtils.loadClass(wrapperName);
+            } catch (ClassNotFoundException e){
+                cls = MethodMarshallerUtils.loadClass(wrapperName, endpointDesc.getAxisService().getClassLoader());
+            }
             JAXBWrapperTool wrapperTool = new JAXBWrapperToolImpl();
-            Object object = wrapperTool.wrap(cls, nameList, objectList,
+            Object object = wrapperTool.wrap(cls, nameList, objectList, declaredClassMap, 
                                              marshalDesc.getPropertyDescriptorMap(cls));
 
             QName wrapperQName = new QName(operationDesc.getRequestWrapperTargetNamespace(),
@@ -454,13 +491,19 @@ public class DocLitWrappedMethodMarshaller implements MethodMarshaller {
             if (!marshalDesc.getAnnotationDesc(cls).hasXmlRootElement()) {
                 object = new JAXBElement(wrapperQName, cls, object);
             }
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             // Put the object into the message
             JAXBBlockFactory factory =
                     (JAXBBlockFactory)FactoryRegistry.getFactory(JAXBBlockFactory.class);
-
+            JAXBBlockContext blockContext = new JAXBBlockContext(packages, packagesKey);
+            blockContext.setWebServiceNamespace(ed.getTargetNamespace());
             Block block = factory.createFrom(object,
-                                             new JAXBBlockContext(packages, packagesKey),
+                                             blockContext, 
                                              wrapperQName);
             m.setBodyBlock(block);
 

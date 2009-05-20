@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.runtime.description.marshal.impl;
 
 import org.apache.axis2.java.security.AccessController;
@@ -102,6 +103,9 @@ class ArtifactProcessor {
                     }
                     String foundRequestWrapperName = findArtifact(requestWrapperName);
                     if (foundRequestWrapperName == null) {
+                        foundRequestWrapperName = findArtifact(requestWrapperName, ed.getAxisService().getClassLoader());
+                    }
+                    if (foundRequestWrapperName == null) {
                         foundRequestWrapperName = missingArtifact(requestWrapperName);
                     }
                     if (foundRequestWrapperName != null) {
@@ -120,6 +124,9 @@ class ArtifactProcessor {
                     }
                     String foundResponseWrapperName = findArtifact(responseWrapperName);
                     if (foundResponseWrapperName == null) {
+                        foundResponseWrapperName = findArtifact(responseWrapperName, ed.getAxisService().getClassLoader());
+                    }
+                    if (foundResponseWrapperName == null) {
                         foundResponseWrapperName = missingArtifact(responseWrapperName);
                     }
                     if (foundResponseWrapperName != null) {
@@ -127,7 +134,7 @@ class ArtifactProcessor {
                     }
 
                     for (FaultDescription faultDesc : opDesc.getFaultDescriptions()) {
-                        FaultBeanDesc faultBeanDesc = create(faultDesc, opDesc);
+                        FaultBeanDesc faultBeanDesc = create(ed, faultDesc, opDesc);
                         faultBeanDescMap.put(faultDesc, faultBeanDesc);
                     }
                 }
@@ -135,7 +142,7 @@ class ArtifactProcessor {
         }
     }
 
-    private FaultBeanDesc create(FaultDescription faultDesc, OperationDescription opDesc) {
+    private FaultBeanDesc create(EndpointDescription ed, FaultDescription faultDesc, OperationDescription opDesc) {
         /* FaultBeanClass algorithm
          *   1) The class defined on @WebFault of the exception
          *   2) If not present or invalid, the class defined by getFaultInfo.
@@ -160,6 +167,9 @@ class ArtifactProcessor {
         }
         String foundClassName = findArtifact(faultBeanClassName);
         if (foundClassName == null) {
+            faultBeanClassName = findArtifact(faultBeanClassName, ed.getAxisService().getClassLoader());
+        }
+        if (foundClassName == null) {
             faultBeanClassName = missingArtifact(faultBeanClassName);
         }
         if (foundClassName != null) {
@@ -175,13 +185,18 @@ class ArtifactProcessor {
         if (faultBeanLocalName == null || faultBeanLocalName.length() == 0) {
             if (faultBeanClassName != null && faultBeanClassName.length() > 0) {
                 try {
-                    Class faultBean = loadClass(faultBeanClassName);
+                    Class faultBean;
+                    try {
+                        faultBean = loadClass(faultBeanClassName, getContextClassLoader());
+                    } catch (ClassNotFoundException e){
+                        faultBean = loadClass(faultBeanClassName, ed.getAxisService().getClassLoader());
+                    }
                     AnnotationDesc aDesc = AnnotationDescImpl.create(faultBean);
                     if (aDesc.hasXmlRootElement()) {
                         faultBeanLocalName = aDesc.getXmlRootElementName();
                     }
                 } catch (Throwable t) {
-                    ExceptionFactory.makeWebServiceException(t);
+                    throw ExceptionFactory.makeWebServiceException(t);
                 }
             }
         }
@@ -198,13 +213,18 @@ class ArtifactProcessor {
         if (faultBeanNamespace == null || faultBeanNamespace.length() == 0) {
             if (faultBeanClassName != null && faultBeanClassName.length() > 0) {
                 try {
-                    Class faultBean = loadClass(faultBeanClassName);
+                    Class faultBean;
+                    try {
+                        faultBean = loadClass(faultBeanClassName, getContextClassLoader());
+                    } catch (ClassNotFoundException e){
+                        faultBean = loadClass(faultBeanClassName, ed.getAxisService().getClassLoader());
+                    }
                     AnnotationDesc aDesc = AnnotationDescImpl.create(faultBean);
                     if (aDesc.hasXmlRootElement()) {
                         faultBeanNamespace = aDesc.getXmlRootElementNamespace();
                     }
                 } catch (Throwable t) {
-                    ExceptionFactory.makeWebServiceException(t);
+                   throw ExceptionFactory.makeWebServiceException(t);
                 }
             }
         }
@@ -224,7 +244,7 @@ class ArtifactProcessor {
      */
     private static String getPackageName(String className) {
         int index = className.lastIndexOf(".");
-        if (index == 0) {
+        if (index <= 0) {
             return "";
         } else {
             return className.substring(0, index);
@@ -237,7 +257,7 @@ class ArtifactProcessor {
      */
     private static String getSimpleClassName(String className) {
         int index = className.lastIndexOf(".");
-        if (index == 0) {
+        if (index <= 0) {
             return className;
         } else {
             return className.substring(index + 1);
@@ -266,9 +286,8 @@ class ArtifactProcessor {
      */
     private String missingArtifact(String artifactName) {
 
-        // TODO Could we contstruct a proxy of the artifact at this point ?
         if (log.isDebugEnabled()) {
-            log.debug("The following class is missing: " + artifactName + " Processing continues.");
+            log.debug("The following class was not found: " + artifactName + " Processing continues without this class.");
         }
         return null;
     }
@@ -290,6 +309,10 @@ class ArtifactProcessor {
     static final String JAXWS_SUBPACKAGE = "jaxws";
 
     private static String findArtifact(String artifactClassName) {
+        return findArtifact(artifactClassName, getContextClassLoader());
+    }
+
+    private static String findArtifact(String artifactClassName, ClassLoader classLoader) {
         String returnArtifactClassName = null;
         if (artifactClassName == null) {
             return returnArtifactClassName;
@@ -297,7 +320,7 @@ class ArtifactProcessor {
 
         // Try to load the class that was passed in
         try {
-            loadClass(artifactClassName);
+            forName(artifactClassName, true, classLoader);
             returnArtifactClassName = artifactClassName;
         }
         catch (ClassNotFoundException e) {
@@ -312,7 +335,7 @@ class ArtifactProcessor {
                 String className = getSimpleClassName(artifactClassName);
                 String alternateWrapperClass = alternatePackage + "." + className;
                 try {
-                    loadClass(alternateWrapperClass);
+                    loadClass(alternateWrapperClass, getContextClassLoader());
                     returnArtifactClassName = alternateWrapperClass;
                 }
                 catch (ClassNotFoundException e) {
@@ -324,9 +347,9 @@ class ArtifactProcessor {
         return returnArtifactClassName;
     }
 
-    private static Class loadClass(String className) throws ClassNotFoundException {
+    private static Class loadClass(String className, ClassLoader classLoader) throws ClassNotFoundException {
         // Don't make this public, its a security exposure
-        return forName(className, true, getContextClassLoader());
+        return forName(className, true, classLoader);
     }
 
     /**
@@ -352,19 +375,22 @@ class ArtifactProcessor {
                         		//Lets catch NoClassDefFoundError as its part of Throwable
                         		//Any Exception that extends Exception will be handled by doPriv method.    
                         	} catch (NoClassDefFoundError e) {
-                        		// TODO Should the exception be swallowed ?
-                        		if (log.isDebugEnabled()) {
-                        			log.debug("ArtifactProcessor cannot load the following class NoClassDefFoundError:" + className);
-                        		}
-                        	}
+                        	    /**
+                        	     * In different jaxws scenarios, some classes may be missing.  So it is normal behavior
+                        	     * to get to this point.  The exception is swallowed and a null is returned.  
+                        	     * The exception is not logged...as this would give servicability folks the idea that a problem occurred.
+                        	     */
+                        	} 
                         	return cls;
                         }
                     }
             );
         } catch (PrivilegedActionException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Exception thrown from AccessController: " + e);
-            }
+            /**
+             * In different jaxws scenarios, some classes may be missing.  So it is normal behavior
+             * to get to this point. 
+             * The exception is not logged...as this would give servicability folks the idea that a problem occurred.
+             */
             throw (ClassNotFoundException)e.getException();
         }
 

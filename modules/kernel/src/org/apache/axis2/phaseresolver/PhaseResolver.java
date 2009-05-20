@@ -20,7 +20,11 @@
 
 package org.apache.axis2.phaseresolver;
 
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisMessage;
+import org.apache.axis2.description.AxisModule;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.Flow;
+import org.apache.axis2.description.HandlerDescription;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.Phase;
 import org.apache.axis2.wsdl.WSDLConstants;
@@ -199,9 +203,9 @@ public class PhaseResolver {
      * @param handler
      * @param phaseList
      */
-    private void removeHandlerfromaPhase(HandlerDescription handler, ArrayList phaseList) {
+    private void removeHandlerfromaPhase(HandlerDescription handler, List<Phase> phaseList) {
         String phaseName = handler.getRules().getPhaseName();
-        Iterator phaseItr = phaseList.iterator();
+        Iterator<Phase> phaseItr = phaseList.iterator();
         while (phaseItr.hasNext()) {
             Phase phase = (Phase) phaseItr.next();
             if (phase.getPhaseName().equals(phaseName)) {

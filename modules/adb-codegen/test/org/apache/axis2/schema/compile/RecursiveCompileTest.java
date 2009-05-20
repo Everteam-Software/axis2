@@ -16,9 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.schema.compile;
 
-import junit.framework.TestCase;
+package org.apache.axis2.schema.compile;
 
 public class RecursiveCompileTest extends AbstractSchemaCompilerTester {
       protected void setUp() throws Exception {

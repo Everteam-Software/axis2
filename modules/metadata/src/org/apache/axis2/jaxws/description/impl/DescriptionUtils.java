@@ -16,9 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.jaxws.description.impl;
 
-import static org.apache.axis2.jaxws.description.builder.MDQConstants.CONSTRUCTOR_METHOD;
+package org.apache.axis2.jaxws.description.impl;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.description.AxisService;
@@ -27,8 +26,11 @@ import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.description.AttachmentDescription;
 import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescription;
-import org.apache.axis2.jaxws.description.OperationDescription;
+import org.apache.axis2.jaxws.description.EndpointDescriptionWSDL;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
+import static org.apache.axis2.jaxws.description.builder.MDQConstants.CONSTRUCTOR_METHOD;
+
+import org.apache.axis2.jaxws.description.builder.MDQConstants;
 import org.apache.axis2.jaxws.description.builder.MethodDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.WebMethodAnnot;
 import org.apache.axis2.jaxws.description.xml.handler.HandlerChainsType;
@@ -52,6 +54,7 @@ import javax.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
 import javax.xml.ws.handler.Handler;
 import javax.xml.ws.handler.soap.SOAPHandler;
+import javax.xml.ws.soap.SOAPBinding;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -145,25 +148,6 @@ public class DescriptionUtils {
     }
 
     /**
-     * Return the name of the class without any package qualifier. This method should be DEPRECATED
-     * when DBC support is complete
-     *
-     * @param theClass
-     * @return the name of the class sans package qualification.
-     */
-    static String getSimpleJavaClassName(Class theClass) {
-        String returnName = null;
-        if (theClass != null) {
-            String fqName = theClass.getName();
-            // We need the "simple name", so strip off any package information from the name
-            int endOfPackageIndex = fqName.lastIndexOf('.');
-            int startOfClassIndex = endOfPackageIndex + 1;
-            returnName = fqName.substring(startOfClassIndex);
-        }
-        return returnName;
-    }
-
-    /**
      * Return the name of the class without any package qualifier.
      *
      * @param theClass
@@ -181,26 +165,6 @@ public class DescriptionUtils {
             returnName = fqName.substring(startOfClassIndex);
         }
         return returnName;
-    }
-
-    /**
-     * Returns the package name from the class.  If no package, then returns null This method should
-     * be DEPRECATED when DBC support is complete
-     *
-     * @param theClass
-     * @return
-     */
-    static String getJavaPackageName(Class theClass) {
-        String returnPackage = null;
-        if (theClass != null) {
-            String fqName = theClass.getName();
-            // Get the package name, if there is one
-            int endOfPackageIndex = fqName.lastIndexOf('.');
-            if (endOfPackageIndex >= 0) {
-                returnPackage = fqName.substring(0, endOfPackageIndex);
-            }
-        }
-        return returnPackage;
     }
 
     /**
@@ -300,13 +264,13 @@ public class DescriptionUtils {
         }
         catch (IOException e) {
             // report this since it was a valid URL but the openStream caused a problem
-            ExceptionFactory.makeWebServiceException(Messages.getMessage("hcConfigLoadFail",
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("hcConfigLoadFail",
                                                                          configFile, className,
                                                                          e.toString()));
         }
         if (configStream == null) {
             if (log.isDebugEnabled()) {
-                log.debug("@HandlerChain.file attribute referes to a relative location: "
+                log.debug("@HandlerChain.file attribute refers to a relative location: "
                         + configFile);
             }
             className = className.replace(".", "/");
@@ -321,21 +285,46 @@ public class DescriptionUtils {
                 if (log.isDebugEnabled()) {
                     log.debug("@HandlerChain.file resolved file path location: " + resolvedPath);
                 }
-                configStream = classLoader.getResourceAsStream(resolvedPath);
+                configStream = getInputStream(resolvedPath, classLoader);
             }
             catch (URISyntaxException e) {
-                ExceptionFactory.makeWebServiceException(Messages.getMessage("hcConfigLoadFail",
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("hcConfigLoadFail",
                                                                              configFile, className,
                                                                              e.toString()));
             }
         }
         if (configStream == null) {
-            ExceptionFactory.makeWebServiceException(Messages.getMessage("handlerChainNS",
-                                                                         configFile, className));
+            //throw ExceptionFactory.makeWebServiceException(Messages.getMessage("handlerChainNS",
+            //                                                             configFile, className));
+            // No longer throwing an exception here.  This method is best-effort, and the caller may
+            // change the class to which the path is relative and try again.  The caller is responsible
+            // for determining when to "give up"
+            if (log.isDebugEnabled()) {
+                log.debug("@HandlerChain configuration fail: " + configFile + " in class: " + className + " failed to load.");
+            }
         } else {
             if (log.isDebugEnabled()) {
                 log.debug("@HandlerChain configuration file: " + configFile + " in class: " +
                         className + " was successfully loaded.");
+            }
+        }
+        return configStream;
+    }
+    
+    private static InputStream getInputStream(String path, ClassLoader classLoader) {
+        InputStream configStream = classLoader.getResourceAsStream(path);
+        if (configStream == null) {
+            // try another classloader
+            ClassLoader cl = System.class.getClassLoader();
+            if (cl != null) {
+                configStream = cl.getResourceAsStream(path);
+            }
+        }
+        if (configStream == null) {
+            // and another classloader
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            if (cl != null) {
+                configStream = cl.getResourceAsStream(path);
             }
         }
         return configStream;
@@ -364,22 +353,13 @@ public class DescriptionUtils {
         }
     }
     
-    public static HandlerChainsType loadHandlerChains(InputStream is) {
+    public static HandlerChainsType loadHandlerChains(InputStream is, ClassLoader classLoader) {
         try {
-            // All the classes we need should be part of this package
-            JAXBContext jc = JAXBContext
-                    .newInstance("org.apache.axis2.jaxws.description.xml.handler",
-                                 EndpointDescriptionImpl.class.getClassLoader());
-
-            Unmarshaller u = jc.createUnmarshaller();
-
-            JAXBElement<?> o = (JAXBElement<?>)u.unmarshal(is);
-            return (HandlerChainsType)o.getValue();
-
+            HandlerChainsParser parser = new HandlerChainsParser();
+            return parser.loadHandlerChains(is);
         } catch (Exception e) {
             throw ExceptionFactory
-                    .makeWebServiceException(
-                            "EndpointDescriptionImpl: loadHandlerList: thrown when attempting to unmarshall JAXB content");
+                    .makeWebServiceException(Messages.getMessage("loadHandlerChainErr", e.getMessage()));
         }       
     }
     
@@ -418,6 +398,22 @@ public class DescriptionUtils {
                 }
                 return ((SOAP12Header) extObj).getNamespaceURI();
             }
+            else if (extObj instanceof MIMEMultipartRelated) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Found a MIMEMultipartRelated element.  Unwrapping to get SOAP binding.");
+                }
+                MIMEMultipartRelated mime = (MIMEMultipartRelated) extObj;
+                List mimeParts = mime.getMIMEParts();
+                
+                Iterator itr = mimeParts.iterator();
+                while (itr.hasNext()) {
+                    MIMEPart mimePart = (MIMEPart) itr.next();
+                    List elements = mimePart.getExtensibilityElements();
+                    
+                    String ns = getNamespaceFromSOAPElement(elements);
+                    return ns;
+                }
+            }
         }
         return null;
     }
@@ -434,21 +430,17 @@ public class DescriptionUtils {
                 if (bindingOp.getName().equals(opDesc.getName().getLocalPart())) {
                     if (bindingOp.getBindingInput() != null) {
                         if (log.isDebugEnabled()) {
-                            log.debug("Processing binding input");
+                                log.debug("Processing binding opertion input");
                         }
-                        processBindingForMIME(bindingOp.getBindingInput()
-                                                       .getExtensibilityElements(),
-                                              opDesc,
-                                              bindingOp.getOperation());
+                        processBindingForMIME(bindingOp.getBindingInput().getExtensibilityElements(), 
+                            opDesc, bindingOp.getOperation(), true);
                     }
                     if (bindingOp.getBindingOutput() != null) {
                         if (log.isDebugEnabled()) {
                             log.debug("Processing binding output");
                         }
-                        processBindingForMIME(bindingOp.getBindingOutput()
-                                                       .getExtensibilityElements(),
-                                              opDesc,
-                                              bindingOp.getOperation());
+                        processBindingForMIME(bindingOp.getBindingOutput().getExtensibilityElements(), 
+                            opDesc, bindingOp.getOperation(), false);
                     }
                 }
             }
@@ -461,16 +453,24 @@ public class DescriptionUtils {
      * does it will build up the appropriate AttachmentDescription objects.
      */
     private static void processBindingForMIME(List extensibilityElements,
-                                              OperationDescriptionImpl opDesc, Operation operation) {
+                                              OperationDescriptionImpl opDesc, 
+                                              Operation operation,
+                                              boolean isRequest) {
         Iterator extensibilityIter = extensibilityElements.iterator();
         while (extensibilityIter.hasNext()) {
             Object obj = extensibilityIter.next();
             if (obj instanceof MIMEMultipartRelated) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Found a mime:multipartRelated extensiblity element.");
+                    }
                 // Found mime information now process it and determine if we need to
                 // create an AttachmentDescription
                 MIMEMultipartRelated mime = (MIMEMultipartRelated) obj;
                 Iterator partIter = mime.getMIMEParts().iterator();
                 while (partIter.hasNext()) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Found a mime:part child element.");
+                        }
                     MIMEPart mimePart = (MIMEPart) partIter.next();
                     Iterator mExtIter = mimePart.getExtensibilityElements().iterator();
                     // Process each mime part to determine if there is mime content
@@ -496,6 +496,19 @@ public class DescriptionUtils {
                                     log.debug("Already created AttachmentDescription for part: "
                                             + part + " of type: " + type);
                                 }
+                            }
+                        }
+                        else if (obj2 instanceof SOAPBody || obj2 instanceof SOAP12Body) {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Found a body element with potential nested mime content");                                    
+                            }
+                            
+                            // Flag whether there's a potential nested attachment.
+                            if (isRequest) {
+                                opDesc.setHasRequestSwaRefAttachments(true);
+                            }
+                            else {
+                                opDesc.setHasResponseSwaRefAttachments(true);
                             }
                         }
                     }
@@ -531,9 +544,69 @@ public class DescriptionUtils {
             try {
                 axisService.addParameter(headerQNParameter);
             } catch (AxisFault e) {
-                // TODO: RAS
-                log.warn("Unable to add Parameter for header QNames to AxisService " + axisService, e);
+                log.warn(Messages.getMessage("regHandlerHeadersErr",axisService.getName(),e.getMessage()));
             }
         }  
+    }
+    
+    /**
+     * Given a binding type value based on a JAXWS anntation, return the corresponding WSDL
+     * binding type.  The JAXWS annotation values understood are those returned by
+     * mapBindingTypeWsdltoAnnotation.
+     * 
+     * @see #mapBindingTypeWsdlToAnnotation(String, String)
+     * 
+     * @param annotationBindingType The binding type as represented by a JAXWS annotation value
+     * @return The binding type as represented by a WSDL binding extension namespace value
+     */
+    public static String mapBindingTypeAnnotationToWsdl(String annotationBindingType) {
+        String wsdlBindingType = null;
+        
+        if (SOAPBinding.SOAP11HTTP_BINDING.equals(annotationBindingType)
+                || MDQConstants.SOAP11JMS_BINDING.equals(annotationBindingType)) {
+            wsdlBindingType = EndpointDescriptionWSDL.SOAP11_WSDL_BINDING;
+        } else if (SOAPBinding.SOAP12HTTP_BINDING.equals(annotationBindingType)
+                || MDQConstants.SOAP12JMS_BINDING.equals(annotationBindingType)) {
+            wsdlBindingType = EndpointDescriptionWSDL.SOAP12_WSDL_BINDING;
+        } else if (javax.xml.ws.http.HTTPBinding.HTTP_BINDING.equals(annotationBindingType)) {
+            wsdlBindingType = EndpointDescriptionWSDL.HTTP_WSDL_BINDING;
+        }
+        
+        return wsdlBindingType;
+    }
+    
+    /**
+     * Given a binding type value based on WSDL, return the corresponding JAXWS annotation value.
+     * The WSDL binding type values are based on the namespace of the binding extension element.
+     * The JAXWS annotation values correspond to the values to the HTTPBinding and SOAPBinding
+     * annotations.  Additionally, proprietary values for JMS bindings are supported.  The JAXWS
+     * binding type annotation values returned could be from SOAPBinding or HTTPBinding.
+     * 
+     * @param wsdlBindingType The binding type as represnted by the WSDL binding extension namespace
+     * @param soapTransport The WSDL transport.  Used to determine if a JMS binding type should
+     * be returned
+     * @return The binding represented by a JAXWS Binding Type Annotation value from either 
+     * SOAPBinding or HTTPBinding.
+     */
+    public static String mapBindingTypeWsdlToAnnotation(String wsdlBindingType, String soapTransport) {
+        String soapBindingType = null;
+        if (EndpointDescriptionWSDL.SOAP11_WSDL_BINDING.equals(wsdlBindingType)) {
+            if (MDQConstants.SOAP11JMS_BINDING.equals(soapTransport)) {
+                soapBindingType =  MDQConstants.SOAP11JMS_BINDING;
+            } else {
+                //REVIEW: We are making the assumption that if not JMS, then HTTP
+                soapBindingType = SOAPBinding.SOAP11HTTP_BINDING;
+            } 
+        } else if (EndpointDescriptionWSDL.SOAP12_WSDL_BINDING.equals(wsdlBindingType)) {
+            if (MDQConstants.SOAP12JMS_BINDING.equals(soapTransport)) {
+                soapBindingType =  MDQConstants.SOAP12JMS_BINDING;
+            } else {
+                //REVIEW: We are making the assumption that if not JMS, then HTTP
+                soapBindingType = SOAPBinding.SOAP12HTTP_BINDING;
+            } 
+        } else if (EndpointDescriptionWSDL.HTTP_WSDL_BINDING.equals(wsdlBindingType)) {
+            soapBindingType = javax.xml.ws.http.HTTPBinding.HTTP_BINDING;
+        }
+        return soapBindingType;
     }
 }

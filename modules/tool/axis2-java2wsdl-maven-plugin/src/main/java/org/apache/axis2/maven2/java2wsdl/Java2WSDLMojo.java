@@ -16,16 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.maven2.java2wsdl;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.Properties;
-import java.util.ArrayList;
-
+import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -33,7 +27,14 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
 import org.apache.ws.java2wsdl.Java2WSDLCodegenEngine;
 import org.apache.ws.java2wsdl.utils.Java2WSDLCommandLineOption;
-import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 
 /**
@@ -228,13 +229,19 @@ public class Java2WSDLMojo extends AbstractMojo {
                         Java2WSDLConstants.OUTPUT_FILENAME_OPTION,
                         outputFile.getName() );
 
+        Artifact artifact = project.getArtifact();
         Set artifacts = project.getArtifacts();
-        String[] artifactFileNames = new String[artifacts.size() + 1];
+        String[] artifactFileNames = new String[artifacts.size() + (artifact == null ? 0 : 1)];
         int j = 0;
         for(Iterator i = artifacts.iterator(); i.hasNext(); j++) {
             artifactFileNames[j] = ((Artifact) i.next()).getFile().getAbsolutePath();
         }
-        artifactFileNames[j] = project.getArtifact().getFile().getAbsolutePath();
+        if(artifact != null) {
+            File file = artifact.getFile();
+            if(file != null){
+                artifactFileNames[j] = file.getAbsolutePath();
+            }
+        }
 
         addToOptionMap( optionMap,
                         Java2WSDLConstants.CLASSPATH_OPTION,
@@ -301,17 +308,19 @@ public class Java2WSDLMojo extends AbstractMojo {
         }
 
         ArrayList list = new ArrayList();
-        Iterator iterator = package2Namespace.entrySet().iterator();
-
-        while (iterator.hasNext()) {
-            Map.Entry entry = (Map.Entry) iterator.next();
-            String packageName = (String) entry.getKey();
-            String namespace = (String) entry.getValue();
-            list.add(OPEN_BRACKET +
-                    packageName +
-                    COMMA +
-                    namespace +
-                    CLOSE_BRACKET);
+        if(package2Namespace != null){
+            Iterator iterator = package2Namespace.entrySet().iterator();
+    
+            while (iterator.hasNext()) {
+                Map.Entry entry = (Map.Entry) iterator.next();
+                String packageName = (String) entry.getKey();
+                String namespace = (String) entry.getValue();
+                list.add(OPEN_BRACKET +
+                        packageName +
+                        COMMA +
+                        namespace +
+                        CLOSE_BRACKET);
+            }
         }
         addToOptionMap(optionMap,
                 Java2WSDLConstants.JAVA_PKG_2_NSMAP_OPTION,

@@ -19,20 +19,16 @@
 
 package org.apache.axis2.tool.codegen.eclipse.ui;
 
-import java.util.Iterator;
-import java.util.Map;
-
-import javax.wsdl.WSDLException;
-import javax.xml.namespace.QName;
-
 import org.apache.axis2.tool.codegen.eclipse.plugin.CodegenWizardPlugin;
 import org.apache.axis2.tool.codegen.eclipse.util.UIConstants;
 import org.apache.axis2.tool.codegen.eclipse.util.WSDLPropertyReader;
+import org.apache.axis2.util.CommandLineOptionConstants;
 import org.apache.axis2.util.URLProcessor;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.TableEditor;
 import org.eclipse.swt.events.ModifyEvent;
 import org.eclipse.swt.events.ModifyListener;
+import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Point;
@@ -49,6 +45,13 @@ import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.TableItem;
 import org.eclipse.swt.widgets.Text;
+
+import javax.wsdl.WSDLException;
+import javax.xml.namespace.QName;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Options Page lets the user change general settings on the code generation. It
@@ -128,6 +131,8 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 	 * Text box to have the service name
 	 */
 	private Combo serviceNameCombo;
+	
+	private Button advanceOptionsButton;
 
 	private WSDLPropertyReader reader;
 
@@ -144,6 +149,8 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 	 */
 	private Table namespace2packageTable = null;
 	
+	private HashMap advanceOptions;
+	
 	Composite container;
 
 	/**
@@ -151,8 +158,14 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 	 */
 	public OptionsPage() {
 		super("page2");
+		advanceOptions=getInitialisedAdvanceOptions();
 	}
 
+	private HashMap getInitialisedAdvanceOptions(){
+		HashMap advanceOptions=new HashMap();
+		advanceOptions.put(CommandLineOptionConstants.WSDL2JavaConstants.UNPACK_CLASSES_OPTION, new String[0]);
+		return advanceOptions;
+	}
 	/**
 	 * Sets the default values for the Options page
 	 * 
@@ -646,7 +659,22 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
             }
           });
        
-        
+		gd = new GridData(GridData.FILL_HORIZONTAL);
+		gd.horizontalSpan = 2;
+		Label fillLabel4 = new Label(container, SWT.NULL);
+		fillLabel4.setLayoutData(gd);
+
+		gd = new GridData(GridData.FILL_HORIZONTAL);
+		gd.horizontalSpan = 1;
+		advanceOptionsButton= new Button(container, SWT.NULL);
+		advanceOptionsButton.setText("Advance Options");
+		advanceOptionsButton.addSelectionListener(new SelectionAdapter(){
+			public void widgetSelected(SelectionEvent e) {
+				handleAdvanceButtonClick();
+			}
+		});
+		advanceOptionsButton.setLayoutData(gd);
+		
         //adjust the width
         //adjustColumnWidth(namespace2packageTable);
        
@@ -674,6 +702,15 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 
 	}
 
+	private void handleAdvanceButtonClick(){
+		WSDLJavaAdvanceDialog javaAdvanceDialog = new WSDLJavaAdvanceDialog(getShell(),advanceOptions);
+		javaAdvanceDialog.create();
+		javaAdvanceDialog.getShell().setSize(700, 950);
+		javaAdvanceDialog.open();
+		if (javaAdvanceDialog.getReturnCode() == org.eclipse.jface.window.Window.OK){
+			advanceOptions=javaAdvanceDialog.getAdvanceOptions();
+		}
+	}
 //	/**
 //	 * Adjust the column widths
 //	 * @param table
@@ -831,7 +868,6 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 		databindingTypeCombo.add(DATA_BINDING_ADB);
 		databindingTypeCombo.add(DATA_BINDING_XMLBEANS);
 		databindingTypeCombo.add(DATA_BINDING_JIBX);
-		//databindingTypeCombo.add(DATA_BINDING_JAXME);
 		databindingTypeCombo.add(DATA_BINDING_NONE);
 
 	}
@@ -1181,6 +1217,7 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
         this.clientSideCheckBoxButton.setEnabled(false);
         this.clientSideCheckBoxButton.setSelection(true);
         this.generateAllCheckBoxButton.setEnabled(false);
+        this.advanceOptionsButton.setEnabled(false);
 	}
 	
 	private void enableControls(){
@@ -1198,7 +1235,8 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
         this.packageText.setEnabled(true);
         this.clientSideCheckBoxButton.setEnabled(true);
         this.generateAllCheckBoxButton.setEnabled(true);
-	}
+        this.advanceOptionsButton.setEnabled(true);
+    }
 	
 	/**
 	 * get the package derived by  Namespace
@@ -1233,5 +1271,12 @@ public class OptionsPage extends AbstractWizardPage implements UIConstants {
 		this.generateAllCheckBoxButton.setSelection(false);
 		settings.put(PREF_GEN_ALL, generateAllCheckBoxButton.getSelection());
 
+	}
+	
+	public HashMap getAdvanceOptions(){
+		if (advanceOptionsButton.getEnabled())
+			return advanceOptions;
+		else
+			return getInitialisedAdvanceOptions();
 	}
 }

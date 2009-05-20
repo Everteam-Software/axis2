@@ -16,25 +16,33 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.server.endpoint;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.jaxws.ExceptionFactory;
-import org.apache.axis2.jaxws.binding.BindingImpl;
+import org.apache.axis2.jaxws.addressing.util.EndpointReferenceUtils;
 import org.apache.axis2.jaxws.binding.BindingUtils;
 import org.apache.axis2.jaxws.description.DescriptionFactory;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.ServiceDescription;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.transport.http.HTTPWorkerFactory;
 import org.apache.axis2.transport.http.server.SimpleHttpServer;
 import org.apache.axis2.transport.http.server.WorkerFactory;
+import org.w3c.dom.Element;
 
+import javax.xml.namespace.QName;
 import javax.xml.transform.Source;
 import javax.xml.ws.Binding;
-
+import javax.xml.ws.EndpointReference;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.wsaddressing.W3CEndpointReference;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -46,6 +54,9 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
     private EndpointDescription endpointDesc;
     private Binding binding;
     private SimpleHttpServer server;
+    private List<Source> metadata;
+    private Map<String, Object> properties;
+    private Executor executor;
 
     public EndpointImpl(Object o) {
         implementor = o;
@@ -60,7 +71,8 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
 
     private void initialize() {
         if (implementor == null) {
-            throw ExceptionFactory.makeWebServiceException("The implementor object cannot be null");
+        	
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("initErr"));
         }
         
         // If we don't have the necessary metadata, let's go ahead and
@@ -82,7 +94,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
     * @see javax.xml.ws.Endpoint#getMetadata()
     */
     public List<Source> getMetadata() {
-        return null;
+        return this.metadata;
     }
 
     /*
@@ -90,7 +102,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
     * @see javax.xml.ws.Endpoint#setMetadata(java.util.List)
     */
     public void setMetadata(List<Source> list) {
-        return;
+        this.metadata = list;
     }
 
     /*
@@ -98,7 +110,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
     * @see javax.xml.ws.Endpoint#getProperties()
     */
     public Map<String, Object> getProperties() {
-        return null;
+        return this.properties;
     }
 
     /*
@@ -106,7 +118,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
     * @see javax.xml.ws.Endpoint#setProperties(java.util.Map)
     */
     public void setProperties(Map<String, Object> properties) {
-        return;
+        this.properties = properties;
     }
 
     /*
@@ -122,7 +134,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
      * @see javax.xml.ws.Endpoint#getExecutor()
      */
     public Executor getExecutor() {
-        return null;
+        return this.executor;
     }
 
     /*
@@ -154,6 +166,16 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
      * @see javax.xml.ws.Endpoint#publish(java.lang.String)
      */
     public void publish(String s) {
+        int port = -1;
+        try {
+            URI uri = new URI(s);
+            port = uri.getPort();
+        } catch (URISyntaxException e) {
+        }
+        // Default to 8080
+        if(port == -1){
+            port = 8080;
+        }
         ConfigurationContext ctx = endpointDesc.getServiceDescription().getAxisConfigContext();
 
         try {
@@ -171,7 +193,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
         WorkerFactory wf = new HTTPWorkerFactory();
 
         try {
-            server = new SimpleHttpServer(ctx, wf, 8080);  //TODO: Add a configurable port
+            server = new SimpleHttpServer(ctx, wf, port);
             server.init();            
             server.start();
         } catch (IOException e) {
@@ -186,7 +208,7 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
      * @see javax.xml.ws.Endpoint#setExecutor(java.util.concurrent.Executor)
      */
     public void setExecutor(Executor executor) {
-
+        this.executor = executor;
     }
 
     /*
@@ -195,11 +217,47 @@ public class EndpointImpl extends javax.xml.ws.Endpoint {
      */
     public void stop() {
         try {
-            server.destroy();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            if(server != null) {
+                server.destroy();
+            }
+        } catch (Exception e) {
+            throw ExceptionFactory.makeWebServiceException(e);
         }
+    }
+
+    @Override
+    public <T extends EndpointReference> T getEndpointReference(Class<T> clazz, Element... referenceParameters) {
+        if (!isPublished()) {
+            throw new WebServiceException("Endpoint is not published");
+        }
+        
+        if (!BindingUtils.isSOAPBinding(binding.getBindingID())) {
+            throw new UnsupportedOperationException("This method is unsupported for the binding: " + binding.getBindingID());
+        }
+        
+        EndpointReference jaxwsEPR = null;
+        String addressingNamespace = EndpointReferenceUtils.getAddressingNamespace(clazz);
+        String address = endpointDesc.getEndpointAddress();
+        QName serviceName = endpointDesc.getServiceQName();
+        QName portName = endpointDesc.getPortQName();
+        
+        org.apache.axis2.addressing.EndpointReference axis2EPR =
+        	EndpointReferenceUtils.createAxis2EndpointReference(address, serviceName, portName, null, addressingNamespace);
+        
+        try {
+            EndpointReferenceUtils.addReferenceParameters(axis2EPR, referenceParameters);
+            jaxwsEPR = EndpointReferenceUtils.convertFromAxis2(axis2EPR, addressingNamespace);
+        }
+        catch (Exception e) {
+            throw ExceptionFactory.
+              makeWebServiceException(Messages.getMessage("endpointRefCreationError"), e);
+        }
+
+        return clazz.cast(jaxwsEPR);
+    }
+
+    @Override
+    public EndpointReference getEndpointReference(Element... referenceParameters) {
+        return getEndpointReference(W3CEndpointReference.class, referenceParameters);
     }
 }

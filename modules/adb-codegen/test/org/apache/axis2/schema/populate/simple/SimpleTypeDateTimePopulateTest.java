@@ -16,13 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.populate.simple;
 
 import org.apache.axis2.databinding.utils.ConverterUtil;
 
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.TimeZone;
-import java.text.SimpleDateFormat;
 
 public class SimpleTypeDateTimePopulateTest extends AbstractSimplePopulater{
     private String values[] ={"2002-10-10T12:00:00+05:00",
@@ -30,19 +31,25 @@ public class SimpleTypeDateTimePopulateTest extends AbstractSimplePopulater{
             "2002-10-10T07:00:00Z"
     };
     private String xmlString[] = {
-            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+values[0]+"</dateTimeParam>",
-            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+values[1]+"</dateTimeParam>",
-            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+values[2]+"</dateTimeParam>"
+            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDateTime(values[0])) +"</dateTimeParam>",
+            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDateTime(values[1]))+"</dateTimeParam>",
+            "<dateTimeParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDateTime(values[2]))+"</dateTimeParam>"
     };
     // force others to implement this method
     public void testPopulate() throws Exception {
-
+        // Skip for JDK1.4
+        if (System.getProperty("java.version").startsWith("1.4.")) {
+            return;
+        }
         Calendar calendar;
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         for (int i = 0; i < values.length; i++) {
             calendar = ConverterUtil.convertToDateTime(values[i]);
-            checkValue(xmlString[i],simpleDateFormat.format(calendar.getTime()));
+            checkValue(xmlString[i],ConverterUtil.convertToString(calendar));
        }
     }
 

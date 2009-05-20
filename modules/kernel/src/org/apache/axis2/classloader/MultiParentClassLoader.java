@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.classloader;
 
 import org.apache.commons.logging.LogFactory;
@@ -127,6 +128,24 @@ public class MultiParentClassLoader extends URLClassLoader {
         nonOverridableResources = toResources(nonOverridableClasses);
     }
 
+    public MultiParentClassLoader(MultiParentClassLoader source) {
+        this(source.getURLs(), deepCopyParents(source.parents), source.inverseClassLoading, source.hiddenClasses, source.nonOverridableClasses);
+    }
+
+    static ClassLoader copy(ClassLoader source) {
+        if (source instanceof MultiParentClassLoader) {
+            return new MultiParentClassLoader((MultiParentClassLoader) source);
+        } else if (source instanceof URLClassLoader) {
+            return new URLClassLoader(((URLClassLoader) source).getURLs(), source.getParent());
+        } else {
+            return new URLClassLoader(new URL[0], source);
+        }
+    }
+
+    ClassLoader copy() {
+        return MultiParentClassLoader.copy(this);
+    }
+
     private String[] toResources(String[] classes) {
         String[] resources = new String[classes.length];
         for (int i = 0; i < classes.length; i++) {
@@ -161,6 +180,21 @@ public class MultiParentClassLoader extends URLClassLoader {
             ClassLoader parent = parents[i];
             if (parent == null) {
                 throw new RuntimeException("parent[" + i + "] is null");
+            }
+            newParentsArray[i] = parent;
+        }
+        return newParentsArray;
+    }
+
+    private static ClassLoader[] deepCopyParents(ClassLoader[] parents) {
+        ClassLoader[] newParentsArray = new ClassLoader[parents.length];
+        for (int i = 0; i < parents.length; i++) {
+            ClassLoader parent = parents[i];
+            if (parent == null) {
+                throw new RuntimeException("parent[" + i + "] is null");
+            }
+            if (parent instanceof MultiParentClassLoader) {
+                parent = ((MultiParentClassLoader) parent).copy();
             }
             newParentsArray[i] = parent;
         }
@@ -213,6 +247,17 @@ public class MultiParentClassLoader extends URLClassLoader {
                     return resolveClass(clazz, resolve);
                 } catch (ClassNotFoundException ignored) {
                     // this parent didn't have the class; try the next one
+                    //  TODO REVIEW FOR JAVA 6
+                    // In Java 5, if you passed an array string such as "[Lcom.mypackage.MyClass;" to
+                    // loadClass, the class would indeed be loaded.  
+                    // In JDK6, a ClassNotFoundException is thrown. 
+                    // The work-around is to use code Class.forName instead.
+                    // Example:
+                    // try {
+                    //       classLoader.loadClass(name);
+                    //  } catch (ClassNotFoundException e) {
+                    //       Class.forName(name, false, loader);
+                    //  }
                 }
             }
         }

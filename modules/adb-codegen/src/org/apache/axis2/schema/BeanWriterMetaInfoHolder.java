@@ -16,10 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema;
 
 import javax.xml.namespace.QName;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * This class is used as a holder to pass on the meta information to the bean writer.
@@ -61,6 +69,11 @@ public class BeanWriterMetaInfoHolder {
     protected String minInclusiveFacet = null;
 
     protected Map memberTypes = new HashMap();
+    protected Map xmlNameJavaNameMap = new HashMap();
+    protected List memberTypesKeys = new ArrayList();
+
+    protected Map elementQNameToDefulatValueMap = new HashMap();
+
     protected QName itemTypeQName;
     protected String itemTypeClassName;
     protected boolean isUnion;
@@ -309,6 +322,34 @@ public class BeanWriterMetaInfoHolder {
     }
 
     /**
+     * this method registers the defult value agaist the element qname.
+     * @param qname
+     * @param value
+     */
+    public void registerDefaultValue(QName qname,String value){
+        this.elementQNameToDefulatValueMap.put(qname,value);
+    }
+
+    /**
+     *
+     * @param qname
+     * @return is a default value available for this qname
+     */
+    public boolean isDefaultValueAvailable(QName qname){
+        return this.elementQNameToDefulatValueMap.containsKey(qname);
+    }
+
+    /**
+     * gets the default value for qname
+     * @param qname
+     * @return default value for this qname
+     */
+
+    public String getDefaultValueForQName(QName qname){
+        return (String) this.elementQNameToDefulatValueMap.get(qname);
+    }
+
+    /**
      * Gets the schema name for the given QName.
      *
      * @param eltQName
@@ -463,6 +504,7 @@ public class BeanWriterMetaInfoHolder {
         this.qNameMaxOccursCountMap.clear();
         this.qNameMinOccursCountMap.clear();
         this.qNameOrderMap.clear();
+        this.elementQNameToDefulatValueMap.clear();
     }
 
     /**
@@ -809,8 +851,17 @@ public class BeanWriterMetaInfoHolder {
         this.memberTypes = memberTypes;
     }
 
+    public List getMemberTypesKeys() {
+        return memberTypesKeys;
+    }
+
+    public void setMemberTypesKeys(List memberTypesKeys) {
+        this.memberTypesKeys = memberTypesKeys;
+    }
+
     public void addMemberType(QName qname,String className){
         this.memberTypes.put(qname,className);
+        this.memberTypesKeys.add(qname);
     }
 
     public boolean isList() {
@@ -851,6 +902,18 @@ public class BeanWriterMetaInfoHolder {
 
     public void setHasParticleType(boolean hasParticleType) {
         this.hasParticleType = hasParticleType;
+    }
+
+    public void addXmlNameJavaNameMapping(String xmlName,String javaName){
+        this.xmlNameJavaNameMap.put(xmlName,javaName);
+    }
+
+    public boolean isJavaNameMappingAvailable(String xmlName){
+        return this.xmlNameJavaNameMap.containsKey(xmlName);
+    }
+
+    public String getJavaName(String xmlName){
+        return (String) this.xmlNameJavaNameMap.get(xmlName);
     }
 
 }

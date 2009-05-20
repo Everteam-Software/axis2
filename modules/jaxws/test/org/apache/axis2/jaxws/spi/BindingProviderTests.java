@@ -16,17 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.spi;
+
+import junit.framework.TestCase;
+import org.apache.axis2.jaxws.description.EndpointDescription;
 
 import javax.xml.namespace.QName;
 import javax.xml.transform.Source;
 import javax.xml.ws.Dispatch;
 import javax.xml.ws.Service;
 import javax.xml.ws.soap.SOAPBinding;
-
-import junit.framework.TestCase;
-
-import org.apache.axis2.jaxws.description.EndpointDescription;
 
 /**
  * The client APIs should each implement the org.apache.axis2.jaxws.spi.BindingProvider

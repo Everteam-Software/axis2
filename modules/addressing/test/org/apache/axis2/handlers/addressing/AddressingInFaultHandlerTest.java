@@ -27,6 +27,7 @@ import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingConstants;
+import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.handlers.util.TestUtil;
 
@@ -84,8 +85,10 @@ public class AddressingInFaultHandlerTest extends TestCase {
         StAXSOAPModelBuilder omBuilder = testUtil.getOMBuilder(testfile);
         SOAPEnvelope envelope = ((SOAPEnvelope)omBuilder.getDocumentElement());
         MessageContext msgContext = new MessageContext();
+        msgContext.setConfigurationContext(
+                ConfigurationContextFactory.createEmptyConfigurationContext());
         msgContext.setEnvelope(envelope);
-        AddressingFinalInHandler afih = new AddressingFinalInHandler();
+        AddressingInHandler afih = new AddressingInHandler();
         afih.invoke(msgContext);
         AddressingInFaultHandler aifh = new AddressingInFaultHandler();
         aifh.invoke(msgContext);

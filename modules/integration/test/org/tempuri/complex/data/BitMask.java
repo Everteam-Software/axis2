@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.tempuri.complex.data;
 
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ public class BitMask {
 
     BitMask(String v) {
         value = v;
+        values = new ArrayList();
         values.add(this);
     }
 

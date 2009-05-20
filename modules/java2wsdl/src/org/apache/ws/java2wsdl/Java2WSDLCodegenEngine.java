@@ -16,11 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ws.java2wsdl;
 
-import org.apache.ws.java2wsdl.utils.Java2WSDLCommandLineOption;
 import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
 import org.apache.axis2.description.java2wsdl.Java2WSDLUtils;
+import org.apache.ws.java2wsdl.utils.Java2WSDLCommandLineOption;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -55,11 +56,7 @@ public class Java2WSDLCodegenEngine implements Java2WSDLConstants {
     }
 
     public void generate() throws Exception {
-        try {
-            java2WsdlBuilder.generateWSDL();
-        } catch (Exception e) {
-            throw new Exception(e);
-        }
+        java2WsdlBuilder.generateWSDL();
     }
 
     private FileOutputStream resolveOutputStream(String className, Map optionsMap) throws Exception
@@ -116,6 +113,9 @@ public class Java2WSDLCodegenEngine implements Java2WSDLConstants {
             try {
                 for (int i = 0; i < classPathEntries.length; i++) {
                     String classPathEntry = classPathEntries[i];
+                    if(classPathEntry == null) {
+                        continue;
+                    }
                     //this should be a file(or a URL)
                     if (Java2WSDLUtils.isURL(classPathEntry)) {
                         urls[i] = new URL(classPathEntry);
@@ -222,6 +222,19 @@ public class Java2WSDLCodegenEngine implements Java2WSDLConstants {
                            optionsMap);
         if (option != null) {
             java2WsdlBuilder.setGenerateDocLitBare(true);
+        }
+
+        option = loadOption(Java2WSDLConstants.CUSTOM_SCHEMA_LOCATION,
+                           Java2WSDLConstants.CUSTOM_SCHEMA_LOCATION_LONG,
+                           optionsMap);
+        if (option != null) {
+            java2WsdlBuilder.setCustomSchemaLocation(option.getOptionValue());
+        }
+        option = loadOption(Java2WSDLConstants.SCHEMA_MAPPING_FILE_LOCATION,
+                           Java2WSDLConstants.SCHEMA_MAPPING_FILE_LOCATION_LONG,
+                           optionsMap);
+        if (option != null) {
+            java2WsdlBuilder.setMappingFileLocation(option.getOptionValue());
         }
     }
     

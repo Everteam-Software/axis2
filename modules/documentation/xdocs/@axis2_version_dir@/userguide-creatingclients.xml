@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
@@ -155,8 +156,7 @@ for calling each of these operations.</p>
 <p><b>The short story:</b></p>
 <ol>
 <li>
-href="http://ws.apache.org/axis2/download/@axis2_version_dir@/download.cgi#std-bin"
-<a href="">Download</a> and unpack the Apache Axis2 Standard
+<a href="http://ws.apache.org/axis2/download/@axis2_version_dir@/download.cgi#std-bin">Download</a> and unpack the Apache Axis2 Standard
 Distribution, if you have not done it already.</li>
 <li>Create the client stub with the following command:
 <pre>
@@ -238,7 +238,7 @@ servlet container. It should look something like this:</p>
 <p>ADB is not your only option for generating Web service clients.
 Other options include <a href=
 "userguide-creatingclients-xmlbeans.html">XmlBeans</a>, <a href=
-"userguide-creatingclients-jibx.html">JiBX</a>, JAXME and
+"userguide-creatingclients-jibx.html">JiBX</a> and
 JAXBRI.</p>
 <p><strong>See the Next Section</strong> -<a href=
 "userguide-buildingservices.html#buildservices">Building

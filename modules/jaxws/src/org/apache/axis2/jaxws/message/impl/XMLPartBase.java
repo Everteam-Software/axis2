@@ -16,9 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMXMLParserWrapper;
+import org.apache.axiom.om.impl.builder.StAXBuilder;
+import org.apache.axiom.soap.RolePlayer;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -41,11 +45,17 @@ import javax.xml.soap.Node;
 import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPEnvelope;
 import javax.xml.soap.SOAPException;
+import javax.xml.soap.SOAPHeader;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.ws.WebServiceException;
+
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
 
 /**
  * XMLPartBase class for an XMLPart An XMLPart is an abstraction of the xml portion of the message.
@@ -100,7 +110,7 @@ public abstract class XMLPartBase implements XMLPart {
 
     boolean consumed = false;
 
-    Message parent;
+    MessageImpl parent;
 
 
     /**
@@ -147,7 +157,9 @@ public abstract class XMLPartBase implements XMLPart {
                 // Okay
             } else
             if (qName.getNamespaceURI().equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
-                throw ExceptionFactory.makeWebServiceException("UNEXPECTED");  // TODO NLS
+                // throw ExceptionFactory.
+                //    makeWebServiceException(Messages.getMessage("restWithSOAPErr"));
+                // Okey
             } else {
                 content = _createSpine(Protocol.rest, Style.DOCUMENT, 0, root);
                 contentType = SPINE;
@@ -514,7 +526,8 @@ public abstract class XMLPartBase implements XMLPart {
     }
 
     /* (non-Javadoc)
-      * @see org.apache.axis2.jaxws.message.XMLPart#getHeaderBlock(java.lang.String, java.lang.String, java.lang.Object, org.apache.axis2.jaxws.message.factory.BlockFactory)
+      * @see org.apache.axis2.jaxws.message.XMLPart#getHeaderBlock(java.lang.String, 
+      * java.lang.String, java.lang.Object, org.apache.axis2.jaxws.message.factory.BlockFactory)
       */
     public Block getHeaderBlock(String namespace, String localPart, Object context,
                                 BlockFactory blockFactory) throws WebServiceException {
@@ -524,6 +537,69 @@ public abstract class XMLPartBase implements XMLPart {
             block.setParent(getParent());
         }
         return block;
+    }
+    
+    public Set<QName> getHeaderQNames() {
+        try {
+            switch (contentType) {
+                case OM: {
+                    HashSet<QName> qnames = new HashSet<QName>();
+                    OMElement om = this.getAsOMElement();
+                    if (om instanceof org.apache.axiom.soap.SOAPEnvelope) {
+                        org.apache.axiom.soap.SOAPEnvelope se =
+                            (org.apache.axiom.soap.SOAPEnvelope) om;
+                        org.apache.axiom.soap.SOAPHeader header = se.getHeader();
+                        if (header != null) {
+                            Iterator it = header.getChildElements(); 
+                            while (it != null && it.hasNext()) {
+                                Object node = it.next();
+                                if (node instanceof OMElement) {
+                                    qnames.add(((OMElement) node).getQName());
+                                }
+                            }
+                        }
+                    }
+                    return qnames;
+                }
+                case SOAPENVELOPE: {
+                    HashSet<QName> qnames = new HashSet<QName>();
+                    SOAPEnvelope se = this.getContentAsSOAPEnvelope();
+                    if (se != null) {
+                        SOAPHeader header = se.getHeader();
+                        if (header != null) {
+                            Iterator it = header.getChildElements(); 
+                            while (it != null && it.hasNext()) {
+                                Object node = it.next();
+                                if (node instanceof SOAPElement) {
+                                    qnames.add(((SOAPElement) node).getElementQName());
+                                }
+                            }
+                        }
+                    }
+                    return qnames;
+                }
+                case SPINE:
+                    return getContentAsXMLSpine().getHeaderQNames();
+                default:
+                    return null;
+            }
+        } catch (SOAPException se) {
+            throw ExceptionFactory.makeWebServiceException(se);
+        }
+    }
+
+    public List<Block> getHeaderBlocks(String namespace, String localPart, 
+                                      Object context, BlockFactory blockFactory, 
+                                      RolePlayer rolePlayer) throws WebServiceException {
+        List<Block> blocks =
+            getContentAsXMLSpine().getHeaderBlocks(namespace, localPart, 
+                                                   context, blockFactory, rolePlayer);
+        for(Block block:blocks) {
+            if (block != null) {
+                block.setParent(getParent());
+            }
+        }
+        return blocks;
     }
 
     /* (non-Javadoc)
@@ -578,6 +654,12 @@ public abstract class XMLPartBase implements XMLPart {
         block.setParent(getParent());
         getContentAsXMLSpine().setHeaderBlock(namespace, localPart, block);
     }
+    
+    public void appendHeaderBlock(String namespace, String localPart, Block block)
+    throws WebServiceException {
+        block.setParent(getParent());
+        getContentAsXMLSpine().appendHeaderBlock(namespace, localPart, block);
+    }
 
     /*
     * (non-Javadoc)
@@ -591,7 +673,7 @@ public abstract class XMLPartBase implements XMLPart {
      * Set the backpointer to this XMLPart's parent Message
      */
     public void setParent(Message p) {
-        parent = p;
+        parent = (MessageImpl) p;
     }
 
     /**
@@ -667,12 +749,26 @@ public abstract class XMLPartBase implements XMLPart {
             this.consumed = true;
             if (log.isDebugEnabled()) {
                 log.debug("Debug Monitoring When Block is Consumed");
-                log.debug(JavaUtils.stackToString());
+                log.trace(JavaUtils.stackToString());
             }
         } else {
             consumed = false;
 		}
 	}
+    
+    public void close() {
+        OMElement om = getContentAsOMElement();
+        if (om !=null) {
+            OMXMLParserWrapper builder = om.getBuilder();
+            if (builder instanceof StAXBuilder) {
+                 StAXBuilder staxBuilder = (StAXBuilder) builder;
+                 staxBuilder.releaseParserOnClose(true);
+                 if (!staxBuilder.isClosed()) {
+                     staxBuilder.close();
+                 }
+            }
+        }
+     }
 	
 	
 }

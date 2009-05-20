@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
   ~ Licensed to the Apache Software Foundation (ASF) under one
   ~ or more contributor license agreements. See the NOTICE file
@@ -17,6 +18,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsd:schema targetNamespace="http://mynamespace.com/testinnerparticle"
             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
             xmlns:test1="http://mynamespace.com/testinnerparticle"
@@ -106,4 +108,29 @@
         <xsd:sequence>
         </xsd:sequence>
     </xsd:complexType>
+
+    <xsd:complexType name="TestComplexType">
+        <xsd:sequence>
+            <xsd:element ref="test1:TestElement"/>
+            <xsd:sequence>
+                <xsd:element name="TestInnerElement" minOccurs="0">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:sequence>
+        </xsd:sequence>
+    </xsd:complexType>
+
+    <xsd:element name="TestElement">
+        <xsd:complexType>
+            <xsd:sequence>
+                <xsd:element name="param" type="xsd:string"/>
+            </xsd:sequence>
+        </xsd:complexType>
+    </xsd:element>
+
+    <xsd:element name="TestComplexTypeElement" type="test1:TestComplexType"/>
+
 </xsd:schema>

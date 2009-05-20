@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.binding;
 
+import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.i18n.Messages;
@@ -30,8 +32,6 @@ import javax.xml.soap.SOAPConstants;
 import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPFactory;
 import javax.xml.ws.WebServiceException;
-
-import java.util.AbstractSet;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -42,10 +42,13 @@ import java.util.Set;
  * explicitly specificied.
  */
 public class SOAPBinding extends BindingImpl implements javax.xml.ws.soap.SOAPBinding {
-
     private boolean mtomEnabled = false;
 
     private static Log log = LogFactory.getLog(SOAPBinding.class);
+    
+    private EndpointReference epr;
+    
+    private String addressingNamespace;
 
     public SOAPBinding(EndpointDescription endpointDesc) {
         super(endpointDesc);
@@ -68,9 +71,9 @@ public class SOAPBinding extends BindingImpl implements javax.xml.ws.soap.SOAPBi
              * "http://schemas.xmlsoap.org/wsdl/soap/http" (SOAP1.1)
              * "http://www.w3.org/2003/05/soap/bindings/HTTP/" (SOAP1.2)
              */
-            if (bindingId.equalsIgnoreCase(SOAPBinding.SOAP12HTTP_BINDING)
-                            || bindingId.equalsIgnoreCase(SOAPBinding.SOAP12HTTP_MTOM_BINDING)) {
-                bindingNamespace = SOAP12_ENV_NS;
+        	
+            if (BindingUtils.isSOAP12Binding(bindingId)){
+            	bindingNamespace = SOAP12_ENV_NS;
             } else {
                 // TODO currently defaults to SOAP11. Should we be more stricct
                 // about checking?
@@ -176,8 +179,7 @@ public class SOAPBinding extends BindingImpl implements javax.xml.ws.soap.SOAPBi
             // Throw an exception for setting a role of "none"
             // Per JAXWS 2.0 Sec 10.1.1.1 SOAP Roles, page 116:
             if (set.contains(SOAPConstants.URI_SOAP_1_2_ROLE_NONE)) {
-                // TODO: RAS/NLS
-                throw ExceptionFactory.makeWebServiceException("The role of 'none' is not allowed.");
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("roleValidatioErr"));
             }
         }
         
@@ -202,21 +204,31 @@ public class SOAPBinding extends BindingImpl implements javax.xml.ws.soap.SOAPBi
                 returnSet.add(SOAPConstants.URI_SOAP_1_2_ROLE_NEXT);
             }
             
-//        } else if (SOAPBinding.SOAP11HTTP_BINDING.equals(bindingId)
-//                || SOAPBinding.SOAP11HTTP_MTOM_BINDING.equals(bindingId)) {
         } else {
             if (returnSet.isEmpty() || !returnSet.contains(SOAPConstants.URI_SOAP_ACTOR_NEXT)) {
                 returnSet.add(SOAPConstants.URI_SOAP_ACTOR_NEXT);
             }
         }
-//        else {
-//            // Invalid binding
-//            // TODO: RAS / NLS
-//            if (log.isDebugEnabled()) {
-//                log.debug("Invalid binding type set on the binding: " + bindingId);
-//            }
-//        }
         return returnSet;
     }
 
+    @Override
+    public String getAddressingNamespace() {
+        return addressingNamespace;
+    }
+
+    @Override
+    public EndpointReference getAxis2EndpointReference() {
+        return epr;
+    }
+
+    @Override
+    public void setAddressingNamespace(String addressingNamespace) {
+        this.addressingNamespace = addressingNamespace;
+    }
+
+    @Override
+    public void setAxis2EndpointReference(EndpointReference epr) {
+        this.epr = epr;
+    }
 }

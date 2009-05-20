@@ -16,12 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.builder;
 
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
-import org.apache.axis2.jaxws.util.ClassLoaderUtils;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import javax.xml.namespace.QName;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 
 /**
  * 
@@ -316,37 +322,116 @@ class DescriptionBuilderUtils {
         if (classLoader != null) {
             // Use the specified classloader to load the class.
             try {
-                returnClass = ClassLoaderUtils.forName(classToLoad, false, classLoader);
+                returnClass = forName(classToLoad, false, classLoader);
             }
             //Catch Throwable as ClassLoader can throw an NoClassDefFoundError that
             //does not extend Exception, so lets catch everything that extends Throwable
             //rather than just Exception.
             catch (Throwable ex) {
                 throw ExceptionFactory.makeWebServiceException(
-                        "DescriptionBuilderUtils: Class not found for parameter: "
-                                + classToLoad + " using classloader: " + classLoader);
+                        Messages.getMessage("DBUClassNotFound", classToLoad, classLoader.toString()));
             }
         } else {
             //Use the thread context class loader to load the class.
             try {
-                returnClass = ClassLoaderUtils.forName(classToLoad, false,
-                                                       ClassLoaderUtils.getContextClassLoader());
+                returnClass = forName(classToLoad, false,
+                                                       getContextClassLoader(null));
             }
             catch (Throwable ex) {
                 //Use the default classloader to load the class.
                 try {
-                    returnClass = ClassLoaderUtils.forName(classToLoad);
+                    returnClass = forName(classToLoad);
                 }
                 //Catch Throwable as ClassLoader can throw an NoClassDefFoundError that
                 //does not extend Exception
                 catch (Throwable ex2) {
                     throw ExceptionFactory.makeWebServiceException(
-                            "DescriptionBuilderUtils: Class not found using default classloader for parameter: " +
-                                    classToLoad);
+                            Messages.getMessage("DBUClassNotFound2", classToLoad));
                 }
             }
         }
         return returnClass;
     }
 
+    static boolean isEmpty(String string) {
+        return (string == null || "".equals(string));
+    }
+
+    static boolean isEmpty(QName qname) {
+        return qname == null || isEmpty(qname.getLocalPart());
+    }
+
+    /**
+     * Return the class for this name
+     *
+     * @return Class
+     */
+    private static Class forName(final String className, final boolean initialize,
+                                final ClassLoader classloader) throws ClassNotFoundException {
+        Class cl = null;
+        try {
+            cl = (Class) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws ClassNotFoundException {
+                            return Class.forName(className, initialize, classloader);
+                        }
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Exception thrown from AccessController: " + e.getMessage(), e);
+            }
+            throw (ClassNotFoundException) e.getException();
+        }
+
+        return cl;
+    }
+
+    /**
+     * Return the class for this name
+     *
+     * @return Class
+     */
+    private static Class forName(final String className) throws ClassNotFoundException {
+        Class cl = null;
+        try {
+            cl = (Class) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws ClassNotFoundException {
+                            return Class.forName(className);
+                        }
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Exception thrown from AccessController: " + e.getMessage(), e);
+            }
+            throw (ClassNotFoundException) e.getException();
+        }
+
+        return cl;
+    }
+
+    /**
+     * @return ClassLoader
+     */
+    private static ClassLoader getContextClassLoader(final ClassLoader classLoader) {
+        ClassLoader cl;
+        try {
+            cl = (ClassLoader) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws ClassNotFoundException {
+                            return classLoader != null ? classLoader : Thread.currentThread().getContextClassLoader();
+                        }
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Exception thrown from AccessController: " + e.getMessage(), e);
+            }
+            throw ExceptionFactory.makeWebServiceException(e.getException());
+        }
+
+        return cl;
+    }
 }

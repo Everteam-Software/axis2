@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.utility;
 
 import org.apache.axis2.java.security.AccessController;
@@ -27,10 +28,13 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlEnumValue;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlSchema;
+import javax.xml.bind.annotation.XmlElementRef;
 import javax.xml.namespace.QName;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -75,7 +79,8 @@ public class XMLRootElementUtil {
     public static QName getXmlRootElementQName(Class clazz) {
 
         // See if the object represents a root element
-        XmlRootElement root = (XmlRootElement)clazz.getAnnotation(XmlRootElement.class);
+        XmlRootElement root = (XmlRootElement)
+            getAnnotation(clazz,XmlRootElement.class);
         if (root == null) {
             return null;
         }
@@ -91,7 +96,8 @@ public class XMLRootElementUtil {
         // The namespace may need to be defaulted
         if (namespace == null || namespace.length() == 0 || namespace.equals("##default")) {
             Package pkg = clazz.getPackage();
-            XmlSchema schema = (XmlSchema)pkg.getAnnotation(XmlSchema.class);
+            XmlSchema schema = (XmlSchema)
+                getAnnotation(pkg, XmlSchema.class);
             if (schema != null) {
                 namespace = schema.namespace();
             } else {
@@ -114,7 +120,7 @@ public class XMLRootElementUtil {
 			
 			f.setAccessible(true);
 			
-			XmlEnumValue xev = f.getAnnotation(XmlEnumValue.class);
+			XmlEnumValue xev = (XmlEnumValue) getAnnotation(f, XmlEnumValue.class);
 			if (xev == null){
 				value = f.getName();
 			} else {
@@ -194,7 +200,7 @@ public class XMLRootElementUtil {
                 if (fieldName.equalsIgnoreCase(pd.getDisplayName()) ||
                         fieldName.equalsIgnoreCase(pd.getName())) {
                     // Get the xmlElement name for this field
-                    String xmlName = getXmlElementName(field.getDeclaringClass(), field);
+                    QName xmlName = getXmlElementRefOrElementQName(field.getDeclaringClass(), field);
                     found = true;
                     if (log.isDebugEnabled()) {
                         log.debug("    Found field " + field.getName() + " which has xmlname=" +
@@ -206,7 +212,7 @@ public class XMLRootElementUtil {
                                     " already has this same xmlName..this may cause problems.");
                         }
                     }
-                    map.put(xmlName, new PropertyDescriptorPlus(pd, xmlName));
+                    map.put(xmlName.getLocalPart(), new PropertyDescriptorPlus(pd, xmlName));
                     break;
                 }
 
@@ -216,7 +222,7 @@ public class XMLRootElementUtil {
                     if (fieldName.equalsIgnoreCase(pd.getDisplayName()) ||
                             fieldName.equalsIgnoreCase(pd.getName())) {
                         // Get the xmlElement name for this field
-                        String xmlName = getXmlElementName(field.getDeclaringClass(), field);
+                        QName xmlName = getXmlElementRefOrElementQName(field.getDeclaringClass(), field);
                         found = true;
                         if (log.isDebugEnabled()) {
                             log.debug("    Found field " + field.getName() + " which has xmlname=" +
@@ -229,7 +235,7 @@ public class XMLRootElementUtil {
                                         " already has this same xmlName..this may cause problems.");
                             }
                         }
-                        map.put(xmlName, new PropertyDescriptorPlus(pd, xmlName));
+                        map.put(xmlName.getLocalPart(), new PropertyDescriptorPlus(pd, xmlName));
                         break;
                     }
                 }
@@ -294,18 +300,37 @@ public class XMLRootElementUtil {
      * @return
      * @throws NoSuchFieldException
      */
-    private static String getXmlElementName(Class jaxbClass, Field field)
+    private static QName getXmlElementRefOrElementQName(Class jaxbClass, Field field)
             throws NoSuchFieldException {
-        XmlElement xmlElement = field.getAnnotation(XmlElement.class);
+        XmlElementRef xmlElementRef = (XmlElementRef)
+                getAnnotation(field, XmlElementRef.class);
+        if (xmlElementRef != null) {
+            return new QName(xmlElementRef.namespace(),
+                    xmlElementRef.name());
+        }
+        XmlElement xmlElement = (XmlElement)
+                getAnnotation(field, XmlElement.class);
 
         // If XmlElement does not exist, default to using the field name
         if (xmlElement == null ||
                 xmlElement.name().equals("##default")) {
-            return field.getName();
+            return new QName("", field.getName());
         }
-        return xmlElement.name();
-
+        return new QName(xmlElement.namespace(),
+                xmlElement.name());
     }
 
-
+    /**
+     * Get an annotation.  This is wrappered to avoid a Java2Security violation.
+     * @param cls Class that contains annotation 
+     * @param annotation Class of requrested Annotation
+     * @return annotation or null
+     */
+    private static Annotation getAnnotation(final AnnotatedElement element, final Class annotation) {
+        return (Annotation) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                return element.getAnnotation(annotation);
+            }
+        });
+    }
 }

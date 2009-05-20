@@ -22,10 +22,12 @@ package org.apache.axis2.transport;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.attachments.CachedFileDataSource;
+import org.apache.axiom.attachments.lifecycle.LifecycleManager;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axiom.om.impl.builder.StAXBuilder;
+import org.apache.axiom.om.util.DetachableInputStream;
 import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPEnvelope;
@@ -36,6 +38,8 @@ import org.apache.axis2.Constants;
 import org.apache.axis2.builder.Builder;
 import org.apache.axis2.builder.BuilderUtil;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.context.OperationContext;
+import org.apache.axis2.deployment.DeploymentConstants;
 import org.apache.axis2.description.Parameter;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.http.ApplicationXMLFormatter;
@@ -50,16 +54,28 @@ import org.apache.commons.logging.LogFactory;
 import javax.activation.DataSource;
 import javax.xml.parsers.FactoryConfigurationError;
 import javax.xml.stream.XMLStreamException;
-
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 public class TransportUtils {
 
     private static final Log log = LogFactory.getLog(TransportUtils.class);
 
     public static SOAPEnvelope createSOAPMessage(MessageContext msgContext) throws AxisFault {
+        return createSOAPMessage(msgContext, false);
+    }
+    
+    /**
+     * This method will create a SOAPEnvelope based on the InputStream stored on
+     * the MessageContext. The 'detach' parameter controls whether or not the 
+     * underlying DetachableInputStream is detached at the end of the method. Note,
+     * detaching the DetachableInputStream closes the underlying InputStream that
+     * is stored on the MessageContext.
+     */
+    public static SOAPEnvelope createSOAPMessage(MessageContext msgContext,
+                                                 boolean detach) throws AxisFault {
         try {
             InputStream inStream = (InputStream) msgContext
                     .getProperty(MessageContext.TRANSPORT_IN);
@@ -84,7 +100,20 @@ public class TransportUtils {
             }
             msgContext.setProperty(Constants.Configuration.CHARACTER_SET_ENCODING, charSetEnc);
 
-            return createSOAPMessage(msgContext, inStream, contentType);
+            SOAPEnvelope env = createSOAPMessage(msgContext, inStream, contentType);
+            
+            // if we were told to detach, we will make the call here, this is only applicable
+            // if a DetachableInputStream instance is found on the MessageContext
+            if(detach) {
+                DetachableInputStream dis = (DetachableInputStream) msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM);
+                if(dis != null) {
+                    if(log.isDebugEnabled()) {
+                        log.debug("Detaching input stream after SOAPEnvelope construction");
+                    }
+                    dis.detach();
+                }
+            }
+            return env;
         } catch (Exception e) {
             throw AxisFault.makeFault(e);
         }
@@ -141,22 +170,25 @@ public class TransportUtils {
             }
             // Some services send REST responces as text/xml. We should convert it to
             // application/xml if its a REST response, if not it will try to use the SOAPMessageBuilder.
-            if (HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
+            // isDoingREST should already be properly set by HTTPTransportUtils.initializeMessageContext
+            if (msgContext.isDoingREST() && HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
+//            if (HTTPConstants.MEDIA_TYPE_TEXT_XML.equals(type)) {
                 if (msgContext.isServerSide()) {
                     if (msgContext.getSoapAction() == null) {
                         type = HTTPConstants.MEDIA_TYPE_APPLICATION_XML;
                     }
-                } else if (msgContext.isDoingREST() &&
-                        !msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
+//                } else if (msgContext.isDoingREST() &&
+//                        !msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
+                } else if (!msgContext.isPropertyTrue(Constants.Configuration.SOAP_RESPONSE_MEP)) {
                     type = HTTPConstants.MEDIA_TYPE_APPLICATION_XML;
                 }
             }
             Builder builder = BuilderUtil.getBuilderFromSelector(type, msgContext);
-            if (log.isDebugEnabled()) {
-                log.debug("createSOAPEnvelope using Builder (" + 
-                          builder.getClass() + ") selected from type (" + type +")");
-            }
             if (builder != null) {
+	            if (log.isDebugEnabled()) {
+	                log.debug("createSOAPEnvelope using Builder (" + 
+	                          builder.getClass() + ") selected from type (" + type +")");
+	            }
                 documentElement = builder.processDocument(inStream, contentType, msgContext);
             }
         }
@@ -274,6 +306,12 @@ public class TransportUtils {
             messageFormatter = msgContext.getConfigurationContext()
                     .getAxisConfiguration().getMessageFormatter(messageFormatString);
 
+        }
+        if (messageFormatter == null) {
+            messageFormatter = (MessageFormatter) msgContext.getProperty(Constants.Configuration.MESSAGE_FORMATTER);
+            if(messageFormatter != null) {
+                return messageFormatter;
+            }
         }
         if (messageFormatter == null) {
 
@@ -477,27 +515,50 @@ public class TransportUtils {
            }
            
        	Attachments attachments = msgContext.getAttachmentMap();
+       	LifecycleManager lcm = (LifecycleManager)msgContext.getRootContext().getAxisConfiguration().getParameterValue(DeploymentConstants.ATTACHMENTS_LIFECYCLE_MANAGER);
            if (attachments != null) {
-               String [] keys = attachments.getAllContentIDs(); 
+               // Get the list of Content IDs for the attachments...but does not try to pull the stream for new attachments.
+               // (Pulling the stream for new attachments will probably fail...the stream is probably closed)
+               List keys = attachments.getContentIDList();
                if (keys != null) {
                	String key = null;
                	File file = null;
                	DataSource dataSource = null;
-                   for (int i = 0; i < keys.length; i++) {
+                   for (int i = 0; i < keys.size(); i++) {
                        try {
-                           key = keys[i];
+                           key = (String) keys.get(i);
                            dataSource = attachments.getDataHandler(key).getDataSource();
                            if(dataSource instanceof CachedFileDataSource){
                            	file = ((CachedFileDataSource)dataSource).getFile();
                            	if (log.isDebugEnabled()) {
                                    log.debug("Delete cache attachment file: "+file.getName());
-                               }
-                           	file.delete();
+                            }
+                           	if(lcm!=null){
+                                if(log.isDebugEnabled()){
+                                    log.debug("deleting file using lifecyclemanager");
+                                }
+                                lcm.delete(file);
+                            }else{
+                                file.delete();
+                            }
                            }
                        }
                        catch (Exception e) {
+                    	   if (log.isDebugEnabled()) {
+                               log.debug("Delete cache attachment file failed"+ e.getMessage());
+                           }
+
                            if (file != null) {
-                               file.deleteOnExit();                            
+                               if(lcm!=null){
+                                   try{                        			   
+                                       lcm.deleteOnExit(file);
+                                   }catch(Exception ex){
+                                       file.deleteOnExit();
+                                   }
+                               }
+                               else{
+                                   file.deleteOnExit();
+                               }
                            }
                        }
                    }
@@ -508,4 +569,168 @@ public class TransportUtils {
                log.debug("Exiting deleteAttachments()");
            }
        }
+       
+       /**
+        * This method can be called by components wishing to detach the DetachableInputStream
+        * object that is present on the MessageContext. This is meant to shield components
+        * from any logic that needs to be executed on the DetachableInputStream in order to 
+        * have it effectively detached. If the DetachableInputStream is not present, or if
+        * the supplied MessageContext is null, no action will be taken.
+        */
+       public static void detachInputStream(MessageContext msgContext) throws AxisFault {
+           try {
+               if(msgContext != null
+                       &&
+                       msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM) != null) {
+                   DetachableInputStream dis = (DetachableInputStream) msgContext.getProperty(Constants.DETACHABLE_INPUT_STREAM);
+                   if(log.isDebugEnabled()) {
+                       log.debug("Detaching DetachableInputStream: " + dis);
+                   }
+                   dis.detach();
+               }
+               else {
+                   if(log.isDebugEnabled()) {
+                       log.debug("Detach not performed for MessageContext: " + msgContext);
+                   }
+               }  
+           }
+           catch(Throwable t) {
+               throw AxisFault.makeFault(t);
+           }
+       }
+
+    /**
+     * <p>
+     * Checks whether MTOM needs to be enabled for the message represented by
+     * the msgContext. We check value assigned to the "enableMTOM" property
+     * either using the config files (axis2.xml, services.xml) or
+     * programatically. Programatic configuration is given priority. If the
+     * given value is "optional", MTOM will be enabled only if the incoming
+     * message was an MTOM message.
+     * </p>
+     *
+     * @param msgContext the active MessageContext
+     * @return true if SwA needs to be enabled
+     */
+    public static boolean doWriteMTOM(MessageContext msgContext) {
+        boolean enableMTOM;
+        Object enableMTOMObject = null;
+        // First check the whether MTOM is enabled by the configuration
+        // (Eg:Axis2.xml, services.xml)
+        Parameter parameter = msgContext.getParameter(Constants.Configuration.ENABLE_MTOM);
+        if (parameter != null) {
+            enableMTOMObject = parameter.getValue();
+        }
+        // Check whether the configuration is overridden programatically..
+        // Priority given to programatically setting of the value
+        Object property = msgContext.getProperty(Constants.Configuration.ENABLE_MTOM);
+        if (property != null) {
+            enableMTOMObject = property;
+        }
+        enableMTOM = JavaUtils.isTrueExplicitly(enableMTOMObject);
+        // Handle the optional value for enableMTOM
+        // If the value for 'enableMTOM' is given as optional and if the request
+        // message was a MTOM message we sent out MTOM
+        if (!enableMTOM && msgContext.isDoingMTOM() && (enableMTOMObject instanceof String)) {
+            if (((String) enableMTOMObject).equalsIgnoreCase(Constants.VALUE_OPTIONAL)) {
+                //In server side, we check whether request was MTOM
+                if (msgContext.isServerSide()) {
+                    if (msgContext.isDoingMTOM()) {
+                        enableMTOM = true;
+                    } 
+                    // in the client side, we enable MTOM if it is optional    
+                } else {
+                    enableMTOM = true;
+                }
+            }
+        }
+        return enableMTOM;
+    }
+
+    /**
+     * <p>
+     * Checks whether SOAP With Attachments (SwA) needs to be enabled for the
+     * message represented by the msgContext. We check value assigned to the
+     * "enableSwA" property either using the config files (axis2.xml,
+     * services.xml) or programatically. Programatic configuration is given
+     * priority. If the given value is "optional", SwA will be enabled only if
+     * the incoming message was SwA type.
+     * </p>
+     *
+     * @param msgContext the active MessageContext
+     * @return true if SwA needs to be enabled
+     */
+    public static boolean doWriteSwA(MessageContext msgContext) {
+        boolean enableSwA;
+        Object enableSwAObject = null;
+        // First check the whether SwA is enabled by the configuration
+        // (Eg:Axis2.xml, services.xml)
+        Parameter parameter = msgContext.getParameter(Constants.Configuration.ENABLE_SWA);
+        if (parameter != null) {
+            enableSwAObject = parameter.getValue();
+        }
+        // Check whether the configuration is overridden programatically..
+        // Priority given to programatically setting of the value
+        Object property = msgContext.getProperty(Constants.Configuration.ENABLE_SWA);
+        if (property != null) {
+            enableSwAObject = property;
+        }
+        enableSwA = JavaUtils.isTrueExplicitly(enableSwAObject);
+        // Handle the optional value for enableSwA
+        // If the value for 'enableSwA' is given as optional and if the request
+        // message was a SwA message we sent out SwA
+        if (!enableSwA && msgContext.isDoingSwA() && (enableSwAObject instanceof String)) {
+            if (((String) enableSwAObject).equalsIgnoreCase(Constants.VALUE_OPTIONAL)) {
+                enableSwA = true;
+            }
+        }
+        return enableSwA;
+    }
+
+    public static boolean isDoingREST(MessageContext msgContext) {
+        boolean enableREST = false;
+
+        // check whether isDoingRest is already true in the message context
+        if (msgContext.isDoingREST()) {
+            return true;
+        }
+        
+        Object enableRESTProperty = msgContext.getProperty(Constants.Configuration.ENABLE_REST);
+        if (enableRESTProperty != null) {
+            enableREST = JavaUtils.isTrueExplicitly(enableRESTProperty);
+        }
+
+        msgContext.setDoingREST(enableREST);
+
+        return enableREST;
+    }
+
+    /**
+     * Utility method to query CharSetEncoding. First look in the
+     * MessageContext. If it's not there look in the OpContext. Use the defualt,
+     * if it's not given in either contexts.
+     *
+     * @param msgContext the active MessageContext
+     * @return String the CharSetEncoding
+     */
+    public static String getCharSetEncoding(MessageContext msgContext) {
+        String charSetEnc = (String) msgContext
+            .getProperty(Constants.Configuration.CHARACTER_SET_ENCODING);
+
+        if (charSetEnc == null) {
+            OperationContext opctx = msgContext.getOperationContext();
+            if (opctx != null) {
+                charSetEnc = (String) opctx
+                    .getProperty(Constants.Configuration.CHARACTER_SET_ENCODING);
+            }
+            /**
+             * If the char set enc is still not found use the default
+             */
+            if (charSetEnc == null) {
+                charSetEnc = MessageContext.DEFAULT_CHAR_SET_ENCODING;
+            }
+        }
+        return charSetEnc;
+    }
+
 }

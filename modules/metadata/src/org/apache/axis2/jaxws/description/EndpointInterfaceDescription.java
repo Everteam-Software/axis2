@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
 
 import javax.xml.namespace.QName;
@@ -78,8 +79,11 @@ public interface EndpointInterfaceDescription {
 
     /**
      * Returns all the dispatchable operations matching the operation QName.  A dispatchable
-     * operation is one that is NOT a JAX-WS client-side async method invocation.  That is, method
-     * signatures of the follogin forms are filtered out of this list: javax.xml.ws.Response<T>
+     * operation is one that is NOT a JAX-WS client-side async method invocation and does NOT
+     * carry an @WebMethod(exclude=true) annotation.
+     * 
+     * JAX-WS client-side async methods which have signatures of the following forms are 
+     * filtered out of this list: javax.xml.ws.Response<T>
      * method(...) java.util.concurrent.Future<?> method(..., javax.xml.ws.AsyncHandler<T>)
      * <p/>
      * These methods are filtered because a common use case is to use the same SEI on both the
@@ -104,7 +108,6 @@ public interface EndpointInterfaceDescription {
 
     public abstract QName getPortType();
 
-    // TODO: These should return a locally defined Enums
     public abstract javax.jws.soap.SOAPBinding.ParameterStyle getSoapBindingParameterStyle();
 
     public abstract javax.jws.soap.SOAPBinding.Style getSoapBindingStyle();

@@ -16,9 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.rpc;
 
-/** Author: Deepal Jayasinghe Date: Oct 12, 2005 Time: 11:24:03 AM */
 public class MyBean {
     private String name;
     private int age;

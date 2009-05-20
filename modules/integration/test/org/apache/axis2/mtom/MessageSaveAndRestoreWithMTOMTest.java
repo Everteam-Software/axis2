@@ -44,9 +44,9 @@ import org.apache.axis2.engine.Handler;
 import org.apache.axis2.engine.Phase;
 import org.apache.axis2.engine.util.TestConstants;
 import org.apache.axis2.handlers.AbstractHandler;
+import org.apache.axis2.integration.TestingUtils;
 import org.apache.axis2.integration.UtilServer;
 import org.apache.axis2.integration.UtilServerBasedTestCase;
-import org.apache.axis2.integration.TestingUtils;
 import org.apache.axis2.phaseresolver.PhaseMetadata;
 import org.apache.axis2.util.Utils;
 
@@ -238,14 +238,13 @@ public class MessageSaveAndRestoreWithMTOMTest extends UtilServerBasedTestCase
             try {
                 System.out.println("MessageSaveAndRestoreWithMTOMTest:Worker thread started");
                 Thread.sleep(5000);
-                AxisEngine axisEngine = new AxisEngine(configurationContext);
                 System.out.println("MessageSaveAndRestoreWithMTOMTest:Resuming processing");
                 ObjectInputStream objectInputStream =
                         new ObjectInputStream(new ByteArrayInputStream(serializedMessageContext));
                 MessageContext reconstitutedMessageContext =
                         (MessageContext)objectInputStream.readObject();
                 reconstitutedMessageContext.activate(configurationContext);
-                axisEngine.resume(reconstitutedMessageContext);
+                AxisEngine.resume(reconstitutedMessageContext);
             }
             catch (Exception e) {
                 e.printStackTrace();

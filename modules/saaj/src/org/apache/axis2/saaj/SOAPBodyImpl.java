@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import org.apache.axiom.om.OMNamespace;
@@ -96,24 +97,41 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
         return childEle;
     }
 
+    @Override
+    protected Element appendElement(ElementImpl child) throws SOAPException {    
+        String namespaceURI = child.getNamespaceURI();
+        String prefix = child.getPrefix();
+
+        SOAPBodyElementImpl childEle = new SOAPBodyElementImpl(child);
+
+        childEle.element.setUserData(SAAJ_NODE, childEle, null);
+        if (namespaceURI != null && namespaceURI.trim().length() > 0) {
+            childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        }
+        element.appendChild(childEle.element);
+        ((NodeImpl)childEle.element.getParentNode()).setUserData(SAAJ_NODE, this, null);
+        childEle.setParentElement(this);
+        return childEle;
+    }
+    
     public SOAPElement addChildElement(SOAPElement soapElement) throws SOAPException {
         String namespaceURI = soapElement.getNamespaceURI();
         String prefix = soapElement.getPrefix();
         String localName = soapElement.getLocalName();
-        element.declareNamespace(namespaceURI, prefix);
+
         SOAPBodyElementImpl childEle;
-        
-        if (localName == null) {
+        if (namespaceURI == null || namespaceURI.trim().length() == 0) {
             childEle =
                 new SOAPBodyElementImpl(
-                        (ElementImpl)getOwnerDocument().createElementNS(namespaceURI,
-                                                                        ""));
+                        (ElementImpl)getOwnerDocument().createElement(localName));
         } else {
+            element.declareNamespace(namespaceURI, prefix);
             childEle =
                 new SOAPBodyElementImpl(
                         (ElementImpl)getOwnerDocument().createElementNS(namespaceURI,
                                                                         localName));            
         }
+
         for (Iterator iter = soapElement.getAllAttributes(); iter.hasNext();) {
             Name name = (Name)iter.next();
             childEle.addAttribute(name, soapElement.getAttributeValue(name));
@@ -129,7 +147,9 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
         }
 
         childEle.element.setUserData(SAAJ_NODE, childEle, null);
-        childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        if (namespaceURI != null && namespaceURI.trim().length() > 0) {
+            childEle.element.setNamespace(childEle.element.declareNamespace(namespaceURI, prefix));
+        }
         element.appendChild(childEle.element);
         ((NodeImpl)childEle.element.getParentNode()).setUserData(SAAJ_NODE, this, null);
         childEle.setParentElement(this);
@@ -412,7 +432,7 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
         }
         if (node instanceof org.w3c.dom.Comment) {
             org.w3c.dom.Comment domText = (org.w3c.dom.Comment)node;
-            return new TextImplEx("<!--" + domText.getData() + "-->", parent);
+            return new CommentImpl(domText.getData(), parent);
         }
         Element domEle = ((Element)node);
         int indexOfColon = domEle.getTagName().indexOf(":");
@@ -427,11 +447,16 @@ public class SOAPBodyImpl extends SOAPElementImpl implements SOAPBody {
             if (localName == null) {  //it is possible that localname isn't set but name is set
                 localName = domEle.getTagName();
             }     
+            
+            String prefix = domEle.getPrefix();
+            if(prefix == null) {
+                prefix = "";
+            }
             if (domEle.getNamespaceURI() != null) {
-                ns = new NamespaceImpl(domEle.getNamespaceURI(), domEle.getPrefix());
+                ns = new NamespaceImpl(domEle.getNamespaceURI(), prefix);
             } else {
-                if (domEle.getPrefix() != null) {
-                    ns = new NamespaceImpl("", domEle.getPrefix());
+                if (prefix != null) {
+                    ns = new NamespaceImpl("", prefix);
                 } else {
                     ns = new NamespaceImpl("", "");
                     

@@ -25,6 +25,8 @@ import org.apache.axis2.jaxws.wrapper.impl.JAXBWrapperException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import javax.xml.namespace.QName;
+import javax.xml.bind.JAXBElement;
 import java.beans.IndexedPropertyDescriptor;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.InvocationTargetException;
@@ -48,7 +50,7 @@ import java.util.Collection;
  */
 public class PropertyDescriptorPlus {
     PropertyDescriptor descriptor;
-    String xmlName = null;
+    QName xmlName = null;
     
     private static Log log = LogFactory.getLog(PropertyDescriptorPlus.class);
     private static final boolean DEBUG_ENABLED = log.isDebugEnabled();
@@ -60,17 +62,34 @@ public class PropertyDescriptorPlus {
      * @param descriptor
      * @see XMLRootElementUtil.createPropertyDescriptorMap
      */
-    PropertyDescriptorPlus(PropertyDescriptor descriptor, String xmlName) {
+    PropertyDescriptorPlus(PropertyDescriptor descriptor, QName xmlName) {
         super();
         this.descriptor = descriptor;
         this.xmlName = xmlName;
     }
 
-    /** @return xmlname */
-    public String getXmlName() {
-        return xmlName;
+    /**
+     * Package protected constructor.  Only created by XMLRootElementUtil.createPropertyDescriptorMap
+     *
+     * @param propertyName
+     * @param descriptor
+     * @see XMLRootElementUtil.createPropertyDescriptorMap
+     */
+    PropertyDescriptorPlus(PropertyDescriptor descriptor, String xmlName) {
+        super();
+        this.descriptor = descriptor;
+        this.xmlName = new QName("", xmlName);
     }
 
+    /** @return xmlname */
+    public String getXmlName() {
+        return xmlName.getLocalPart();
+    }
+
+    public QName getXmlQName() {
+        return xmlName;
+    }
+    
     /** @return property type */
     public Class getPropertyType() {
         return descriptor.getPropertyType();
@@ -91,10 +110,7 @@ public class PropertyDescriptorPlus {
      */
     public Object get(Object targetBean) throws InvocationTargetException, IllegalAccessException {
             if(descriptor == null){
-                if(log.isDebugEnabled()){
-                    log.debug("Null Descriptor");
-                }
-                throw new RuntimeException("PropertyDescriptor not found");
+                throw new RuntimeException(Messages.getMessage("pDescrErr"));
             }
             Method method = descriptor.getReadMethod();
             if(method == null && descriptor.getPropertyType() == Boolean.class){
@@ -110,18 +126,19 @@ public class PropertyDescriptorPlus {
                        method = targetBean.getClass().getMethod(methodName, null);
                    }catch(NoSuchMethodException e){
                        if(log.isDebugEnabled()){
-                           log.debug("Mehtod not found" + methodName);
+                           log.debug("Method not found" + methodName);
                        }
                    }
                 }
             }
             if(method == null){
-                if(log.isDebugEnabled()){
-                    log.debug("No read Method found to read propertyvalue");
-                }
-                throw new RuntimeException("No read Method found to read property Value from jaxbObject: "+targetBean.getClass().getName());
+                throw new RuntimeException(Messages.getMessage("pDescrErr2",targetBean.getClass().getName()));
             }
-            return method.invoke(targetBean, null);
+            Object ret = method.invoke(targetBean, null);
+            if (ret != null && method.getReturnType() == JAXBElement.class) {
+                ret = ((JAXBElement) ret).getValue();
+            }
+            return ret;
     }
 
     /**
@@ -133,29 +150,50 @@ public class PropertyDescriptorPlus {
      * @throws IllegalAccessException
      * @throws JAXBWrapperException
      */
-    public void set(Object targetBean, Object propValue)
+    public void set(Object targetBean, Object propValue, Class dclClass)
             throws InvocationTargetException, IllegalAccessException, JAXBWrapperException {
 
-        // No set occurs if the value is null
-        if (propValue == null) {
-            return;
-        }
+        Method writeMethod  = null;
+        try {
+            // No set occurs if the value is null
+            if (propValue == null) {
+                return;
+            }
 
-        // There are 3 different types of setters that can occur.
-        // 1) Normal Attomic Setter : setFoo(type)
-        // 2) Indexed Array Setter : setFoo(type[])
-        // 3) No Setter case if the property is a List<T>.
+            // There are 3 different types of setters that can occur.
+            // 1) Normal Attomic Setter : setFoo(type)
+            // 2) Indexed Array Setter : setFoo(type[])
+            // 3) No Setter case if the property is a List<T>.
 
-        Method writeMethod = descriptor.getWriteMethod();
-        if (descriptor instanceof IndexedPropertyDescriptor) {
-            // Set for indexed  T[]
-            setIndexedArray(targetBean, propValue, writeMethod);
-        } else if (writeMethod == null) {
-            // Set for List<T>
-            setList(targetBean, propValue);
-        } else {
-            // Normal case
-            setAtomic(targetBean, propValue, writeMethod);
+            writeMethod = descriptor.getWriteMethod();
+            if (descriptor instanceof IndexedPropertyDescriptor) {
+                // Set for indexed  T[]
+                setIndexedArray(targetBean, propValue, writeMethod);
+            } else if (writeMethod == null) {
+                // Set for List<T>
+                setList(targetBean, propValue);
+            } else if (descriptor.getPropertyType() == JAXBElement.class) {
+                if (propValue != null) {
+                    Class clazz = dclClass!=null ? dclClass : propValue.getClass();
+                    JAXBElement element = new JAXBElement(xmlName, clazz, propValue);
+                    setAtomic(targetBean, element, writeMethod);
+                }
+            } else {
+                // Normal case
+                setAtomic(targetBean, propValue, writeMethod);
+            }
+        } catch (RuntimeException e) {
+            
+            if (DEBUG_ENABLED) {
+                String propClass = propValue.getClass().getName();
+                log.debug("An exception occurred while attempting to set a property on " +
+                          targetBean.getClass().getName());
+                log.debug("The setter method is " + writeMethod );
+                log.debug("The class of the argument is :" +propClass);
+                log.debug("The PropertyDescriptor is: " + this.toString());
+                log.debug("The exception is: " + e);
+            }
+            throw e;
         }
     }
 
@@ -184,7 +222,6 @@ public class PropertyDescriptorPlus {
             if(paramTypes !=null && paramTypes.length ==1){
                 Class paramType = paramTypes[0];
                 if(paramType.isPrimitive() && propValue == null){
-                    // TODO NLS
                     //Ignoring null value for primitive type, this could potentially be the way of a customer indicating to set
                     //default values defined in JAXBObject/xmlSchema.
                     if(DEBUG_ENABLED){

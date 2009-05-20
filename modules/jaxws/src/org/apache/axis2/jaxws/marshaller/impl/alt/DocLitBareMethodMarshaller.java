@@ -16,9 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.core.MessageContext;
+import org.apache.axis2.jaxws.description.AttachmentDescription;
+import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.axis2.jaxws.description.OperationDescription;
@@ -37,8 +41,8 @@ import org.apache.commons.logging.LogFactory;
 import javax.xml.namespace.QName;
 import javax.xml.ws.WebServiceException;
 import java.lang.reflect.Array;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeSet;
 
 public class DocLitBareMethodMarshaller implements MethodMarshaller {
@@ -78,31 +82,51 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
                     MethodMarshallerUtils.getMarshalDesc(endpointDesc);
             TreeSet<String> packages = marshalDesc.getPackages();
 
+            // Remember this unmarshal information so that we can speed up processing
+            // the next time.
+            if (shouldRegisterUnmarshalInfo(operationDesc, message.getMessageContext())) {
+                MethodMarshallerUtils.registerUnmarshalInfo(message.getMessageContext(),
+                                                            packages,
+                                                            marshalDesc.getPackagesKey());
+            }
+
             // Get the return value.
             Class returnType = operationDesc.getResultActualType();
             Object returnValue = null;
             boolean hasReturnInBody = false;
             if (returnType != void.class) {
-                // If the webresult is in the header, we need the name of the header so that we can find it.
-                Element returnElement = null;
-                if (operationDesc.isResultHeader()) {
-                    returnElement =
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                       String cid = message.getAttachmentID(0);
+                       returnValue = message.getDataHandler(cid);
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
+                    }
+                } else {
+                    // If the webresult is in the header, we need the name of the header so that we can find it.
+                    Element returnElement = null;
+                    if (operationDesc.isResultHeader()) {
+                        returnElement =
                             MethodMarshallerUtils.getReturnElement(packages, message, null, false, true,
                                                                    operationDesc.getResultTargetNamespace(),
                                                                    operationDesc.getResultName(),
                                                                    MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
 
-                } else {
-                    returnElement = MethodMarshallerUtils
-                            .getReturnElement(packages, message, null, false, false, null, null,
-                                    MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
-                    hasReturnInBody = true;
+                    } else {
+                        returnElement = MethodMarshallerUtils
+                        .getReturnElement(packages, message, null, false, false, null, null,
+                                          MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
+                        hasReturnInBody = true;
+                    }
+                    returnValue = returnElement.getTypeValue();
+                    
                 }
-                returnValue = returnElement.getTypeValue();
                 if (ConvertUtils.isConvertable(returnValue, returnType)) {
-                	returnValue = ConvertUtils.convert(returnValue, returnType);
-                }
-                
+                    returnValue = ConvertUtils.convert(returnValue, returnType);
+                }              
             }
 
             // Unmarshall the ParamValues from the Message
@@ -146,6 +170,14 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
             MarshalServiceRuntimeDescription marshalDesc =
                     MethodMarshallerUtils.getMarshalDesc(endpointDesc);
             TreeSet<String> packages = marshalDesc.getPackages();
+
+            // Remember this unmarshal information so that we can speed up processing
+            // the next time.
+            if (shouldRegisterUnmarshalInfo(operationDesc, message.getMessageContext())) {
+                MethodMarshallerUtils.registerUnmarshalInfo(message.getMessageContext(),
+                                                            packages,
+                                                            marshalDesc.getPackagesKey());
+            }
 
             // Unmarshal the ParamValues from the message
             List<PDElement> pvList = MethodMarshallerUtils.getPDElements(pds,
@@ -209,36 +241,54 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
             // Put the return object onto the message
             Class returnType = operationDesc.getResultActualType();
             if (returnType != void.class) {
-                Element returnElement = null;
-                QName returnQName = new QName(operationDesc.getResultTargetNamespace(),
-                                              operationDesc.getResultName());
-                if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
-                    returnElement = new Element(returnObject, returnQName);
-                } else {
-                    /* when a schema defines a SimpleType with xsd list jaxws tooling generates art-effects with array rather than a java.util.List
-                     * However the ObjectFactory definition uses a List and thus marshalling fails. Lets convert the Arrays to List.
-                     */
-                    if(operationDesc.isListType()){
-                       List list= new ArrayList();
-                       if(returnType.isArray()){
-                            for(int count = 0; count < Array.getLength(returnObject); count++){
-                                Object obj = Array.get(returnObject, count);
-                                list.add(obj);
-                            }
-                            returnElement = new Element(list, returnQName, List.class);
-                        }
-                      }
-                    else{
-                        returnElement = new Element(returnObject, returnQName, returnType);
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                        // Create an Attachment object with the signature value
+                        Attachment attachment = new Attachment(returnObject, 
+                                                               returnType, 
+                                                               attachmentDesc, 
+                                                               operationDesc.getResultPartName());
+                        m.addDataHandler(attachment.getDataHandler(), 
+                                         attachment.getContentID());
+                        m.setDoingSWA(true);
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
                     }
+                } else {
+                    Element returnElement = null;
+                    QName returnQName = new QName(operationDesc.getResultTargetNamespace(),
+                                                  operationDesc.getResultName());
+                    if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
+                        returnElement = new Element(returnObject, returnQName);
+                    } else {
+                        /* when a schema defines a SimpleType with xsd list jaxws tooling generates art-effects with array rather than a java.util.List
+                         * However the ObjectFactory definition uses a List and thus marshalling fails. Lets convert the Arrays to List.
+                         */
+                        if(operationDesc.isListType()){
+                            List list= new ArrayList();
+                            if(returnType.isArray()){
+                                for(int count = 0; count < Array.getLength(returnObject); count++){
+                                    Object obj = Array.get(returnObject, count);
+                                    list.add(obj);
+                                }
+                                returnElement = new Element(list, returnQName, List.class);
+                            }
+                        }
+                        else{
+                            returnElement = new Element(returnObject, returnQName, returnType);
+                        }
+                    }
+                    MethodMarshallerUtils.toMessage(returnElement, 
+                                                    returnType,
+                                                    operationDesc.isListType(),
+                                                    marshalDesc, 
+                                                    m,
+                                                    null, // always marshal using "by element" mode
+                                                    operationDesc.isResultHeader());
                 }
-                MethodMarshallerUtils.toMessage(returnElement, 
-                								returnType,
-                								operationDesc.isListType(),
-                                                marshalDesc, 
-                                                m,
-                                                null, // always marshal using "by element" mode
-                                                operationDesc.isResultHeader());
             }
 
             // Convert the holder objects into a list of JAXB objects for marshalling
@@ -251,6 +301,11 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pvList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -301,6 +356,11 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pvList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -357,4 +417,33 @@ public class DocLitBareMethodMarshaller implements MethodMarshaller {
         }
     }
 
+    /**
+     * Registering UnmarshalInfo will cause JAXB unmarshalling to occur
+     * during StAXOMBuilder processing the next time an xml message is targered
+     * at this wsdl operation.  In some cases we want to disable this early unmarshalling.
+     * 
+     * @param OperationDescription
+     * @param MessageContext
+     * @return true or false
+     */
+    private static boolean shouldRegisterUnmarshalInfo(OperationDescription opDesc, 
+                                                       MessageContext mc) {
+        
+        ParameterDescription[] pds = opDesc.getParameterDescriptions();
+        
+        // If one or more operations have a generic type of Object, then
+        // avoid early unmarshalling
+        for (int i=0; i<pds.length; i++) {
+            ParameterDescription pd = pds[i];
+            if (pd.getParameterActualType() == null ||
+                pd.getParameterActualType().isAssignableFrom(Object.class)) {
+                return false;
+            }          
+        }
+        if (opDesc.getResultActualType() == null ||
+                opDesc.getResultActualType().isAssignableFrom(Object.class)) {
+            return false;
+        }
+        return true;
+    }
 }

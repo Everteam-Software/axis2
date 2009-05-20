@@ -20,16 +20,15 @@
 
 package org.apache.axis2.dispatchers;
 
-import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMNamespace;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.engine.AbstractDispatcher;
-import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.HandlerDescription;
+import org.apache.axis2.engine.AbstractDispatcher;
+import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.util.LoggingControl;
 import org.apache.axis2.util.Utils;
 import org.apache.commons.logging.Log;
@@ -52,15 +51,20 @@ public class SOAPMessageBodyBasedDispatcher extends AbstractDispatcher {
     public AxisOperation findOperation(AxisService service, MessageContext messageContext)
             throws AxisFault {
 
-        OMElement bodyFirstChild = messageContext.getEnvelope().getBody().getFirstElement();
+        String localName = messageContext.getEnvelope().getSOAPBodyFirstElementLocalName();
 
         AxisOperation axisOperation = null;
-        if (bodyFirstChild != null){
-           axisOperation = service.getOperationByMessageElementQName(bodyFirstChild.getQName());
+        if (localName != null){
+           OMNamespace ns = messageContext.getEnvelope().getSOAPBodyFirstElementNS();
+           QName qName = null;
+           if (ns != null) {
+               qName = new QName(ns.getNamespaceURI(), localName);
+               axisOperation = service.getOperationByMessageElementQName(qName);
+           }
 
            // this is required for services uses the RPC message receiver
            if (axisOperation == null){
-               QName operationName = new QName(bodyFirstChild.getLocalName());
+               QName operationName = new QName(localName);
                axisOperation = service.getOperation(operationName);
            }
 
@@ -75,10 +79,10 @@ public class SOAPMessageBodyBasedDispatcher extends AbstractDispatcher {
     public AxisService findService(MessageContext messageContext) throws AxisFault {
         String serviceName;
 
-        OMElement bodyFirstChild = messageContext.getEnvelope().getBody().getFirstElement();
+        String localPart = messageContext.getEnvelope().getSOAPBodyFirstElementLocalName();
 
-        if (bodyFirstChild != null) {
-            OMNamespace ns = bodyFirstChild.getNamespace();
+        if (localPart != null) {
+            OMNamespace ns = messageContext.getEnvelope().getSOAPBodyFirstElementNS();
 
             if (ns != null) {
                 String filePart = ns.getNamespaceURI();

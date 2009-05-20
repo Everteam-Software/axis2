@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
-import org.apache.axis2.util.Loader;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.deployment.repository.util.ArchiveReader;
 import org.apache.axis2.description.AxisServiceGroup;
@@ -28,6 +28,7 @@ import org.apache.axis2.description.Parameter;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.AxisConfigurator;
 import org.apache.axis2.transport.http.HTTPConstants;
+import org.apache.axis2.util.Loader;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -96,14 +97,24 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
             this.config = servletConfig;
             InputStream axis2Stream = null;
             try {
+                // when the module is an unpacked war file,
+                // we can set the web location path in the deployment engine.
+                // This will let us
+                String webpath = config.getServletContext().getRealPath("");
+                if (webpath == null || webpath.length() == 0) {
+                    webpath = config.getServletContext().getRealPath("/");
+                }
+                if (webpath != null && !"".equals(webpath)) {
+                    log.debug("setting web location string: " + webpath);
+                    File weblocation = new File(webpath);
+                    setWebLocationString(weblocation.getAbsolutePath());
+                } // if webpath not null
 
-                if (axis2Stream == null) {
-                    String axis2xmlpath = config.getInitParameter(PARAM_AXIS2_XML_PATH);
-                    if (axis2xmlpath != null) {
-                        // when init parameter was present.
-                        axis2Stream = new FileInputStream(axis2xmlpath);
-                        log.debug("using axis2.xml from path: " + axis2xmlpath);
-                    }
+                String axis2xmlpath = config.getInitParameter(PARAM_AXIS2_XML_PATH);
+                if (axis2xmlpath != null) {
+                    // when init parameter was present.
+                    axis2Stream = new FileInputStream(axis2xmlpath);
+                    log.debug("using axis2.xml from path: " + axis2xmlpath);
                 }
 
                 if (axis2Stream == null) {
@@ -150,24 +161,22 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
             }
             Parameter param = new Parameter();
             param.setName(Constants.Configuration.ARTIFACTS_TEMP_DIR);
-            param.setValue(config.getServletContext().getAttribute("javax.servlet.context.tempdir"));
+            File f = new File((File) config.getServletContext().getAttribute("javax.servlet.context.tempdir"), "_axis2");
+            if (f.exists() || f.mkdirs()) {
+                param.setValue(f);
+            } else {
+                f = new File(System.getProperty("java.io.tmpdir"), "_axis2");
+                if (f.exists() || f.mkdirs()) {
+                    param.setValue(f);
+                } else {
+                    throw new DeploymentException("Unable to create a temporary working directory");
+                }
+            }
             try {
                 axisConfig.addParameter(param);
             } catch (AxisFault axisFault) {
                 log.error(axisFault.getMessage(), axisFault);
             }
-
-            // when the module is an unpacked war file,
-            // we can set the web location path in the deployment engine.
-            // This will let us
-            String webpath = config.getServletContext().getRealPath("");
-            if (webpath != null && !"".equals(webpath)) {
-                log.debug("setting web location string: " + webpath);
-                File weblocation = new File(webpath);
-                setWebLocationString(weblocation.getAbsolutePath());
-            } // if webpath not null
-
-
         } catch (DeploymentException e) {
             log.error(e.getMessage(), e);
             throw e;
@@ -191,14 +200,10 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
      */
     public AxisConfiguration getAxisConfiguration() throws AxisFault {
         try {
-            String repository = null;
-
-            if (repository == null) {
-                repository = config.getInitParameter(PARAM_AXIS2_REPOSITORY_PATH);
-                if (repository != null) {
-                    loadRepository(repository);
-                    log.debug("loaded repository from path: " + repository);
-                }
+            String repository = config.getInitParameter(PARAM_AXIS2_REPOSITORY_PATH);
+            if (repository != null) {
+                loadRepository(repository);
+                log.debug("loaded repository from path: " + repository);
             }
 
             if (repository == null) {
@@ -213,6 +218,12 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
                 if (config.getServletContext().getRealPath("") != null) {
                     // this is an unpacked war file
                     repository = config.getServletContext().getRealPath("/WEB-INF");
+                }
+                if (repository == null) {
+                    if (config.getServletContext().getRealPath("/") != null) {
+                        // this is an unpacked war file
+                        repository = config.getServletContext().getRealPath("/WEB-INF");
+                    }
                 }
                 if (repository != null) {
                     loadRepository(repository);
@@ -268,7 +279,8 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
                 return;
             }
             loadServicesFromWebInf();
-            if (config.getServletContext().getRealPath("") != null) {
+            if (config.getServletContext().getRealPath("") != null || 
+                    config.getServletContext().getRealPath("/") != null) {
                 super.loadServices();
                 log.debug("loaded services from webapp");
                 return;
@@ -324,11 +336,6 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
     }
 
     public void setConfigContext(ConfigurationContext configContext) {
-        super.setConfigContext(configContext);
-
-        // setting ServletContext into configctx
-        configContext.setProperty(HTTPConstants.MC_HTTP_SERVLETCONTEXT,
-                                  config.getServletContext());
         // setting ServletContext into configctx
         configContext.setProperty(HTTPConstants.MC_HTTP_SERVLETCONTEXT,
                                   config.getServletContext());
@@ -340,5 +347,6 @@ public class WarBasedAxisConfigurator extends DeploymentEngine implements AxisCo
         } catch (AxisFault axisFault) {
             log.error(axisFault.getMessage(), axisFault);
         }
+        super.setConfigContext(configContext);
     }
 }

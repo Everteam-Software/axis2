@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
 
@@ -62,11 +63,23 @@
         private java.util.HashMap faultExceptionClassNameMap = new java.util.HashMap();
         private java.util.HashMap faultMessageMap = new java.util.HashMap();
 
+        private static int counter = 0;
+
+        private static synchronized java.lang.String getUniqueSuffix(){
+            // reset the counter if it is greater than 99999
+            if (counter > 99999){
+                counter = 0;
+            }
+            counter = counter + 1; 
+            return java.lang.Long.toString(System.currentTimeMillis()) + "_" + counter;
+        }
+
     
     private void populateAxisService() throws org.apache.axis2.AxisFault {
 
      //creating the Service with a unique name
-     _service = new org.apache.axis2.description.AxisService("<xsl:value-of select="@servicename"/>" + this.hashCode());
+     _service = new org.apache.axis2.description.AxisService("<xsl:value-of select="@servicename"/>" + getUniqueSuffix());
+     addAnonymousOperations();
 
         //creating the operations
         org.apache.axis2.description.AxisOperation __operation;
@@ -90,11 +103,11 @@
 	    
 
 	    <xsl:if test="input/@policy">
-	    (__operation).getMessage(org.apache.axis2.wsdl.WSDLConstants.MESSAGE_LABEL_OUT_VALUE).getPolicyInclude().setPolicy(getPolicy("<xsl:value-of select="input/@policy"/>"));
+	    (__operation).getMessage(org.apache.axis2.wsdl.WSDLConstants.MESSAGE_LABEL_OUT_VALUE).getPolicySubject().attachPolicy(getPolicy("<xsl:value-of select="input/@policy"/>"));
 	    </xsl:if>
 	    
 	    <xsl:if test="output/@policy">
-	    (__operation).getMessage(org.apache.axis2.wsdl.WSDLConstants.MESSAGE_LABEL_IN_VALUE).getPolicyInclude().setPolicy(getPolicy("<xsl:value-of select="output/@policy"/>"));
+	    (__operation).getMessage(org.apache.axis2.wsdl.WSDLConstants.MESSAGE_LABEL_IN_VALUE).getPolicySubject().attachPolicy(getPolicy("<xsl:value-of select="output/@policy"/>"));
 	    </xsl:if>
 	    
             _operations[<xsl:value-of select="position()-1"/>]=__operation;
@@ -106,20 +119,9 @@
     private void populateFaults(){
          <xsl:for-each select="method">
            <xsl:for-each select="fault/param">
-              faultExceptionNameMap.put( new javax.xml.namespace.QName(
-                 "<xsl:value-of select="@namespace"/>",
-                 "<xsl:value-of select="@localname"/>"),
-                 "<xsl:value-of select="@name"/>"
-               );
-              faultExceptionClassNameMap.put(new javax.xml.namespace.QName(
-                "<xsl:value-of select="@namespace"/>",
-                "<xsl:value-of select="@localname"/>"),
-                "<xsl:value-of select="@name"/>");
-               faultMessageMap.put( new javax.xml.namespace.QName(
-                 "<xsl:value-of select="@namespace"/>",
-                 "<xsl:value-of select="@localname"/>"),
-                 "<xsl:value-of select="@instantiatableType"/>"
-               );
+              faultExceptionNameMap.put( new javax.xml.namespace.QName("<xsl:value-of select="@namespace"/>","<xsl:value-of select="@localname"/>"),"<xsl:value-of select="@name"/>");
+              faultExceptionClassNameMap.put(new javax.xml.namespace.QName("<xsl:value-of select="@namespace"/>","<xsl:value-of select="@localname"/>"),"<xsl:value-of select="@name"/>");
+              faultMessageMap.put( new javax.xml.namespace.QName("<xsl:value-of select="@namespace"/>","<xsl:value-of select="@localname"/>"),"<xsl:value-of select="@instantiatableType"/>");
            </xsl:for-each>
         </xsl:for-each>
 
@@ -152,8 +154,6 @@
         _service.applyPolicy();
         </xsl:if>
 	
-        configurationContext = _serviceClient.getServiceContext().getConfigurationContext();
-
         _serviceClient.getOptions().setTo(new org.apache.axis2.addressing.EndpointReference(
                 targetEndpoint));
         _serviceClient.getOptions().setUseSeparateListener(useSeparateListener);
@@ -220,7 +220,7 @@
             <xsl:variable name="outputparamcount"><xsl:value-of select="count(output/param[@location='body']/param)"/></xsl:variable>
             <xsl:variable name="outputparamshorttype"><xsl:value-of select="output/param[@location='body']/@shorttype"/></xsl:variable>
             <xsl:variable name="outputparampartname"><xsl:value-of select="output/param[@location='body']/param/@partname"/></xsl:variable>
-
+            <xsl:variable name="isUnwrapParameters" select="input/param[@location='body' and @type!='']/@unwrappParameters"/>
         <!-- MTOM -->
         <xsl:variable name="method-name"><xsl:value-of select="@name"/></xsl:variable>
         <xsl:variable name="method-ns"><xsl:value-of select="@namespace"/> </xsl:variable>
@@ -231,10 +231,14 @@
                 <xsl:if test="$isSync='1'">
                     /**
                      * Auto generated method signature
+                     * <xsl:value-of select="@comment"/>
                      * @see <xsl:value-of select="$package"/>.<xsl:value-of select="$interfaceName"/>#<xsl:value-of select="@name"/>
                     <xsl:for-each select="input/param[@type!='']">
                      * @param <xsl:value-of select="@name"></xsl:value-of><xsl:text>
                     </xsl:text></xsl:for-each>
+                    <xsl:for-each select="fault/param[@type!='']">
+                     * @throws <xsl:value-of select="@name"/> : <xsl:value-of select="@comment"/>
+                    </xsl:for-each>
                      */
 
                     <xsl:choose>
@@ -267,22 +271,25 @@
                             </xsl:for-each>)
                         </xsl:when>
                         <xsl:otherwise>
+
                             public  <xsl:choose>
                             <xsl:when test="$outputtype=''">void</xsl:when>
                             <xsl:when test="$outputparamcount=1"><xsl:value-of select="output/param[@location='body']/param/@type"/></xsl:when>
                             <xsl:when test="string-length(normalize-space($outputcomplextype)) > 0"><xsl:value-of select="$outputcomplextype"/></xsl:when>
+                            <xsl:when test="($outputparamcount=0) and ($isUnwrapParameters)">void</xsl:when>
                             <xsl:otherwise><xsl:value-of select="$outputtype"/></xsl:otherwise>
                             </xsl:choose>
                             <xsl:text> </xsl:text><xsl:value-of select="@name"/>(
 
                             <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
+                            <xsl:variable name="inputParamCount" select="count(input/param[@location='body' and @type!='']/param)"/>
+
                             <xsl:choose>
                                 <xsl:when test="$inputcount=1">
                                     <!-- Even when the parameters are 1 we have to see whether we have the
                                   wrapped parameters -->
-                                    <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                                     <xsl:choose>
-                                        <xsl:when test="$inputWrappedCount &gt; 0">
+                                        <xsl:when test="$isUnwrapParameters">
                                            <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                                 <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                                             </xsl:for-each>
@@ -295,7 +302,8 @@
                                 <xsl:otherwise><!-- Just leave it - nothing we can do here --></xsl:otherwise>
                             </xsl:choose>
 
-                            <xsl:if test="$inputcount=1 and input/param[not(@location='body') and @type!='']">,</xsl:if>
+                            <xsl:if test="($inputcount=1 and input/param[not(@location='body') and @type!='']) and
+                                not($isUnwrapParameters and $inputParamCount=0)">,</xsl:if>
                             <xsl:for-each select="input/param[not(@location='body') and @type!='']">
                                 <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                             </xsl:for-each>)
@@ -307,7 +315,7 @@
                     <xsl:for-each select="fault/param[@type!='']">
                         ,<xsl:value-of select="@name"/>
                     </xsl:for-each>{
-
+              org.apache.axis2.context.MessageContext _messageContext = null;
               try{
                org.apache.axis2.client.OperationClient _operationClient = _serviceClient.createClient(_operations[<xsl:value-of select="position()-1"/>].getName());
               _operationClient.getOptions().setAction("<xsl:value-of select="$soapAction"/>");
@@ -319,7 +327,7 @@
               </xsl:for-each>
 
               // create a message context
-              org.apache.axis2.context.MessageContext _messageContext = new org.apache.axis2.context.MessageContext();
+              _messageContext = new org.apache.axis2.context.MessageContext();
 
               <!--todo if the stub was generated with unwrapping, wrap all parameters into a single element-->
 
@@ -340,7 +348,6 @@
                                                 wrapped parameters -->
                                             <!-- unwrapping takes place only if the back word compatiblity is off. if -b on
                                              then we do not unwrapp and only remove the top element -->
-                                           <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                                            <xsl:variable name="inputElementType" select="input/param[@location='body' and @type!='']/@type"></xsl:variable>
                                            <xsl:variable name="inputElementComplexType" select="input/param[@location='body' and @type!='']/@complextype"></xsl:variable>
                                            <xsl:variable name="opName" select="input/param[@location='body' and @type!='']/@opname"></xsl:variable>
@@ -353,7 +360,7 @@
                                                     optimizeContent(new javax.xml.namespace.QName("<xsl:value-of select="$method-ns"/>",
                                                     "<xsl:value-of select="$method-name"/>")));
                                                 </xsl:when>
-                                                <xsl:when test="($inputWrappedCount &gt; 0) and not($isbackcompatible='true')">
+                                                <xsl:when test="($isUnwrapParameters) and not($isbackcompatible='true')">
                                                     <xsl:value-of select="$inputElementType"/><xsl:text> </xsl:text>dummyWrappedType = null;
                                                     env = toEnvelope(getFactory(_operationClient.getOptions().getSoapVersionURI()),
                                                     <xsl:for-each select="input/param[@location='body' and @type!='']/param">
@@ -488,7 +495,7 @@
                                              _returnEnv.getBody().getFirstElement() ,
                                              <xsl:value-of select="$outputtype"/>.class,
                                               getEnvelopeNamespaces(_returnEnv));
-                                _messageContext.getTransportOut().getSender().cleanup(_messageContext);
+
                                <xsl:choose>
                                    <xsl:when test="$outputparamcount=1">
                                         return get<xsl:value-of select="$outputparamshorttype"/><xsl:value-of
@@ -497,6 +504,9 @@
                                    <!-- this covers both back compatibility and normal unwrapping -->
                                    <xsl:when test="(string-length(normalize-space($outputcomplextype)) > 0)">
                                         return get<xsl:value-of select="$outputopname"/>((<xsl:value-of select="$outputtype"/>)object);
+                                   </xsl:when>
+                                   <xsl:when test="($outputparamcount=0) and ($isUnwrapParameters)">
+                                        return;
                                    </xsl:when>
                                    <xsl:otherwise>
                                         return (<xsl:value-of select="$outputtype"/>)object;
@@ -561,13 +571,16 @@
             }else{
                 throw f;
             }
-        }
+            } finally {
+                _messageContext.getTransportOut().getSender().cleanup(_messageContext);
+            }
         }
             </xsl:if>
             <!-- Async method generation -->
             <xsl:if test="$isAsync='1'">
                 /**
                 * Auto generated method signature for Asynchronous Invocations
+                * <xsl:value-of select="@comment"/>
                 * @see <xsl:value-of select="$package"/>.<xsl:value-of select="$interfaceName"/>#start<xsl:value-of select="@name"/>
                 <xsl:for-each select="input/param[@type!='']">
                     * @param <xsl:value-of select="@name"></xsl:value-of><xsl:text>
@@ -576,13 +589,14 @@
                 public  void start<xsl:value-of select="@name"/>(
 
                  <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
+                 <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
+
                     <xsl:choose>
                         <xsl:when test="$inputcount=1">
                             <!-- Even when the parameters are 1 we have to see whether we have the
                           wrapped parameters -->
-                            <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
-                            <xsl:choose>
-                                <xsl:when test="$inputWrappedCount &gt; 0">
+                                                       <xsl:choose>
+                                <xsl:when test="$isUnwrapParameters">
                                    <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                         <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                                     </xsl:for-each>
@@ -594,7 +608,7 @@
                         </xsl:when>
                         <xsl:otherwise><!-- Just leave it - nothing we can do here --></xsl:otherwise>
                     </xsl:choose>                                                
-                    <xsl:if test="$inputcount=1">,</xsl:if>
+                    <xsl:if test="($inputcount=1) and not($isUnwrapParameters and $inputWrappedCount=0)">,</xsl:if>
                     <xsl:for-each select="input/param[not(@location='body') and @type!='']">
                        <xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>,
                     </xsl:for-each>
@@ -615,7 +629,7 @@
 
               // create SOAP envelope with that payload
               org.apache.axiom.soap.SOAPEnvelope env=null;
-              org.apache.axis2.context.MessageContext _messageContext = new org.apache.axis2.context.MessageContext();
+              final org.apache.axis2.context.MessageContext _messageContext = new org.apache.axis2.context.MessageContext();
 
                     <xsl:variable name="count" select="count(input/param[@type!=''])"/>
                     <xsl:choose>
@@ -630,11 +644,10 @@
                                         <xsl:when test="$inputcount=1">
                                             <!-- Even when the parameters are 1 we have to see whether we have the
                                                 wrapped parameters -->
-                                           <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                                             <xsl:variable name="inputElementType" select="input/param[@location='body' and @type!='']/@type"></xsl:variable>
 
                                             <xsl:choose>
-                                                <xsl:when test="$inputWrappedCount &gt; 0">
+                                                <xsl:when test="$isUnwrapParameters">
                                                     <xsl:value-of select="$inputElementType"/><xsl:text> </xsl:text>dummyWrappedType = null;
                                                     env = toEnvelope(getFactory(_operationClient.getOptions().getSoapVersionURI()),
                                                     <xsl:for-each select="input/param[@location='body' and @type!='']/param">
@@ -769,6 +782,7 @@
                                         <xsl:when test="string-length(normalize-space($outputcomplextype)) > 0">
                                             (<xsl:value-of select="$outputcomplextype"/>)object);
                                         </xsl:when>
+                                        <xsl:when test="($outputparamcount=0) and ($isUnwrapParameters)">);</xsl:when>
                                         <xsl:otherwise>
                                         (<xsl:value-of select="$outputtype"/>)object);
                                         </xsl:otherwise>
@@ -805,7 +819,7 @@
 											            return;
 										            }
 										            </xsl:for-each>
-
+					
 										            callback.receiveError<xsl:value-of select="@name"/>(new java.rmi.RemoteException(ex.getMessage(), ex));
                                             } catch(java.lang.ClassCastException e){
                                                 // we cannot intantiate the class - throw the original Axis fault
@@ -846,7 +860,11 @@
                             }
 
                             public void onComplete() {
-                                // Do nothing by default
+                                try {
+                                    _messageContext.getTransportOut().getSender().cleanup(_messageContext);
+                                } catch (org.apache.axis2.AxisFault axisFault) {
+                                    callback.receiveError<xsl:value-of select="@name"/>(axisFault);
+                                }
                             }
                 });
                         </xsl:otherwise>
@@ -873,15 +891,23 @@
             <!-- Start of in only mep-->
             <xsl:if test="$mep='10' or $mep='11'"> <!-- These constants can be found in org.apache.axis2.wsdl.WSDLConstants -->
                 <!-- for the in only mep there is no notion of sync or async. And there is no return type also -->
+                /**
+                  * Auto generated method signature
+                  * <xsl:value-of select="@comment"/>
+                 <xsl:if test="$mep='11'">
+                   <xsl:for-each select="fault/param[@type!='']">
+                     * @throws <xsl:value-of select="@name"/> : <xsl:value-of select="@comment"/>
+                    </xsl:for-each>
+                  </xsl:if>
+                  */
                 public void <xsl:text> </xsl:text><xsl:value-of select="@name"/>(
                  <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
                     <xsl:choose>
                         <xsl:when test="$inputcount=1">
                             <!-- Even when the parameters are 1 we have to see whether we have the
                           wrapped parameters -->
-                            <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                             <xsl:choose>
-                                <xsl:when test="$inputWrappedCount &gt; 0">
+                                <xsl:when test="$isUnwrapParameters">
                                    <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                         <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                                     </xsl:for-each>
@@ -907,6 +933,7 @@
                     </xsl:for-each>
                 </xsl:if>
                 {
+                org.apache.axis2.context.MessageContext _messageContext = null;
 
                 <xsl:if test="$mep='11'">try {</xsl:if>
                 org.apache.axis2.client.OperationClient _operationClient = _serviceClient.createClient(_operations[<xsl:value-of select="position()-1"/>].getName());
@@ -920,7 +947,7 @@
 
                 <xsl:for-each select="input/param[@Action!='']">_operationClient.getOptions().setAction("<xsl:value-of select="@Action"/>");</xsl:for-each>
                 org.apache.axiom.soap.SOAPEnvelope env = null;
-                org.apache.axis2.context.MessageContext _messageContext = new org.apache.axis2.context.MessageContext();
+                 _messageContext = new org.apache.axis2.context.MessageContext();
 
                 <xsl:variable name="count" select="count(input/param[@type!=''])"/>
                                     <xsl:choose>
@@ -936,11 +963,10 @@
                                                         <xsl:when test="$inputcount=1">
                                                             <!-- Even when the parameters are 1 we have to see whether we have the
                                                                 wrapped parameters -->
-                                                           <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                                                             <xsl:variable name="inputElementType" select="input/param[@location='body' and @type!='']/@type"></xsl:variable>
 
                                                             <xsl:choose>
-                                                                <xsl:when test="$inputWrappedCount &gt; 0">
+                                                                <xsl:when test="$isUnwrapParameters">
                                                                     <xsl:value-of select="$inputElementType"/><xsl:text> </xsl:text>dummyWrappedType = null;
                                                                     env = toEnvelope(getFactory(_operationClient.getOptions().getSoapVersionURI()),
                                                                     <xsl:for-each select="input/param[@location='body' and @type!='']/param">
@@ -1073,7 +1099,12 @@
                   }else{
                       throw f;
                   }
+              } finally {
+                _messageContext.getTransportOut().getSender().cleanup(_messageContext);
               }
+           </xsl:if>
+           <xsl:if test="not($mep='11')">
+              _messageContext.getTransportOut().getSender().cleanup(_messageContext); 
            </xsl:if>
              return;
            }

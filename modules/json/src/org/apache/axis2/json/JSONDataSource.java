@@ -19,20 +19,21 @@
 
 package org.apache.axis2.json;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.Writer;
-import java.util.HashMap;
-
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamReader;
-
 import org.apache.axiom.om.OMDataSource;
 import org.apache.axiom.om.OMException;
 import org.apache.axiom.om.OMOutputFormat;
 import org.codehaus.jettison.json.JSONTokener;
 import org.codehaus.jettison.mapped.MappedXMLInputFactory;
+
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Writer;
+import java.util.HashMap;
 
 /**
  * JSONDataSource keeps the JSON String inside and consumes it when needed. This is to be kept in
@@ -62,7 +63,7 @@ public class JSONDataSource implements OMDataSource {
      *          if there is an error while writing the message in to the output stream.
      */
     public void serialize(OutputStream outputStream, OMOutputFormat omOutputFormat)
-            throws javax.xml.stream.XMLStreamException {
+            throws XMLStreamException {
         try {
             outputStream.write(getCompleteJOSNString().getBytes());
         } catch (IOException e) {
@@ -80,7 +81,7 @@ public class JSONDataSource implements OMDataSource {
      *          if there is an error while writing the message through the writer.
      */
     public void serialize(Writer writer, OMOutputFormat omOutputFormat)
-            throws javax.xml.stream.XMLStreamException {
+            throws XMLStreamException {
         try {
             writer.write(getCompleteJOSNString());
         } catch (IOException e) {
@@ -97,8 +98,7 @@ public class JSONDataSource implements OMDataSource {
      * @throws javax.xml.stream.XMLStreamException
      *          if there is an error while writing the message through the StAX writer.
      */
-    public void serialize(javax.xml.stream.XMLStreamWriter xmlStreamWriter)
-            throws javax.xml.stream.XMLStreamException {
+    public void serialize(XMLStreamWriter xmlStreamWriter) throws XMLStreamException {
         XMLStreamReader reader = getReader();
         xmlStreamWriter.writeStartDocument();
         while (reader.hasNext()) {
@@ -164,7 +164,7 @@ public class JSONDataSource implements OMDataSource {
      *          if there is an error while making the StAX reader.
      */
 
-    public javax.xml.stream.XMLStreamReader getReader() throws javax.xml.stream.XMLStreamException {
+    public XMLStreamReader getReader() throws XMLStreamException {
 
         HashMap XMLToJSNNamespaceMap = new HashMap();
         XMLToJSNNamespaceMap.put("", "");

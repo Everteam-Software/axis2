@@ -16,10 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.impl;
 
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMNamespace;
+import org.apache.axiom.om.OMFactory;
+import org.apache.axiom.om.OMAbstractFactory;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
+import org.apache.axiom.om.impl.OMNamespaceImpl;
+import org.apache.axiom.om.impl.llom.OMSourcedElementImpl;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -27,14 +33,18 @@ import org.apache.axis2.jaxws.message.Block;
 import org.apache.axis2.jaxws.message.Message;
 import org.apache.axis2.jaxws.message.Protocol;
 import org.apache.axis2.jaxws.message.databinding.SOAPEnvelopeBlock;
+import org.apache.axis2.jaxws.message.databinding.DataSourceBlock;
 import org.apache.axis2.jaxws.message.factory.MessageFactory;
-import org.apache.axis2.jaxws.message.util.MessageUtils;
+import org.apache.axis2.transport.http.HTTPConstants;
 
 import javax.xml.soap.AttachmentPart;
+import javax.xml.soap.MimeHeader;
+import javax.xml.soap.MimeHeaders;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.ws.WebServiceException;
+import java.util.HashMap;
 import java.util.Iterator;
 
 /** MessageFactoryImpl */
@@ -86,6 +96,22 @@ public class MessageFactoryImpl implements MessageFactory {
         try {
             // Create a Message with an XMLPart from the SOAPEnvelope
             Message m = new MessageImpl(message.getSOAPPart().getEnvelope());
+
+            MimeHeaders mimeHeaders = message.getMimeHeaders();
+            HashMap map = new HashMap();
+            Iterator iterator = mimeHeaders.getAllHeaders();
+            while (iterator.hasNext()) {
+                MimeHeader mimeHeader = (MimeHeader)iterator.next();
+                String key = mimeHeader.getName();
+                String value = mimeHeader.getValue();
+                if(key != null && value != null) {
+                    if(!HTTPConstants.HEADER_CONTENT_TYPE.equalsIgnoreCase(key)) {
+                        map.put(key, value);
+                    }
+                }
+            }
+            m.setMimeHeaders(map);
+
             if (message.countAttachments() > 0) {
                 Iterator it = message.getAttachments();
                 m.setDoingSWA(true);
@@ -109,6 +135,8 @@ public class MessageFactoryImpl implements MessageFactory {
         // Small optimization to quickly consider the SOAPEnvelope case
         if (block instanceof SOAPEnvelopeBlock) {
             return new MessageImpl((SOAPEnvelope)block.getBusinessObject(true), protocol);
+        } else if (block instanceof DataSourceBlock) {
+            return createFrom(block.getOMElement(), protocol);
         }
         return createFrom(block.getXMLStreamReader(true), protocol);
     }

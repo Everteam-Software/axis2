@@ -16,28 +16,37 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws;
 
-import java.util.Hashtable;
-import java.util.Map;
-
-import javax.xml.ws.Binding;
-import javax.xml.ws.handler.HandlerResolver;
+import org.apache.axis2.addressing.AddressingConstants;
+import org.apache.axis2.jaxws.addressing.util.EndpointReferenceUtils;
 import org.apache.axis2.jaxws.binding.BindingUtils;
 import org.apache.axis2.jaxws.binding.SOAPBinding;
 import org.apache.axis2.jaxws.client.PropertyValidator;
 import org.apache.axis2.jaxws.core.InvocationContext;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.description.EndpointDescription;
+import org.apache.axis2.jaxws.description.ServiceDescriptionWSDL;
 import org.apache.axis2.jaxws.handler.HandlerResolverImpl;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.spi.ServiceDelegate;
 import org.apache.axis2.transport.http.HTTPConstants;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import javax.xml.namespace.QName;
+import javax.xml.ws.Binding;
+import javax.xml.ws.EndpointReference;
+import javax.xml.ws.WebServiceException;
+import javax.xml.ws.WebServiceFeature;
+import javax.xml.ws.handler.HandlerResolver;
+import javax.xml.ws.wsaddressing.W3CEndpointReference;
+import java.util.Hashtable;
+import java.util.Map;
+
 public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvider {
+    private static final Log log = LogFactory.getLog(BindingProvider.class);
 
     protected Map<String, Object> requestContext;
 
@@ -47,56 +56,116 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
 
     protected ServiceDelegate serviceDelegate;
 
-    private Binding binding = null;
-    private static final Log log = LogFactory.getLog(BindingProvider.class);
-    public BindingProvider(ServiceDelegate svcDelegate, EndpointDescription epDesc) {
-        endpointDesc = epDesc;
-        serviceDelegate = svcDelegate;
+    private org.apache.axis2.jaxws.spi.Binding binding;
 
-        initialize();
+    public BindingProvider(ServiceDelegate svcDelegate,
+                           EndpointDescription epDesc,
+                           org.apache.axis2.addressing.EndpointReference epr,
+                           String addressingNamespace,
+                           WebServiceFeature... features) {
+        this.endpointDesc = epDesc;
+        this.serviceDelegate = svcDelegate;
+        
+        initialize(epr, addressingNamespace, features);
     }
 
     /*
      * Initialize any objects needed by the BindingProvider
      */
-    private void initialize() {
+    private void initialize(org.apache.axis2.addressing.EndpointReference epr,
+                            String addressingNamespace,
+                            WebServiceFeature... features) {
         requestContext = new ValidatingClientContext();
         responseContext = new ValidatingClientContext();
-
+        
         // Setting standard property defaults for the request context
-        requestContext.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, new Boolean(false));
-        requestContext.put(BindingProvider.SOAPACTION_USE_PROPERTY, new Boolean(true));
-
+        requestContext.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, Boolean.FALSE);
+        requestContext.put(BindingProvider.SOAPACTION_USE_PROPERTY, Boolean.TRUE);
+        requestContext.put(AddressingConstants.DISABLE_ADDRESSING_FOR_OUT_MESSAGES, Boolean.TRUE);
+        
         // Set the endpoint address
-        String endpointAddress = endpointDesc.getEndpointAddress();
-        if (endpointAddress != null) {
-            requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, endpointAddress);
+        String endpointAddress = (epr != null ) ? epr.getAddress() : endpointDesc.getEndpointAddress();        
+        if (endpointAddress != null && !"".equals(endpointAddress)) {
+            requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, endpointAddress);                
         }
         
         // JAXWS 9.2.1.1 requires that we go ahead and create the binding object
         // so we can also set the handlerchain
-        if (binding == null) {
-            binding = BindingUtils.createBinding(endpointDesc);
+        binding = (org.apache.axis2.jaxws.spi.Binding) BindingUtils.createBinding(endpointDesc);
+        if(log.isDebugEnabled()){
+            log.debug("Lookign for Handler Resolver");
+        }
+        // TODO should we allow the ServiceDelegate to figure out the default handlerresolver?  Probably yes, since a client app may look for one there.
+        HandlerResolver handlerResolver = null;
+        if(serviceDelegate.getHandlerResolver() != null){
             if(log.isDebugEnabled()){
-                log.debug("Lookign for Handler Resolver");
+                log.debug("Reading default Handler Resolver ");
             }
-            // TODO should we allow the ServiceDelegate to figure out the default handlerresolver?  Probably yes, since a client app may look for one there.
-            HandlerResolver handlerResolver = null;
-            if(serviceDelegate.getHandlerResolver() != null){
-                if(log.isDebugEnabled()){
-                    log.debug("Reading default Handler Resolver ");
-                }
-                handlerResolver= serviceDelegate.getHandlerResolver();
+            handlerResolver = serviceDelegate.getHandlerResolver();
+        }
+        else{
+            handlerResolver = new HandlerResolverImpl(endpointDesc.getServiceDescription(), serviceDelegate);
+            if(log.isDebugEnabled()){
+                log.debug("Creating new Handler Resolver using HandlerResolverImpl");
             }
-            else{
-                handlerResolver = new HandlerResolverImpl(endpointDesc.getServiceDescription());
-                if(log.isDebugEnabled()){
-                    log.debug("Creating new Handler Resolver using HandlerResolverImpl");
-                }
-            }
-            binding.setHandlerChain(handlerResolver.getHandlerChain(endpointDesc.getPortInfo()));
         }
 
+        // See if the metadata from creating the service indicates that MTOM should be enabled
+        if (binding instanceof SOAPBinding) {
+            // MTOM can be enabled either at the ServiceDescription level (via the WSDL binding type) or
+            // at the EndpointDescription level via the binding type used to create a Dispatch.
+            boolean enableMTOMFromMetadata = false;
+            
+            // if we have an SEI for the port, then we'll use it in order to search for MTOM configuration
+            if(endpointDesc.getEndpointInterfaceDescription() != null
+                    &&
+                    endpointDesc.getEndpointInterfaceDescription().getSEIClass() != null) {
+                enableMTOMFromMetadata = endpointDesc.getServiceDescription().isMTOMEnabled(serviceDelegate, 
+                                                                   endpointDesc.getEndpointInterfaceDescription().getSEIClass());
+            }
+            else {
+                enableMTOMFromMetadata = endpointDesc.getServiceDescription().isMTOMEnabled(serviceDelegate);
+            }
+            if (!enableMTOMFromMetadata) {
+                String bindingType = endpointDesc.getClientBindingID();
+                enableMTOMFromMetadata = (bindingType.equals(SOAPBinding.SOAP11HTTP_MTOM_BINDING) || 
+                                          bindingType.equals(SOAPBinding.SOAP12HTTP_MTOM_BINDING));
+            }
+            
+            if (enableMTOMFromMetadata) {
+                ((SOAPBinding) binding).setMTOMEnabled(true);
+            }
+        }
+                
+        // check for properties that need to be set on the BindingProvider
+        String seiName = null;
+        if(endpointDesc.getEndpointInterfaceDescription() != null 
+                &&
+                endpointDesc.getEndpointInterfaceDescription().getSEIClass() != null) {
+            seiName = endpointDesc.getEndpointInterfaceDescription().getSEIClass().getName();
+        }
+        String portQNameString = endpointDesc.getPortQName().toString();
+        String key = seiName + ":" + portQNameString;
+        Map<String, Object> bProps = endpointDesc.getServiceDescription().getBindingProperties(serviceDelegate, key);
+        if(bProps != null) {
+            if(log.isDebugEnabled()) {
+                log.debug("Setting binding props with size: " + bProps.size() + " on " +
+                "BindingProvider RequestContext");
+            }
+            requestContext.putAll(bProps);
+        }
+        
+        binding.setHandlerChain(handlerResolver.getHandlerChain(endpointDesc.getPortInfo()));
+        
+        //Set JAX-WS 2.1 related properties.
+        try {
+            binding.setAxis2EndpointReference(epr);
+            binding.setAddressingNamespace(addressingNamespace);
+            binding.setFeatures(features);
+        }
+        catch (Exception e) {
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
     }
 
     public ServiceDelegate getServiceDelegate() {
@@ -109,10 +178,6 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
 
     public Binding getBinding() {
         return binding;
-    }
-    
-    public void setBinding(Binding binding) {
-        this.binding = binding;
     }
 
     public Map<String, Object> getRequestContext() {
@@ -151,27 +216,25 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
     */
     protected void setupSessionContext(Map<String, Object> properties) {
         String sessionKey = null;
-        String sessionValue = null;
+        Object sessionValue = null;
 
         if (properties == null) {
-            return;
-        }
-
-        if (properties.containsKey(HTTPConstants.HEADER_LOCATION)) {
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("NoMaintainSessionProperty"));
+        } else if (properties.containsKey(HTTPConstants.HEADER_LOCATION)) {
             sessionKey = HTTPConstants.HEADER_LOCATION;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, sessionValue);
             }
         } else if (properties.containsKey(HTTPConstants.HEADER_COOKIE)) {
             sessionKey = HTTPConstants.HEADER_COOKIE;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(HTTPConstants.COOKIE_STRING, sessionValue);
             }
         } else if (properties.containsKey(HTTPConstants.HEADER_COOKIE2)) {
             sessionKey = HTTPConstants.HEADER_COOKIE2;
-            sessionValue = (String)properties.get(sessionKey);
+            sessionValue = properties.get(sessionKey);
             if (sessionValue != null && !"".equals(sessionValue)) {
                 requestContext.put(HTTPConstants.COOKIE_STRING, sessionValue);
             }
@@ -207,9 +270,61 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
     }
 
     /*
+     *  (non-Javadoc)
+     * @see javax.xml.ws.BindingProvider#getEndpointReference()
+     */
+    public EndpointReference getEndpointReference() {
+        return getEndpointReference(W3CEndpointReference.class);
+    }
+
+    /*
+     *  (non-Javadoc)
+     * @see javax.xml.ws.BindingProvider#getEndpointReference(java.lang.Class)
+     */
+    public <T extends EndpointReference> T getEndpointReference(Class<T> clazz) {
+        EndpointReference jaxwsEPR = null;
+        String addressingNamespace = EndpointReferenceUtils.getAddressingNamespace(clazz);
+        
+        try {
+            org.apache.axis2.addressing.EndpointReference epr = binding.getAxis2EndpointReference();
+            
+            if (epr == null) {
+                String address =
+                    (String) requestContext.get(BindingProvider.ENDPOINT_ADDRESS_PROPERTY);
+                if (address == null)
+                    address = endpointDesc.getEndpointAddress();
+                QName service = endpointDesc.getServiceQName();
+                QName port = endpointDesc.getPortQName();
+                String wsdlLocation = ((ServiceDescriptionWSDL) endpointDesc.getServiceDescription()).getWSDLLocation();
+
+                epr = EndpointReferenceUtils.createAxis2EndpointReference(address, service, port, wsdlLocation, addressingNamespace);
+            }
+            else if (!addressingNamespace.equals(binding.getAddressingNamespace())) {
+                throw ExceptionFactory.
+                   makeWebServiceException(Messages.getMessage("bindingProviderErr1",
+                                                               binding.getAddressingNamespace(),
+                                                               addressingNamespace));
+            }
+
+            jaxwsEPR = EndpointReferenceUtils.convertFromAxis2(epr, addressingNamespace);
+        } catch (UnsupportedOperationException e) {
+            throw e;
+        } catch (WebServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw ExceptionFactory.
+                makeWebServiceException(Messages.getMessage("endpointRefConstructionFailure3", 
+                                                            e.toString()));
+        }
+        
+        return clazz.cast(jaxwsEPR);
+    }
+    
+    /*
     * An inner class used to validate properties as they are set by the client.
     */
     class ValidatingClientContext extends Hashtable<String, Object> {
+        private static final long serialVersionUID = 3485112205801917858L;
 
         @Override
         public synchronized Object put(String key, Object value) {
@@ -225,4 +340,6 @@ public class BindingProvider implements org.apache.axis2.jaxws.spi.BindingProvid
             }
         }
     }
+
+
 }

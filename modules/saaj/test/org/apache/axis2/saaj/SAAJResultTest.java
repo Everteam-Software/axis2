@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import junit.framework.TestCase;
@@ -51,14 +52,17 @@ public class SAAJResultTest extends TestCase {
         headerEle.setActor("actor-URI");
     }
 
+    /*
+    public void testGetResult() throws Exception{
+        SAAJResult sr = new SAAJResult();
+        Node node = sr.getResult();
+        assertNotNull(node);
+    }
+    */
 
-    public void testGetResult() {
-        try {
-            SAAJResult sr = new SAAJResult();
-            Node node = sr.getResult();
-            assertNull(node);
-        } catch (Exception e) {
-            fail("Exception: " + e);
-        }
+    public void testGetResultSOAPMessage() throws Exception{
+    	SAAJResult sr = new SAAJResult(msg);
+    	Node node = sr.getResult();
+    	assertNotNull(node);
     }
 }

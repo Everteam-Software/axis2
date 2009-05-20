@@ -16,12 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.tool.codegen.eclipse.ui;
 
-
-
-import java.util.ArrayList;
-import java.util.Iterator;
 
 import org.apache.axis2.tool.codegen.eclipse.plugin.CodegenWizardPlugin;
 import org.apache.axis2.tool.codegen.eclipse.util.ClassFileReader;
@@ -40,6 +37,9 @@ import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.List;
 import org.eclipse.swt.widgets.Text;
+
+import java.util.ArrayList;
+import java.util.Iterator;
 
 public class JavaSourceSelectionPage extends AbstractWizardPage{
 

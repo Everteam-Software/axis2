@@ -21,8 +21,8 @@
 package org.apache.axis2.deployment.repository.util;
 
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.deployment.DeploymentErrorMsgs;
 import org.apache.axis2.deployment.Deployer;
+import org.apache.axis2.deployment.DeploymentErrorMsgs;
 import org.apache.axis2.deployment.DeploymentException;
 import org.apache.axis2.deployment.util.Utils;
 import org.apache.axis2.i18n.Messages;
@@ -40,7 +40,6 @@ public class DeploymentFileData {
     private Deployer deployer;
 
     public DeploymentFileData(File file) {
-        if (file == null) throw new IllegalArgumentException("Filename must not be null");
         this.file = file;
     }
 

@@ -30,9 +30,9 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.apache.axis2</groupId>
     <artifactId>axis2-parent</artifactId>
-    <version>1.3</version>
+    <version>1.5</version>
     <packaging>pom</packaging>
-    <name>Apache Axis 2.0 - Parent</name>
+    <name>Apache Axis2 - Parent</name>
     <inceptionYear>2004</inceptionYear>
     <description>Axis2 is an effort to re-design and totally re-implement both Axis/Java and
         (eventually) Axis/C++ on a new architecture. Evolving from the now standard "handler chain"
@@ -60,7 +60,8 @@
         -oriented and exploit many different message exchange patterns. The Axis2 engine
         architecture is careful to not build in any assumptions of request-response patterns to
         ensure that it can be used easily to support arbitrary message exchange
-        patterns.</description>
+        patterns.
+    </description>
     <url>http://ws.apache.org/axis2/</url>
     <organization>
         <name>Apache Software Foundation</name>
@@ -79,69 +80,79 @@
               element, and it will need to be changed manually before a release,
               as the maven-release-plugin will not update this value.
         -->
-        <version>1.3</version>
-	<addressing.mar.version>1.3</addressing.mar.version>
-	<soapmonitor.mar.version>1.3</soapmonitor.mar.version>
-	<mex.mar.version>1.3</mex.mar.version>
-	<ping.mar.version>1.3</ping.mar.version>
-	<scripting.mar.version>1.3</scripting.mar.version>
-        <annogen.version>0.1.0</annogen.version>
+        <version>1.5</version>
+
+        <!-- Version #'s for the mars that we generate -->
+        <addressing.mar.version>1.5</addressing.mar.version>
+        <soapmonitor.mar.version>1.5</soapmonitor.mar.version>
+        <mex.mar.version>1.5</mex.mar.version>
+        <ping.mar.version>1.5</ping.mar.version>
+        <scripting.mar.version>1.5</scripting.mar.version>
+        <mtompolicy.mar.version>1.5</mtompolicy.mar.version>
+
         <ant.version>1.7.0</ant.version>
-        <antlr.version>2.7.4</antlr.version>
-        <activemq.version>4.1.1</activemq.version>
-        <axiom.version>1.2.5</axiom.version>
-        <backport.util.concurrent.version>2.2</backport.util.concurrent.version>
+        <antlr.version>2.7.7</antlr.version>
+        <axiom.version>1.2.8</axiom.version>
         <bcel.version>5.2</bcel.version>
         <bsf.version>2.4.0</bsf.version>
         <commons.codec.version>1.3</commons.codec.version>
-        <commons.fileupload.version>1.1.1</commons.fileupload.version>
-        <commons.httpclient.version>3.0.1</commons.httpclient.version>
-        <commons.io.version>1.2</commons.io.version>
-        <commons.logging.version>1.1</commons.logging.version>
+        <commons.fileupload.version>1.2</commons.fileupload.version>
+        <commons.httpclient.version>3.1</commons.httpclient.version>
+        <commons.io.version>1.4</commons.io.version>
+        <commons.logging.version>1.1.1</commons.logging.version>
+        <eclipse.plugins.version>1.4.0</eclipse.plugins.version>
         <eclipse.version>3.2.0</eclipse.version>
-	<eclipse.plugins.version>1.3.0</eclipse.plugins.version>
-        <fi.version>1.2.1</fi.version>
-        <geronimo.spec.activation.version>1.0-M1</geronimo.spec.activation.version>
-        <geronimo.spec.javamail.version>1.0-M1</geronimo.spec.javamail.version>
-        <geronimo.spec.jms.version>1.1</geronimo.spec.jms.version>
+        <fi.version>1.1.8</fi.version>
+        <geronimo.spec.activation.version>1.0.1</geronimo.spec.activation.version>
         <geronimo.spec.annotation.version>1.1</geronimo.spec.annotation.version>
-        <groovy.all.version>1.0-jsr-06</groovy.all.version>
+        <geronimo.spec.javamail.version>1.6</geronimo.spec.javamail.version>
+        <geronimo.spec.stax.version>1.0.1</geronimo.spec.stax.version>
+        <geronimo.spec.metadata.version>1.1.2</geronimo.spec.metadata.version>
+        <geronimo.spec.saaj.version>1.0.1</geronimo.spec.saaj.version>
+        <geronimo.spec.jaxws.version>1.0</geronimo.spec.jaxws.version>
+        <httpcore.version>4.0</httpcore.version>
         <intellij.version>5.0</intellij.version>
-        <httpcore.version>4.0-alpha5</httpcore.version>
         <jalopy.version>1.5rc3</jalopy.version>
-        <jaxb.api.version>2.0</jaxb.api.version>
-        <jaxbri.version>2.0.5</jaxbri.version>
+        <jaxb.api.version>2.1</jaxb.api.version>
+        <jaxbri.version>2.1.7</jaxbri.version>
         <jaxen.version>1.1.1</jaxen.version>
-        <jaxme2.version>0.5.2</jaxme2.version>
-        <jettison.version>1.0-RC1</jettison.version>
-        <jibx.version>1.1.5</jibx.version>
-        <junit.version>4.3.1</junit.version>
+        <jettison.version>1.0-RC2</jettison.version>
+        <jibx.version>1.2.1</jibx.version>
         <junit.version-jdk1.4>3.8.2</junit.version-jdk1.4>
-        <log4j.version>1.2.14</log4j.version>
+        <junit.version>4.4</junit.version>
+        <log4j.version>1.2.15</log4j.version>
+        <maven.antrun.version>1.1</maven.antrun.version>
         <maven.archiver.version>2.2</maven.archiver.version>
-        <maven.artifact.version>2.0.4</maven.artifact.version>
-        <maven.assembly.version>2.2-beta-1</maven.assembly.version>
-        <maven.plugin.testing.version>1.0-beta-1</maven.plugin.testing.version>
+        <maven.artifact.version>2.0.8</maven.artifact.version>
+        <maven.assembly.version>2.2-beta-2</maven.assembly.version>
+        <maven.plugin.version>2.3</maven.plugin.version>
+        <maven.plugin.testing.version>1.1</maven.plugin.testing.version>
         <maven.version>2.0.7</maven.version>
-        <neethi.version>2.0.2</neethi.version>
-        <plexus.utils.version>1.1</plexus.utils.version>
-        <rhino.version>1.6R5</rhino.version>
+        <maven.war.version>2.0.2</maven.war.version>
+        <neethi.version>2.0.4</neethi.version>
+        <plexus.utils.version>1.4.9</plexus.utils.version>
+        <rhino.version>1.6R7</rhino.version>
         <servlet.api.version>2.3</servlet.api.version>
-        <spring.version>2.0.4</spring.version>
+        <spring.version>2.5.1</spring.version>
         <stax.api.version>1.0.1</stax.api.version>
-        <stax.impl.artifactid>wstx-asl</stax.impl.artifactid>
+        <stax.impl.artifact>wstx-asl</stax.impl.artifact>
         <stax.impl.groupid>org.codehaus.woodstox</stax.impl.groupid>
-        <stax.impl.version>3.2.1</stax.impl.version>
-        <stax_utils.version>20060915</stax_utils.version>
-        <tomcat.version>6.0.10</tomcat.version>
-        <woden.version>1.0-incubating-M7b</woden.version>
+        <stax.impl.version>3.2.4</stax.impl.version>
+        <tomcat.version>6.0.16</tomcat.version>
+        <woden.version>1.0M8</woden.version>
         <wsdl4j.version>1.6.2</wsdl4j.version>
         <xalan.version>2.7.0</xalan.version>
-        <xbean.version>2.2.0</xbean.version>
-        <xerces.version>2.8.1</xerces.version>
-        <xml_apis.version>1.3.03</xml_apis.version>
-        <xmlschema.version>1.3.2</xmlschema.version>
-        <xmlunit.version>1.0</xmlunit.version>
+        <xmlbeans.version>2.3.0</xmlbeans.version>
+        <xml_resolver.version>1.2</xml_resolver.version>
+        <xmlschema.version>1.4.3</xmlschema.version>
+        <xmlunit.version>1.1</xmlunit.version>
+        <smack.version>3.0.4</smack.version>
+        <commons.lang.version>2.3</commons.lang.version>
+        <javax.mail.version>1.4</javax.mail.version>
+        <!-- The build failing if tests are skipped is very annoying -->
+        <failIfNoTests>false</failIfNoTests>
+        <m2Repository>'${settings.localRepository}'</m2Repository>
+        <geronimo-spec.jta.version>1.1</geronimo-spec.jta.version>
     </properties>
     <mailingLists>
         <mailingList>
@@ -150,6 +161,9 @@
             <unsubscribe>axis-dev-unsubscribe@ws.apache.org</unsubscribe>
             <post>axis-dev@ws.apache.org</post>
             <archive>http://marc.theaimsgroup.com/?l=axis-dev</archive>
+            <otherArchives>
+                <otherArchive>http://markmail.org/search/list:org.apache.ws.axis-dev</otherArchive>
+            </otherArchives>
         </mailingList>
         <mailingList>
             <name>Axis User List</name>
@@ -157,6 +171,16 @@
             <unsubscribe>axis-user-unsubscribe@ws.apache.org</unsubscribe>
             <post>axis-user@ws.apache.org</post>
             <archive>http://marc.theaimsgroup.com/?l=axis-user</archive>
+            <otherArchives>
+                <otherArchive>http://markmail.org/search/list:org.apache.ws.axis-user</otherArchive>
+            </otherArchives>
+        </mailingList>
+        <mailingList>
+            <name>CVS Commit Message List</name>
+            <subscribe>axis-cvs-subscribe@ws.apache.org</subscribe>
+            <unsubscribe>axis-cvs-unsubscribe@ws.apache.org</unsubscribe>
+            <post>axis-cvs@ws.apache.org</post>
+            <archive>http://markmail.org/search/list:org.apache.ws.axis-cvs</archive>
         </mailingList>
     </mailingLists>
     <developers>
@@ -171,6 +195,11 @@
             <id>azeez</id>
             <email>azeez AT wso2.com</email>
             <organization>WSO2</organization>
+            <url>http://www.apache.org/~azeez</url>
+        </developer>
+        <developer>
+            <name>Jeff Barrett</name>
+            <organization>IBM</organization>
         </developer>
         <developer>
             <name>Eran Chinthaka</name>
@@ -186,6 +215,12 @@
             <organization>Sonic Software</organization>
         </developer>
         <developer>
+            <name>Brian DePradine</name>
+            <id>pradine</id>
+            <email>pradine AT uk.ibm.com</email>
+            <organization>IBM</organization>
+        </developer>
+        <developer>
             <name>Jaliya Ekanayake</name>
             <id>jaliya</id>
             <email>jaliya AT opensource.lk</email>
@@ -199,6 +234,10 @@
             <organization>WSO2</organization>
         </developer>
         <developer>
+            <name>Nicholas Gallardo</name>
+            <organization>IBM</organization>
+        </developer>
+        <developer>
             <name>Thilina Gunarathne</name>
             <id>thilina</id>
             <email>thilina AT opensource.lk</email>
@@ -210,6 +249,12 @@
             <email>chathura AT opensource.lk</email>
             <organization>Indiana University, USA</organization>
             <url>www.apache.org/~chathura</url>
+        </developer>
+        <developer>
+            <name>David Illsley</name>
+            <id>davidillsley</id>
+            <organization>IBM</organization>
+            <url>http://www.illsley.org</url>
         </developer>
         <developer>
             <name>Deepal Jayasinghe</name>
@@ -229,6 +274,10 @@
             <id>stevel</id>
             <email>stevel AT apache.org</email>
             <organization>HP labs</organization>
+        </developer>
+        <developer>
+            <name>Bill Nagy</name>
+            <organization>IBM</organization>
         </developer>
         <developer>
             <name>Chatra Nakkawita</name>
@@ -269,10 +318,24 @@
             <organization>Computer Associates</organization>
         </developer>
         <developer>
+            <name>Michael Rheinheimer</name>
+            <organization>IBM</organization>
+        </developer>
+        <developer>
+            <name>Ann Robinson</name>
+            <organization>IBM</organization>
+        </developer>
+        <developer>
             <name>Sanka Samaranayake</name>
             <id>sanka</id>
             <email>sanka AT wso2.com</email>
             <organization>WSO2</organization>
+        </developer>
+        <developer>
+            <name>Rich Scheuerle</name>
+            <id>scheu</id>
+            <email>scheu AT us.ibm.com</email>
+            <organization>IBM</organization>
         </developer>
         <developer>
             <name>Ashutosh Shahi</name>
@@ -295,14 +358,24 @@
         <developer>
             <name>Davanum Srinivas</name>
             <id>dims</id>
-            <email>dims AT wso2.com</email>
-            <organization>WSO2</organization>
+            <email>davanum AT gmail.com</email>
+            <organization></organization>
         </developer>
         <developer>
             <name>Jayachandra Sekhara Rao Sunkara</name>
             <id>jaya</id>
             <email>jayachandra AT gmail.com</email>
             <organization>Computer Associates</organization>
+        </developer>
+        <developer>
+            <name>Nandana Mihindukulasooriya</name>
+            <id>nandana</id>
+            <email>nandana AT wso2.com</email>
+            <organization>WSO2</organization>
+        </developer>
+        <developer>
+            <name>Nikhil Thaker</name>
+            <organization>IBM</organization>
         </developer>
         <developer>
             <name>Chamil Thanthrimudalige</name>
@@ -317,10 +390,28 @@
             <organization>Purdue University, USA</organization>
         </developer>
         <developer>
+            <name>Eranga Jayasundera</name>
+            <id>eranga</id>
+            <email>eranga AT apache.org</email>
+            <organization></organization>
+        </developer>
+        <developer>
             <name>Sanjiva Weerawarana</name>
             <id>sanjiva</id>
             <email>sanjiva AT wso2.com</email>
             <organization>WSO2</organization>
+        </developer>
+        <developer>
+            <name>Keith Chapman</name>
+            <id>keithc</id>
+            <email>keith AT wso2.com</email>
+            <organization>WSO2</organization>
+        </developer>
+        <developer>
+            <name>Andreas Veithen</name>
+            <id>veithen</id>
+            <email>veithen AT apache.org</email>
+            <url>http://www.linkedin.com/in/aveithen</url>
         </developer>
     </developers>
     <contributors>
@@ -359,11 +450,11 @@
             <email/>
             <organization>Lanka Software Foundation / University of Moratuwa</organization>
         </contributor>
-       
-<contributor>
+
+        <contributor>
             <name>Shivantha Huruggamuwa</name>
             <email>shivanthah AT gmail.com</email>
-            <organization>University Of Peradeniya , Sri Lanaka</organization>
+            <organization>University Of Peradeniya , Sri Lanka</organization>
         </contributor>
 
     </contributors>
@@ -409,17 +500,6 @@
             </snapshots>
         </repository>
         <repository>
-            <id>apache-incubating</id>
-            <url>http://people.apache.org/repo/m2-incubating-repository</url>
-            <releases>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-        <repository>
             <id>eclipse-repo</id>
             <name>eclipse maven repository</name>
             <url>http://repo1.maven.org/eclipse</url>
@@ -432,14 +512,8 @@
             </snapshots>
         </repository>
         <repository>
-            <id>jibx</id>
-            <name>Jibx Repository</name>
-            <url>http://jibx.sourceforge.net/maven</url>
-            <layout>legacy</layout>
-        </repository>
-        <repository>
             <id>java.net</id>
-            <url>http://download.java.net/maven/1/</url>
+            <url>https://maven-repository.dev.java.net/nonav/repository/</url>
             <layout>legacy</layout>
             <snapshots>
                 <enabled>false</enabled>
@@ -496,14 +570,20 @@
                 <version>${tomcat.version}</version>
             </dependency>
             <dependency>
-                <groupId>xml-apis</groupId>
-                <artifactId>xml-apis</artifactId>
-                <version>${xml_apis.version}</version>
+                <groupId>xml-resolver</groupId>
+                <artifactId>xml-resolver</artifactId>
+                <version>${xml_resolver.version}</version>
             </dependency>
             <dependency>
                 <groupId>xalan</groupId>
                 <artifactId>xalan</artifactId>
                 <version>${xalan.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>xml-apis</groupId>
+                        <artifactId>xml-apis</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>com.sun.xml.bind</groupId>
@@ -519,6 +599,16 @@
                 <groupId>javax.xml.bind</groupId>
                 <artifactId>jaxb-api</artifactId>
                 <version>${jaxb.api.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>javax.xml.stream</groupId>
+                        <artifactId>stax-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>javax.activation</groupId>
+                        <artifactId>activation</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.springframework</groupId>
@@ -549,16 +639,28 @@
                 <groupId>org.codehaus.jettison</groupId>
                 <artifactId>jettison</artifactId>
                 <version>${jettison.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>stax</groupId>
+                        <artifactId>stax-api</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
-                <groupId>jibx</groupId>
+                <groupId>org.jibx</groupId>
                 <artifactId>jibx-bind</artifactId>
                 <version>${jibx.version}</version>
             </dependency>
             <dependency>
-                <groupId>jibx</groupId>
+                <groupId>org.jibx</groupId>
                 <artifactId>jibx-run</artifactId>
                 <version>${jibx.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.codehaus.woodstox</groupId>
+                        <artifactId>wstx-asl</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.apache.ant</groupId>
@@ -569,6 +671,16 @@
                 <groupId>org.apache.ws.commons.axiom</groupId>
                 <artifactId>axiom-api</artifactId>
                 <version>${axiom.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>xml-apis</groupId>
+                        <artifactId>xml-apis</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xerces</groupId>
+                        <artifactId>xercesImpl</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.apache.ws.commons.axiom</groupId>
@@ -612,10 +724,21 @@
             </dependency>
             <dependency>
                 <groupId>${stax.impl.groupid}</groupId>
-                <artifactId>${stax.impl.artifactid}</artifactId>
+                <artifactId>${stax.impl.artifact}</artifactId>
                 <version>${stax.impl.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>stax</groupId>
+                        <artifactId>stax-api</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
 
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-stax-api_1.0_spec</artifactId>
+                <version>${geronimo.spec.stax.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.apache.geronimo.specs</groupId>
                 <artifactId>geronimo-activation_1.1_spec</artifactId>
@@ -628,29 +751,29 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.geronimo.specs</groupId>
-                <artifactId>geronimo-jms_1.1_spec</artifactId>
-                <version>${geronimo.spec.jms.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.geronimo.specs</groupId>
                 <artifactId>geronimo-annotation_1.0_spec</artifactId>
                 <version>${geronimo.spec.annotation.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-ws-metadata_2.0_spec</artifactId>
+                <version>${geronimo.spec.metadata.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-saaj_1.3_spec</artifactId>
+                <version>${geronimo.spec.saaj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-jaxws_2.1_spec</artifactId>
+                <version>${geronimo.spec.jaxws.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>jaxen</groupId>
                 <artifactId>jaxen</artifactId>
                 <version>${jaxen.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>annogen</groupId>
-                <artifactId>annogen</artifactId>
-                <version>${annogen.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>javax.servlet</groupId>
-                <artifactId>servlet-api</artifactId>
-                <version>${servlet.api.version}</version>
-                <scope>provided</scope>
             </dependency>
             <dependency>
                 <groupId>commons-httpclient</groupId>
@@ -668,16 +791,6 @@
                 <version>${httpcore.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpcore-nio</artifactId>
-                <version>${httpcore.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpcore-niossl</artifactId>
-                <version>${httpcore.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>commons-fileupload</groupId>
                 <artifactId>commons-fileupload</artifactId>
                 <version>${commons.fileupload.version}</version>
@@ -688,14 +801,34 @@
                 <version>${wsdl4j.version}</version>
             </dependency>
             <dependency>
-                <groupId>backport-util-concurrent</groupId>
-                <artifactId>backport-util-concurrent</artifactId>
-                <version>${backport.util.concurrent.version}</version>
+                <groupId>org.apache.woden</groupId>
+                <artifactId>woden-api</artifactId>
+                <version>${woden.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.codehaus.woodstox</groupId>
+                        <artifactId>wstx-asl</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xerces</groupId>
+                        <artifactId>xmlParserAPIs</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.apache.woden</groupId>
-                <artifactId>woden</artifactId>
+                <artifactId>woden-impl-dom</artifactId>
                 <version>${woden.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.codehaus.woodstox</groupId>
+                        <artifactId>wstx-asl</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xerces</groupId>
+                        <artifactId>xmlParserAPIs</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>xmlunit</groupId>
@@ -710,15 +843,15 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
-                <groupId>xmlbeans</groupId>
-                <artifactId>xbean</artifactId>
-                <version>${xbean.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.ws.jaxme</groupId>
-                <artifactId>jaxme2</artifactId>
-                <version>${jaxme2.version}</version>
-                <scope>provided</scope>
+                <groupId>org.apache.xmlbeans</groupId>
+                <artifactId>xmlbeans</artifactId>
+                <version>${xmlbeans.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>stax</groupId>
+                        <artifactId>stax-api</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.apache.maven</groupId>
@@ -755,6 +888,32 @@
                 <groupId>log4j</groupId>
                 <artifactId>log4j</artifactId>
                 <version>${log4j.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>javax.mail</groupId>
+                        <artifactId>mail</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>javax.jms</groupId>
+                        <artifactId>jms</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.sun.jdmk</groupId>
+                        <artifactId>jmxtools</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.sun.jmx</groupId>
+                        <artifactId>jmxri</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>oro</groupId>
+                        <artifactId>oro</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>junit</groupId>
+                        <artifactId>junit</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.eclipse.core</groupId>
@@ -822,20 +981,32 @@
                 <version>${bsf.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.activemq</groupId>
-                <artifactId>apache-activemq</artifactId>
-                <version>${activemq.version}</version>
-            </dependency>
-			<dependency>
-				<groupId>jalopy</groupId>
-				<artifactId>jalopy</artifactId>
+                <groupId>jalopy</groupId>
+                <artifactId>jalopy</artifactId>
                 <version>${jalopy.version}</version>
-			</dependency>
+            </dependency>
             <dependency>
-                 <groupId>xerces</groupId>
-		 <artifactId>xercesImpl</artifactId>
-		 <version>${xerces.version}</version>
-	    </dependency>
+                <groupId>org.igniterealtime</groupId>
+                <artifactId>smack</artifactId>
+                <version>${smack.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.igniterealtime</groupId>
+                <artifactId>smackx</artifactId>
+                <version>${smack.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-lang</groupId>
+                <artifactId>commons-lang</artifactId>
+                <version>${commons.lang.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.geronimo.specs</groupId>
+                <artifactId>geronimo-jta_1.1_spec</artifactId>
+                <version>${geronimo-spec.jta.version}</version>
+            </dependency>
+
+
         </dependencies>
     </dependencyManagement>
     <!-- Top level dependencies that will be needed in all sub mvn modules -->
@@ -872,31 +1043,100 @@
         <!-- Stax implementation class -->
         <dependency>
             <groupId>${stax.impl.groupid}</groupId>
-            <artifactId>${stax.impl.artifactid}</artifactId>
+            <artifactId>${stax.impl.artifact}</artifactId>
         </dependency>
         <dependency>
-            <groupId>xerces</groupId>
-            <artifactId>xercesImpl</artifactId>
+            <groupId>org.apache.geronimo.specs</groupId>
+            <artifactId>geronimo-stax-api_1.0_spec</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-	 </dependency>
+        </dependency>
     </dependencies>
+
     <profiles>
         <profile>
-            <id>java14</id>
-            <activation>
-                <jdk>1.4</jdk>
-            </activation>
-            <dependencies>
-                <!-- Junit testing environment-->
-                <dependency>
-                    <groupId>junit</groupId>
-                    <artifactId>junit</artifactId>
-                    <version>3.8.2</version>
-                </dependency>
-            </dependencies>
+          <id>release</id>
+          <build>
+                          <plugins>
+
+                              <!--<plugin>-->
+                                  <!--<groupId>org.apache.maven.plugins</groupId>-->
+                                  <!--<artifactId>maven-release-plugin</artifactId>-->
+                                  <!--<configuration>-->
+				      <!--<tagBase>https://svn.apache.org/repos/asf/webservices/axis2/tags/java/</tagBase>-->
+                                      <!--<useReleaseProfile>false</useReleaseProfile>-->
+                                      <!--<goals>deploy</goals>-->
+                                      <!--<arguments>-Prelease</arguments>-->
+                                  <!--</configuration>-->
+                              <!--</plugin>-->
+
+                              <!-- We want a source jar -->
+                              <plugin>
+                                  <groupId>org.apache.maven.plugins</groupId>
+                                  <artifactId>maven-source-plugin</artifactId>
+                                  <executions>
+                                      <execution>
+                                          <goals>
+                                              <goal>jar</goal>
+                                          </goals>
+                                      </execution>
+                                  </executions>
+                              </plugin>
+
+                              <!-- We want to sign the artifact, the POM, and all attached artifacts -->
+                              <plugin>
+                                  <groupId>org.apache.maven.plugins</groupId>
+                                  <artifactId>maven-gpg-plugin</artifactId>
+                                  <inherited>true</inherited>
+                                  <configuration>
+                                      <passphrase>${gpg.passphrase}</passphrase>
+                                  </configuration>
+                                  <executions>
+                                      <execution>
+                                          <goals>
+                                              <goal>sign</goal>
+                                          </goals>
+                                      </execution>
+                                  </executions>
+                              </plugin>
+
+                              <!-- We want to deploy the artifact to a staging location for perusal -->
+                              <plugin>
+                                  <groupId>org.apache.maven.plugins</groupId>
+                                  <artifactId>maven-deploy-plugin</artifactId>
+                                  <inherited>true</inherited>
+                                  <configuration>
+                                      <altDeploymentRepository>${deploy.altRepository}</altDeploymentRepository>
+                                      <updateReleaseInfo>true</updateReleaseInfo>
+                                  </configuration>
+                              </plugin>
+
+                              <!-- We want the JavaDoc JAR published with the release -->
+                              <plugin>
+                                  <groupId>org.apache.maven.plugins</groupId>
+                                  <artifactId>maven-javadoc-plugin</artifactId>
+                                  <inherited>true</inherited>
+                                  <configuration>
+                                      <source>1.5</source>
+                                  </configuration>
+                                  <executions>
+                                      <execution>
+                                          <id>attach-javadocs</id>
+                                          <goals>
+                                              <goal>jar</goal>
+                                          </goals>
+                                      </execution>
+                                  </executions>
+                              </plugin>
+                          </plugins>
+                      </build>
         </profile>
         <profile>
             <id>java15</id>
@@ -926,35 +1166,162 @@
                 </dependency>
             </dependencies>
         </profile>
+        <profile>
+            <id>sign</id>
+            <activation>
+                <property>
+                    <name>sign</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>1.0-alpha-3</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
+  <scm>
+    <connection>scm:svn:http://svn.apache.org/repos/asf/webservices/axis2/branches/java/1_5</connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/webservices/axis2/branches/java/1_5
+    </developerConnection>
+    <url>http://svn.apache.org/viewcvs.cgi/webservices/axis2/branches/java/1_5</url>
+  </scm>
+
     <distributionManagement>
         <repository>
             <id>apache-repo</id>
             <name>Maven Central Repository</name>
             <url>
-                scpexe://people.apache.org//www/people.apache.org/repo/m2-ibiblio-rsync-repository</url>
+                scpexe://people.apache.org//www/people.apache.org/repo/m2-ibiblio-rsync-repository
+            </url>
         </repository>
         <snapshotRepository>
             <id>apache-snapshots</id>
             <name>Apache Development Repository</name>
             <url>scpexe://people.apache.org//www/people.apache.org/repo/m2-snapshot-repository</url>
+            <uniqueVersion>false</uniqueVersion>
         </snapshotRepository>
     </distributionManagement>
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>1.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <version>2.2-beta-1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>2.0.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>2.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>2.3</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-ear-plugin</artifactId>
+                    <version>2.3.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-ejb-plugin</artifactId>
+                    <version>2.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>2.4</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-plugin-plugin</artifactId>
+                    <version>2.3</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-rar-plugin</artifactId>
+                    <version>2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>2.0-beta-7</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>2.0-beta-6</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>2.0.4</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>2.4.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-war-plugin</artifactId>
+                    <version>2.1-alpha-1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <inherited>true</inherited>
                 <configuration>
-                    <source>1.4</source>
-                    <target>1.4</target>
+                    <source>1.5</source>
+                    <target>1.5</target>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-plugin-plugin</artifactId>
+                <version>${maven.plugin.version}</version>
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <inherited>true</inherited>
                 <configuration>
                     <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-clean-plugin</artifactId>
+                <configuration>
+                    <failOnError>false</failOnError>
                 </configuration>
             </plugin>
         </plugins>

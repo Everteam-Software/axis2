@@ -16,17 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.transport.http;
 
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.OMOutputFormat;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
-import org.apache.axis2.util.JavaUtils;
-import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.context.MessageContext;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.transport.MessageFormatter;
 import org.apache.axis2.transport.http.util.URLTemplatingUtil;
+import org.apache.axis2.util.JavaUtils;
 
 import java.io.IOException;
 import java.io.OutputStream;

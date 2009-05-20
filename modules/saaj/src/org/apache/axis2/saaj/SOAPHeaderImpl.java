@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import org.apache.axiom.om.OMNamespace;
@@ -30,6 +31,7 @@ import org.apache.axiom.soap.impl.dom.soap11.SOAP11HeaderBlockImpl;
 import org.apache.axiom.soap.impl.dom.soap12.SOAP12Factory;
 import org.apache.axiom.soap.impl.dom.soap12.SOAP12HeaderBlockImpl;
 import org.apache.axis2.namespace.Constants;
+import org.w3c.dom.Element;
 
 import javax.xml.namespace.QName;
 import javax.xml.soap.Name;
@@ -127,6 +129,31 @@ public class SOAPHeaderImpl extends SOAPElementImpl implements SOAPHeader {
         return soapHeaderElement;
     }
 
+    @Override
+    protected Element appendElement(ElementImpl child) throws SOAPException {     
+        OMNamespace ns = new NamespaceImpl(child.getNamespaceURI(),
+                                           child.getPrefix());
+        SOAPHeaderBlock headerBlock = null;
+        if (this.element.getOMFactory() instanceof SOAP11Factory) {
+            headerBlock = new SOAP11HeaderBlockImpl(child.getLocalName(), ns,
+                                                    omSOAPHeader,
+                                                    (SOAPFactory)this.element.getOMFactory());
+        } else {
+            headerBlock = new SOAP12HeaderBlockImpl(child.getLocalName(), ns,
+                                                    omSOAPHeader,
+                                                    (SOAPFactory)this.element.getOMFactory());
+
+        }
+     
+        element.setUserData(SAAJ_NODE, this, null);
+        
+        SOAPHeaderElementImpl soapHeaderElement = new SOAPHeaderElementImpl(headerBlock);
+        copyContents(soapHeaderElement, child);
+        soapHeaderElement.element.setUserData(SAAJ_NODE, soapHeaderElement, null);
+        soapHeaderElement.setParentElement(this);
+        return soapHeaderElement;
+    }
+    
     /**
      * Creates a new <CODE>SOAPHeaderElement</CODE> object initialized with the specified name and
      * adds it to this <CODE>SOAPHeader</CODE> object.
@@ -138,14 +165,14 @@ public class SOAPHeaderImpl extends SOAPElementImpl implements SOAPHeader {
      * @throws SOAPException if a SOAP error occurs
      */
     public SOAPHeaderElement addHeaderElement(Name name) throws SOAPException {
+        
         if (name.getURI() == null
-                || name.getURI().trim().length() == 0
-                || name.getPrefix() == null
-                || name.getPrefix().trim().length() == 0) {
+                || name.getURI().trim().length() == 0) {
             throw new SOAPException("SOAP1.1 and SOAP1.2 requires all HeaderElements to have " +
-                    "qualified namespace.");
+                    "a namespace.");
         }
-        OMNamespace ns = new NamespaceImpl(name.getURI(), name.getPrefix());
+        String prefix = name.getPrefix() == null ? "" : name.getPrefix();
+        OMNamespace ns = new NamespaceImpl(name.getURI(), prefix);
 
         SOAPHeaderBlock headerBlock = null;
         if (this.element.getOMFactory() instanceof SOAP11Factory) {

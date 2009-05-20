@@ -16,11 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message.databinding.impl;
 
+import org.apache.axiom.om.OMDataSource;
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.OMSourcedElement;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axiom.soap.SOAP11Constants;
+import org.apache.axis2.datasource.SourceDataSource;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.i18n.Messages;
@@ -43,11 +47,11 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.ws.WebServiceException;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.StringReader;
-import java.lang.reflect.Constructor;
+import java.io.UnsupportedEncodingException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
@@ -76,6 +80,10 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
             // Dynamically discover if StAXSource is available
             staxSource = forName("javax.xml.transform.stax.StAXSource");
         } catch (Exception e) {
+            if (log.isDebugEnabled()) {
+                log.debug("StAXSource is not present in the JDK.  " +
+                                "This is acceptable.  Processing continues");
+            }
         }
         try {
             // Woodstox does not work with StAXSource
@@ -104,6 +112,9 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
                 (busObject.getClass().equals(staxSource)) ||
                 busObject instanceof JAXBSource) {
             // Okay, these are supported Source objects
+            if (log.isDebugEnabled()) {
+                log.debug("data object is a " + busObject.getClass().getName());
+            }
         } else {
             throw ExceptionFactory.makeWebServiceException(
                     Messages.getMessage("SourceNotSupported", busObject.getClass().getName()));
@@ -127,6 +138,9 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
             throws XMLStreamException {
 
         // Best solution is to use a StAXSource
+        // However StAXSource is not widely accepted.  
+        // For now, a StreamSource is always returned
+        /*
         if (staxSource != null) {
             try {
                 // TODO Constructor should be statically cached for performance
@@ -136,6 +150,7 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
             } catch (Exception e) {
             }
         }
+        */
 
         // TODO StreamSource is not performant...work is needed here to make this faster
         Reader2Writer r2w = new Reader2Writer(reader);
@@ -143,6 +158,41 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
         StringReader sr = new StringReader(text);
         return new StreamSource(sr);
 
+    }
+    
+    @Override
+    protected Object _getBOFromOM(OMElement omElement, Object busContext)
+        throws XMLStreamException, WebServiceException {
+        Object busObject;
+        
+        // Shortcut to get business object from existing data source
+        if (omElement instanceof OMSourcedElement) {
+            OMDataSource ds = ((OMSourcedElement) omElement).getDataSource();
+            if (ds instanceof SourceDataSource) {
+                return ((SourceDataSource) ds).getObject();
+            }
+        }
+        
+        // If the message is a fault, there are some special gymnastics that we have to do
+        // to get this working for all of the handler scenarios.  
+        boolean hasFault = false;
+        if ((parent != null && parent.isFault()) || 
+            omElement.getQName().getLocalPart().equals(SOAP11Constants.SOAPFAULT_LOCAL_NAME)) {
+            hasFault = true;
+        }
+        
+        // Transform reader into business object
+        if (!hasFault) {
+            busObject = super._getBOFromOM(omElement, busContext);
+        }
+        else {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            omElement.serialize(baos);
+            
+            ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+            busObject = new StreamSource(bais);
+        }
+        return busObject;
     }
 
     @Override
@@ -197,9 +247,19 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
 
     /** Creates an XMLStreamReader from a Source using a slow but proven algorithm. */
     private XMLStreamReader _slow_getReaderFromSource(Source src) throws XMLStreamException {
+        if (log.isDebugEnabled()) {
+            log.debug("Start _slow_getReaderFromSource");
+        }
         byte[] bytes = (byte[]) ConvertUtils.convert(src, byte[].class);
+        if (log.isDebugEnabled()) {
+            log.debug("Successfully converted to ByteArray");
+        }
         ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-        return StAXUtils.createXMLStreamReader(bais);
+        XMLStreamReader reader = StAXUtils.createXMLStreamReader(bais);
+        if (log.isDebugEnabled()) {
+            log.debug("End _slow_getReaderFromSource =" + reader);
+        }
+        return reader;
     }
 
     @Override
@@ -207,8 +267,17 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
             throws XMLStreamException, WebServiceException {
         // There is no fast way to output the Source to a writer, so get the reader
         // and pass use the default reader->writer.
+        if (log.isDebugEnabled()) {
+            log.debug("Start _outputFromBO");
+        }
         XMLStreamReader reader = _getReaderFromBO(busObject, busContext);
+        if (log.isDebugEnabled()) {
+            log.debug("Obtained reader=" + reader);
+        }
         _outputFromReader(reader, writer);
+        if (log.isDebugEnabled()) {
+            log.debug("End _outputReaderFromBO");
+        }
         // REVIEW Should we call close() on the Source ?
     }
 
@@ -255,53 +324,51 @@ public class SourceBlockImpl extends BlockImpl implements SourceBlock {
     }
     
     
-    /* (non-Javadoc)
-     * @see org.apache.axis2.jaxws.message.Block#getBusinessObject(boolean)
-     */
-    public Object getBusinessObject(boolean consume) throws XMLStreamException,
-                                                    WebServiceException {
-        if (consumed) {
-            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("BlockImplErr1",
-                                                                               this.getClass()
-                                                                                   .getName()));
-        }
-        
-        if (busObject != null) {
-            busObject = _getBOFromBO(busObject, busContext, consume);
-        } else {
-            // If the message is a fault, there are some special gymnastics that we have to do
-            // to get this working for all of the handler scenarios.  
-            boolean hasFault = false;
-            if ((parent != null && parent.isFault()) || 
-                omElement.getQName().getLocalPart().equals(SOAP11Constants.SOAPFAULT_LOCAL_NAME)) {
-                hasFault = true;
-            }
-            
-            // Transform reader into business object
-            if (!hasFault) {
-                XMLStreamReader reader;
-                if (omElement.getBuilder() != null && !omElement.getBuilder().isCompleted()) {
-                    reader = omElement.getXMLStreamReaderWithoutCaching();
-                } else {
-                    reader = omElement.getXMLStreamReader();
-                }
-                busObject = _getBOFromReader(reader, busContext);    
-            }
-            else {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                omElement.serialize(baos);
-                
-                ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-                busObject = new StreamSource(bais);
-            }
-            
-            omElement = null;
-        }
+    public void close() {
+        return; // Nothing to close
+    }
 
-        // Save the businessObject in a local variable
-        // so that we can reset the Block if consume was indicated
-        Object newBusObject = busObject;
-        setConsumed(consume);
-        return newBusObject;
+    public InputStream getXMLInputStream(String encoding) throws UnsupportedEncodingException {
+        try {
+            byte[] bytes = (byte[]) 
+                ConvertUtils.convert(getBusinessObject(false), byte[].class);
+            return new ByteArrayInputStream(bytes);
+        } catch (XMLStreamException e) {
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
+    }
+
+    public Object getObject() {
+        try {
+            return getBusinessObject(false);
+        } catch (XMLStreamException e) {
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
+    }
+
+    public boolean isDestructiveRead() {
+        return true;
+    }
+
+    public boolean isDestructiveWrite() {
+        return true;
+    }
+
+
+    public byte[] getXMLBytes(String encoding) throws UnsupportedEncodingException {
+        if (log.isDebugEnabled()) {
+            log.debug("Start getXMLBytes");
+        }
+        byte[] bytes = null;
+        try {
+            bytes = (byte[]) 
+                ConvertUtils.convert(getBusinessObject(false), byte[].class);
+        } catch (XMLStreamException e) {
+            throw ExceptionFactory.makeWebServiceException(e);
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("End getXMLBytes");
+        }
+        return bytes;
     }
 }

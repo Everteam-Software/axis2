@@ -23,10 +23,10 @@ import org.apache.axis2.java.security.AccessController;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.security.PrivilegedAction;
-import java.io.InputStream;
 
 /**
  * Loads resources (or images) from various sources.
@@ -196,9 +196,9 @@ public class Loader {
      * @throws IllegalAccessException
      * @throws InvocationTargetException
      */
-    static public ClassLoader getTCL() throws IllegalAccessException, InvocationTargetException {
-        return (ClassLoader) AccessController.doPrivileged(new PrivilegedAction() {
-            public Object run() {
+    static private ClassLoader getTCL() throws IllegalAccessException, InvocationTargetException {
+        return (ClassLoader) AccessController.doPrivileged(new PrivilegedAction<ClassLoader>() {
+            public ClassLoader run() {
                 return Thread.currentThread().getContextClassLoader();
             }
         });
@@ -221,7 +221,7 @@ public class Loader {
                 }
             }
         } catch (UnsupportedClassVersionError e) {
-            log.error(e.getMessage(), e);
+            log.debug(e);
             throw e;
         } catch (Throwable e) {
             log.debug(e);
@@ -250,7 +250,7 @@ public class Loader {
                 }
             }
         } catch (UnsupportedClassVersionError e) {
-            log.error(e.getMessage(), e);
+            log.debug(e);
             throw e;
         } catch (Throwable e) {
             log.debug(e);

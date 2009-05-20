@@ -20,13 +20,12 @@
 
 package org.apache.axis2.jaxws.description;
 
-import java.lang.reflect.Method;
+import junit.framework.TestCase;
+import org.apache.axis2.jaxws.spi.ServiceDelegate;
 
 import javax.xml.namespace.QName;
 import javax.xml.ws.Service;
-
-import junit.framework.TestCase;
-import org.apache.axis2.jaxws.spi.ServiceDelegate;
+import java.lang.reflect.Method;
 
 /**
  * Directly test the Description classes built via annotations without a WSDL file.
@@ -50,7 +49,7 @@ public class AnnotationDescriptionTests extends TestCase {
         ServiceDescription serviceDescription = serviceDelegate.getServiceDescription();
         String portLocalPart = "EchoServiceAnnotatedPort";
         QName portQName = new QName(namespaceURI, portLocalPart);
-        DocLitWrappedProxy dlwp = service.getPort(portQName, DocLitWrappedProxy.class);
+        DocumentLiteralWrappedProxy dlwp = service.getPort(portQName, DocumentLiteralWrappedProxy.class);
         
         // Validate that the Endpoint and EndpointInterface Descriptions were created correctly
         EndpointDescription endpointDescription = serviceDescription.getEndpointDescription(portQName);
@@ -58,7 +57,7 @@ public class AnnotationDescriptionTests extends TestCase {
         EndpointInterfaceDescription endpointInterfaceDescription = endpointDescription.getEndpointInterfaceDescription();
         assertNotNull("EndpointInterface not created", endpointInterfaceDescription);
         // Verify we can get the same endpoint description based on the SEI class
-        EndpointDescription[] fromSEIClass = serviceDescription.getEndpointDescription(DocLitWrappedProxy.class);
+        EndpointDescription[] fromSEIClass = serviceDescription.getEndpointDescription(DocumentLiteralWrappedProxy.class);
         assertEquals(1,fromSEIClass.length);
         assertEquals(endpointDescription, fromSEIClass[0]);
         
@@ -71,7 +70,7 @@ public class AnnotationDescriptionTests extends TestCase {
         assertNull(operationResult);
         
         // Test getOperations(): Number of methods on SEI should match number of operationDescriptions
-        Method[] seiMethods = DocLitWrappedProxy.class.getMethods();
+        Method[] seiMethods = DocumentLiteralWrappedProxy.class.getMethods();
         operationResultArray = endpointInterfaceDescription.getOperations();
         assertEquals("Number of SEI methods and operations did not match", seiMethods.length, operationResultArray.length);
         

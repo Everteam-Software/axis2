@@ -16,11 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.databinding;
 
-import javax.xml.namespace.QName;
-
 import junit.framework.TestCase;
+
+import javax.xml.namespace.QName;
 
 /**
  * A suite of tests for reading the binding from a WSDL file and

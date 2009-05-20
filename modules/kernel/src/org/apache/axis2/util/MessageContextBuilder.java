@@ -27,37 +27,35 @@ import org.apache.axiom.soap.SOAP11Constants;
 import org.apache.axiom.soap.SOAP12Constants;
 import org.apache.axiom.soap.SOAPConstants;
 import org.apache.axiom.soap.SOAPEnvelope;
+import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axiom.soap.SOAPFault;
 import org.apache.axiom.soap.SOAPFaultCode;
 import org.apache.axiom.soap.SOAPFaultDetail;
 import org.apache.axiom.soap.SOAPFaultReason;
+import org.apache.axiom.soap.SOAPFaultSubCode;
+import org.apache.axiom.soap.SOAPFaultValue;
 import org.apache.axiom.soap.SOAPHeader;
 import org.apache.axiom.soap.SOAPHeaderBlock;
 import org.apache.axiom.soap.SOAPProcessingException;
+import org.apache.axiom.soap.SOAPFaultNode;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.AddressingConstants;
+import org.apache.axis2.addressing.AddressingConstants.Final;
 import org.apache.axis2.addressing.AddressingHelper;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.addressing.RelatesTo;
-import org.apache.axis2.addressing.AddressingConstants.Final;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
-import org.apache.axis2.description.AxisOperation;
-import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.Parameter;
-import org.apache.axis2.description.TransportOutDescription;
-import org.apache.axis2.description.WSDL2Constants;
+import org.apache.axis2.description.*;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.transport.http.HTTPConstants;
-import org.apache.axis2.transport.jms.JMSConstants;
 import org.apache.axis2.wsdl.WSDLConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Iterator;
@@ -181,12 +179,24 @@ public class MessageContextBuilder {
             newmsgCtx.setWSAAction(inMessageContext.getWSAAction());
         }
 
-        if (ao != null)
-            newmsgCtx.setAxisMessage(ao.getMessage(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        if (ao != null){
+           newmsgCtx.setAxisMessage(ao.getMessage(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        }
+
+        // setting the out bound binding message
+        AxisBindingMessage inboundAxisBindingMessage
+                = (AxisBindingMessage)inMessageContext.getProperty(Constants.AXIS_BINDING_MESSAGE);
+        if (inboundAxisBindingMessage != null){
+            AxisBindingOperation axisBindingOperation = inboundAxisBindingMessage.getAxisBindingOperation();
+            newmsgCtx.setProperty(Constants.AXIS_BINDING_MESSAGE,
+                    axisBindingOperation.getChild(WSDLConstants.MESSAGE_LABEL_OUT_VALUE));
+        }
 
         newmsgCtx.setDoingMTOM(inMessageContext.isDoingMTOM());
         newmsgCtx.setDoingSwA(inMessageContext.isDoingSwA());
         newmsgCtx.setServiceGroupContextId(inMessageContext.getServiceGroupContextId());
+
+
 
         // Ensure transport settings match the scheme for the To EPR
         setupCorrectTransportOut(newmsgCtx);
@@ -207,10 +217,10 @@ public class MessageContextBuilder {
     		log.debug("Incoming Transport is JMS, lets check for JMS correlation id");
     		
 	    	String correlationId =
-	            (String) inMessageContext.getProperty(JMSConstants.JMS_COORELATION_ID);
+	            (String) inMessageContext.getProperty(Constants.JMS_COORELATION_ID);
 	    	log.debug("Correlation id is " + correlationId);
 	        if (correlationId != null && correlationId.length() > 0) {
-	        	outMessageContext.setProperty(JMSConstants.JMS_COORELATION_ID, correlationId);
+	        	outMessageContext.setProperty(Constants.JMS_COORELATION_ID, correlationId);
 	        }
     	}
     }
@@ -284,7 +294,7 @@ public class MessageContextBuilder {
         // there are some information  that the fault thrower wants to pass to the fault path.
         // Means that the fault is a ws-addressing one hence use the ws-addressing fault action.
         Object faultInfoForHeaders =
-                processingContext.getProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
+                processingContext.getLocalProperty(Constants.FAULT_INFORMATION_FOR_HEADERS);
         if (faultInfoForHeaders != null) {
             faultContext.setProperty(Constants.FAULT_INFORMATION_FOR_HEADERS, faultInfoForHeaders);
 
@@ -335,8 +345,8 @@ public class MessageContextBuilder {
                 (List) processingContext.getProperty(SOAPConstants.HEADER_LOCAL_NAME);
         if (soapHeadersList != null) {
             SOAPHeader soapHeaderElement = envelope.getHeader();
-            for (int i = 0; i < soapHeadersList.size(); i++) {
-                OMElement soapHeaderBlock = (OMElement) soapHeadersList.get(i);
+            for (Object aSoapHeadersList : soapHeadersList) {
+                OMElement soapHeaderBlock = (OMElement)aSoapHeadersList;
                 soapHeaderElement.addChild(soapHeaderBlock);
             }
         }
@@ -363,7 +373,7 @@ public class MessageContextBuilder {
                 if (!responseEPR.hasAnonymousAddress() && !responseEPR.hasNoneAddress()) {
                     URI uri = new URI(responseEPR.getAddress());
                     String scheme = uri.getScheme();
-                    if (!transportOut.getName().equals(scheme)) {
+                    if ((transportOut == null) || !transportOut.getName().equals(scheme)) {
                         ConfigurationContext configurationContext =
                                 context.getConfigurationContext();
                         transportOut = configurationContext.getAxisConfiguration()
@@ -476,7 +486,7 @@ public class MessageContextBuilder {
                         prefix = prefix == null ? "" : prefix;
                         uri = uri == null || "" .equals(uri) ?
                                 fault.getNamespace().getNamespaceURI() : uri;
-                        // Make sure the prefix and uri are declared on the fault, and
+                        // Make sure the prefix and uri are declared on the fault, and 
                         // get the resulting prefix.
                         prefix = fault.declareNamespace(uri, prefix).getPrefix();
                         soapFaultCode = prefix + ":" + faultCodeQName.getLocalPart();
@@ -501,6 +511,28 @@ public class MessageContextBuilder {
             } else {
                 fault.getCode().getValue().setText(soapFaultCode);
             }
+        }
+        
+        if (axisFault != null && !context.isSOAP11()) {
+            if (axisFault.getFaultSubCodes() != null) {
+                
+                List faultSubCodes = axisFault.getFaultSubCodes();
+                
+                QName faultSubCodeQName;
+
+                for (Object faultSubCode : faultSubCodes) {
+
+                    faultSubCodeQName = (QName)faultSubCode;
+
+                    SOAPFactory sf = (SOAPFactory)envelope.getOMFactory();
+                    SOAPFaultSubCode soapFaultSubCode = sf.createSOAPFaultSubCode(fault.getCode());
+                    SOAPFaultValue saopFaultValue = sf.createSOAPFaultValue(fault.getCode());
+                    saopFaultValue.setText(faultSubCodeQName);
+                    soapFaultSubCode.setValue(saopFaultValue);
+                    fault.getCode().setSubCode(soapFaultSubCode);
+                }
+                
+            } 
         }
 
         SOAPFaultReason faultReason = (SOAPFaultReason)context.getProperty(
@@ -545,7 +577,10 @@ public class MessageContextBuilder {
 
         Object faultNode = context.getProperty(SOAP12Constants.SOAP_FAULT_NODE_LOCAL_NAME);
         if (faultNode != null) {
-            fault.getNode().setText((String) faultNode);
+            SOAPFaultNode soapFaultNode = fault.getNode();
+            if(soapFaultNode != null) {
+                soapFaultNode.setText((String) faultNode);
+            }
         } else if (axisFault != null) {
             if (axisFault.getFaultNodeElement() != null) {
                 fault.setNode(axisFault.getFaultNodeElement());

@@ -21,10 +21,12 @@
 package org.apache.axis2.util;
 
 import org.apache.axiom.om.util.UUIDGenerator;
+import org.apache.axiom.soap.SOAPBody;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPFault;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
+import org.apache.axis2.transport.TransportListener;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.ConfigurationContextFactory;
 import org.apache.axis2.context.MessageContext;
@@ -33,7 +35,6 @@ import org.apache.axis2.context.ServiceGroupContext;
 import org.apache.axis2.description.AxisModule;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.AxisServiceGroup;
 import org.apache.axis2.description.Flow;
 import org.apache.axis2.description.HandlerDescription;
 import org.apache.axis2.description.InOnlyAxisOperation;
@@ -54,8 +55,14 @@ import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
 import java.io.File;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Enumeration;
+import java.net.SocketException;
+import java.net.NetworkInterface;
+import java.net.InetAddress;
 
 public class Utils {
     private static final Log log = LogFactory.getLog(Utils.class);
@@ -99,7 +106,7 @@ public class Utils {
                                                         QName opName)
             throws AxisFault {
         AxisService service = new AxisService(serviceName.getLocalPart());
-        service.setClassLoader(Thread.currentThread().getContextClassLoader());
+        service.setClassLoader(getContextClassLoader_DoPriv());
 
         AxisOperation axisOp = new InOnlyAxisOperation(opName);
 
@@ -112,6 +119,16 @@ public class Utils {
         return service;
     }
 
+    private static ClassLoader getContextClassLoader_DoPriv() {
+        return (ClassLoader) org.apache.axis2.java.security.AccessController.doPrivileged(
+                new PrivilegedAction<ClassLoader>() {
+                    public ClassLoader run() {
+                        return Thread.currentThread().getContextClassLoader();
+                    }
+                }
+        );
+    }
+
 
     public static AxisService createSimpleService(QName serviceName,
                                                   MessageReceiver messageReceiver, String className,
@@ -119,7 +136,7 @@ public class Utils {
             throws AxisFault {
         AxisService service = new AxisService(serviceName.getLocalPart());
 
-        service.setClassLoader(Thread.currentThread().getContextClassLoader());
+        service.setClassLoader(getContextClassLoader_DoPriv());
         service.addParameter(new Parameter(Constants.SERVICE_CLASS, className));
 
         AxisOperation axisOp = new InOutAxisOperation(opName);
@@ -140,7 +157,7 @@ public class Utils {
             throws AxisFault {
         AxisService service = new AxisService(serviceName.getLocalPart());
 
-        service.setClassLoader(Thread.currentThread().getContextClassLoader());
+        service.setClassLoader(getContextClassLoader_DoPriv());
         service.addParameter(new Parameter(Constants.SERVICE_CLASS, className));
 
         AxisOperation axisOp = new OutInAxisOperation(opName);
@@ -218,7 +235,9 @@ public class Utils {
                 }
             }
         } else {
-            log.info("Unable to parse request URL [" + path + "][" + servicePath + "]");
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to parse request URL [" + path + "][" + servicePath + "]");
+            }
         }
 
         return values;
@@ -226,18 +245,37 @@ public class Utils {
 
     public static ConfigurationContext getNewConfigurationContext(String repositry)
             throws Exception {
-        File file = new File(repositry);
-        if (!file.exists()) {
+        final File file = new File(repositry);
+        boolean exists = exists(file);
+        if (!exists) {
             throw new Exception("repository directory " + file.getAbsolutePath()
                                 + " does not exists");
         }
         File axis2xml = new File(file, "axis.xml");
         String axis2xmlString = null;
-        if (axis2xml.exists()) {
+        if (exists(axis2xml)) {
             axis2xmlString = axis2xml.getName();
         }
+        String path = (String) org.apache.axis2.java.security.AccessController.doPrivileged(
+                new PrivilegedAction<String>() {
+                    public String run() {
+                        return file.getAbsolutePath();
+                    }
+                }
+        );
         return ConfigurationContextFactory
-                .createConfigurationContextFromFileSystem(file.getAbsolutePath(), axis2xmlString);
+                .createConfigurationContextFromFileSystem(path, axis2xmlString);
+    }
+
+    private static boolean exists(final File file) {
+        Boolean exists = (Boolean) org.apache.axis2.java.security.AccessController.doPrivileged(
+                new PrivilegedAction<Boolean>() {
+                    public Boolean run() {
+                        return new Boolean(file.exists());
+                    }
+                }
+        );
+        return exists.booleanValue();
     }
 
     public static String getParameterValue(Parameter param) {
@@ -472,19 +510,129 @@ public class Utils {
         // Else, extract it from the SOAPBody
         if (result == null) {
             SOAPEnvelope envelope = messageContext.getEnvelope();
-            if (envelope == null || envelope.getBody() == null ||
-                envelope.getBody().getFault() == null) {
-                // Not going to be able to 
-                throw new IllegalArgumentException(
-                        "The MessageContext does not have an associated SOAPFault.");
+            SOAPFault soapFault;
+            SOAPBody soapBody;
+            if (envelope != null && (soapBody = envelope.getBody()) != null) {
+                if ((soapFault = soapBody.getFault()) != null) {
+                    return new AxisFault(soapFault, messageContext);
+                }
+                // If its a REST response the content is not a SOAP envelop and hence we will
+                // Have use the soap body as the exception
+                if (messageContext.isDoingREST() && soapBody.getFirstElement() != null) {
+                    return new AxisFault(soapBody.getFirstElement().toString());
+                }
             }
-            SOAPFault soapFault = envelope.getBody().getFault();
-
-            // The AxisFault returned needs to have the MessageContext set on it so that 
-            // other programming models can potentially handle the fault with an 
-            // alternate deserialization.
-            result = new AxisFault(soapFault, messageContext);
+            // Not going to be able to
+            throw new IllegalArgumentException(
+                    "The MessageContext does not have an associated SOAPFault.");
         }
         return result;
+    }
+    
+    /**
+     * This method will provide the logic needed to retrieve an Object's classloader
+     * in a Java 2 Security compliant manner.
+     */
+    public static ClassLoader getObjectClassLoader(final Object object) {
+        if(object == null) {
+            return null;
+        }
+        else {
+            return (ClassLoader) AccessController.doPrivileged(new PrivilegedAction() {
+                public Object run() {
+                    return object.getClass().getClassLoader();
+                }
+            });
+        }
+    }
+    
+    public static int getMtomThreshold(MessageContext msgCtxt){
+    	Integer value = null;         
+        if(!msgCtxt.isServerSide()){                
+	        value = (Integer)msgCtxt.getProperty(Constants.Configuration.MTOM_THRESHOLD);	        
+        }else{
+        	Parameter param = msgCtxt.getParameter(Constants.Configuration.MTOM_THRESHOLD);
+        	if(param!=null){
+        		value = (Integer)param.getValue();       		        		
+        	}        	        	
+        }
+        int threshold = (value!=null)?value.intValue():0;
+        if(log.isDebugEnabled()){
+        	log.debug("MTOM optimized Threshold value ="+threshold);
+        }
+        return threshold;
+    }
+     /**
+     * Returns the ip address to be used for the replyto epr
+     * CAUTION:
+     * This will go through all the available network interfaces and will try to return an ip address.
+     * First this will try to get the first IP which is not loopback address (127.0.0.1). If none is found
+     * then this will return this will return 127.0.0.1.
+     * This will <b>not<b> consider IPv6 addresses.
+     * <p/>
+     * TODO:
+     * - Improve this logic to genaralize it a bit more
+     * - Obtain the ip to be used here from the Call API
+     *
+     * @return Returns String.
+     * @throws java.net.SocketException
+      */
+    public static String getIpAddress() throws SocketException {
+        Enumeration e = NetworkInterface.getNetworkInterfaces();
+        String address = "127.0.0.1";
+
+        while (e.hasMoreElements()) {
+            NetworkInterface netface = (NetworkInterface) e.nextElement();
+            Enumeration addresses = netface.getInetAddresses();
+
+            while (addresses.hasMoreElements()) {
+                InetAddress ip = (InetAddress) addresses.nextElement();
+                if (!ip.isLoopbackAddress() && isIP(ip.getHostAddress())) {
+                    return ip.getHostAddress();
+                }
+            }
+        }
+
+        return address;
+    }
+
+    /**
+     * First check whether the hostname parameter is there in AxisConfiguration (axis2.xml) ,
+     * if it is there then this will retun that as the host name , o.w will return the IP address.
+     */
+    public static String getIpAddress(AxisConfiguration axisConfiguration) throws SocketException {
+        if(axisConfiguration!=null){
+            Parameter param = axisConfiguration.getParameter(TransportListener.HOST_ADDRESS);
+            if (param != null) {
+                String  hostAddress = ((String) param.getValue()).trim();
+                if(hostAddress!=null){
+                    return hostAddress;
+                }
+            }
+        }
+        return getIpAddress();
+    }
+    
+    /**
+     * First check whether the hostname parameter is there in AxisConfiguration (axis2.xml) ,
+     * if it is there then this will return that as the host name , o.w will return the IP address.
+     * @param axisConfiguration
+     * @return hostname 
+     */
+    public static String getHostname(AxisConfiguration axisConfiguration) {
+        if(axisConfiguration!=null){
+            Parameter param = axisConfiguration.getParameter(TransportListener.HOST_ADDRESS);
+            if (param != null) {
+                String  hostAddress = ((String) param.getValue()).trim();
+                if(hostAddress!=null){
+                    return hostAddress;
+                }
+            }
+        }      
+        return null;
+    }
+
+    private static boolean isIP(String hostAddress) {
+        return hostAddress.split("[.]").length == 4;
     }
 }

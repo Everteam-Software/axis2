@@ -17,7 +17,6 @@
  * under the License.
  */
 
-
 package org.apache.axis2.addressing;
 
 import javax.xml.namespace.QName;
@@ -46,7 +45,10 @@ public interface AddressingConstants {
     static final String PARAM_SERVICE_GROUP_CONTEXT_ID =
             "ServiceGroupContextIdFromAddressing";
     static final String IS_ADDR_INFO_ALREADY_PROCESSED = "IsAddressingProcessed";
+    static final String DISABLE_ADDRESSING_FOR_IN_MESSAGES = "disableAddressingForInMessages";
     static final String ADDR_VALIDATE_ACTION = "addressing.validateAction";
+    static final String ADDR_VALIDATE_INVOCATION_PATTERN = "addressing.validateInvocationPattern";
+    static final String ENDPOINT_REFERENCE = "EndpointReference";
 
     // ====================== WSDL Binding Constants ========================
     static final String USING_ADDRESSING = "UsingAddressing";
@@ -55,6 +57,7 @@ public interface AddressingConstants {
     // ====================== Addressing Requirement Levels ==================
     // These are used to represent the requirement level on WS-Addressing indicated
     // in a services.xml or a WSDL file.
+    static final String ADDRESSING_REQUIREMENT_PARAMETER = "addressingRequirementParameter";
     // ADDRESSING_UNSPECIFIED is the equivalent of no UsingAddressing flag in a
     // WSDL file and the default of the WSAddressingRequred attribute in service.xml
     static final String ADDRESSING_UNSPECIFIED = "unspecified";
@@ -77,6 +80,8 @@ public interface AddressingConstants {
     static final String ADD_MUST_UNDERSTAND_TO_ADDRESSING_HEADERS =
             "addMustUnderstandToAddressingHeaders";
 
+    static final String SOAP_ROLE_FOR_ADDRESSING_HEADERS = "wsaddressingRole";
+    
     /**
      * A property pointing to an ArrayList of OMAttribute objects representing any attributes
      * of the wsa:Action header.
@@ -104,7 +109,22 @@ public interface AddressingConstants {
     static final String DISABLE_OUTBOUND_ADDRESSING_VALIDATION =
             "disableAddressingOutboundValidation";
 
-    static final String WSAW_ANONYMOUS_PARAMETER_NAME = "wsawAnonymous";
+    /**
+     * This parameter is used to attach OMElement ReferenceParameters found in an EPR embedded in a
+     * WSDL to an AxisEndpoint object.
+     */
+    static final String REFERENCE_PARAMETER_PARAMETER = "referenceParameters";
+
+    /**
+     * This parameter is used to decide whether the reference parameters in an inbound request
+     * message are to be processed or not.
+     */
+    static final String DISABLE_REF_PARAMETER_EXTRACT = "disableRefParamExtract";
+    
+    static final String WSAM_INVOCATION_PATTERN_PARAMETER_NAME = "wsamInvocationPattern";
+    static final String WSAM_INVOCATION_PATTERN_SYNCHRONOUS = "synchronous";
+    static final String WSAM_INVOCATION_PATTERN_ASYNCHRONOUS = "asynchronous";
+    static final String WSAM_INVOCATION_PATTERN_BOTH = "both";
 
     // ======================== Common Faults ==============================
     static final String FAULT_ACTION_NOT_SUPPORTED = "ActionNotSupported";
@@ -113,13 +133,35 @@ public interface AddressingConstants {
     static final String FAULT_ADDRESSING_DESTINATION_UNREACHABLE =
             "DestinationUnreachable";
     
+    // ==================== WS-AddressingAndIdentity ========================
+    
+    static final String ADDRESSING_IDENTITY_PREFIX = "wsid";
+    static final String ADDRESSING_IDENTITY_NS = 
+        "http://schemas.xmlsoap.org/ws/2006/02/addressingidentity";
+    static final String XML_SIG_PREFIX = "ds";
+    static final String XML_SIG_NS = "http://www.w3.org/2000/09/xmldsig#";
+    
+    static final String IDENTITY = "Identity";
+    static final String IDENTITY_KEY_INFO = "KeyInfo";
+    static final String IDENTITY_X509_DATA = "X509Data";
+    static final String IDENTITY_X509_CERT = "X509Certificate";
+    
+    static final String IDENTITY_PARAMETER = "WSAddressingAndIdentity";
+    
+    static final QName QNAME_IDENTITY = new QName(ADDRESSING_IDENTITY_NS,IDENTITY,ADDRESSING_IDENTITY_PREFIX);
+    static final QName QNAME_IDENTITY_KEY_INFO = new QName(XML_SIG_NS,IDENTITY_KEY_INFO,XML_SIG_PREFIX);
+    static final QName QNAME_IDENTITY_X509_DATA = new QName(XML_SIG_NS,IDENTITY_X509_DATA,XML_SIG_PREFIX);
+    static final QName QNAME_IDENTITY_X509_CERT = new QName(XML_SIG_NS,IDENTITY_X509_CERT,XML_SIG_PREFIX);
+    
     interface Final {
 
         // ====================== Addressing 1.0 Final Version Constants ====================
         static final String WSA_NAMESPACE =
                 "http://www.w3.org/2005/08/addressing";
         static final String WSAW_NAMESPACE =
-                "http://www.w3.org/2006/05/addressing/wsdl";
+            "http://www.w3.org/2006/05/addressing/wsdl";
+        static final String WSAM_NAMESPACE = 
+        	"http://www.w3.org/2007/05/addressing/metadata";
         /**
          * @deprecated use {@link #WSA_DEFAULT_RELATIONSHIP_TYPE} instead.
          */
@@ -138,6 +180,8 @@ public interface AddressingConstants {
         static final String WSA_SERVICE_NAME_ENDPOINT_NAME = "EndpointName";
         static final String WSA_POLICIES = "Policies";
         static final String WSA_METADATA = "Metadata";
+        static final String WSA_DEFAULT_METADATA_PREFIX = "wsam";
+        static final String WSA_ORIGINAL_METADATA_PREFIX = "wsaw";
 
         static final String WSA_INTERFACE_NAME = "InterfaceName";
 
@@ -168,6 +212,8 @@ public interface AddressingConstants {
         static final QName WSAW_USING_ADDRESSING =
                 new QName(WSAW_NAMESPACE, USING_ADDRESSING);
         static final QName WSAW_ANONYMOUS = new QName(WSAW_NAMESPACE, USING_ADDRESSING);
+        static final QName WSA_ENDPOINT_REFERENCE = new QName(WSA_NAMESPACE, ENDPOINT_REFERENCE, WSA_DEFAULT_PREFIX);
+        static final QName WSA_ADDRESS = new QName(WSA_NAMESPACE, EPR_ADDRESS,WSA_DEFAULT_PREFIX);
 
         final QName QNAME_WSA_TO = new QName(WSA_NAMESPACE, WSA_TO);
         final QName QNAME_WSA_FROM = new QName(WSA_NAMESPACE, WSA_FROM);
@@ -196,6 +242,8 @@ public interface AddressingConstants {
         static final String EPR_REFERENCE_PROPERTIES = "ReferenceProperties";
         static final String WSA_FAULT_ACTION =
                 "http://schemas.xmlsoap.org/ws/2004/08/addressing/fault";
+        static final String WSA_SERVICE_NAME_ENDPOINT_NAME = "PortName";
+        static final String WSA_INTERFACE_NAME = "PortType";
 
         // fault information
         static final String FAULT_INVALID_HEADER = "InvalidMessageInformationHeader";

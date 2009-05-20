@@ -16,21 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
-import java.util.ArrayList;
-import java.util.Set;
+import junit.framework.TestCase;
+import org.apache.axis2.jaxws.core.MessageContext;
+import org.apache.axis2.jaxws.handler.factory.HandlerInvokerFactory;
+import org.apache.axis2.jaxws.message.Protocol;
+import org.apache.axis2.jaxws.registry.FactoryRegistry;
 
 import javax.xml.ws.ProtocolException;
 import javax.xml.ws.handler.Handler;
 import javax.xml.ws.handler.LogicalHandler;
 import javax.xml.ws.handler.soap.SOAPHandler;
 import javax.xml.ws.handler.soap.SOAPMessageContext;
-
-import junit.framework.TestCase;
-
-import org.apache.axis2.jaxws.core.MessageContext;
-import org.apache.axis2.jaxws.message.Protocol;
+import java.util.ArrayList;
+import java.util.Set;
 
 /*
  * There are myriad scenarios to test here:
@@ -562,7 +563,6 @@ public class HandlerChainProcessorTests extends TestCase {
         // reset result
         result = "";
 
-        // we want one false response:
         soaphandler1_MessageResultDesired = ResultDesired.TRUE;
         soaphandler1_FaultResultDesired = ResultDesired.TRUE;
         soaphandler2_MessageResultDesired = ResultDesired.TRUE;
@@ -575,11 +575,16 @@ public class HandlerChainProcessorTests extends TestCase {
         HandlerChainProcessor processor = new HandlerChainProcessor(handlers, Protocol.soap11);
         MessageContext mc1 = new MessageContext();
         mc1.setMEPContext(new MEPContext(mc1));
-        processor.processChain(mc1.getMEPContext(),
-                               HandlerChainProcessor.Direction.IN,
-                               HandlerChainProcessor.MEP.REQUEST,
-                               false);
-
+        Exception e = null;
+        try {
+            processor.processChain(mc1.getMEPContext(),
+                                   HandlerChainProcessor.Direction.IN,
+                                   HandlerChainProcessor.MEP.REQUEST,
+                                   false);
+        } catch (ProtocolException pe) {
+            e = pe;
+        }
+        assertNull(e);
         // no handleFault calls
         assertEquals("S2m:S1m:L1m:L1c:S1c:S2c:", result);
     }
@@ -846,6 +851,17 @@ public class HandlerChainProcessorTests extends TestCase {
 
         assertNotNull(e);
         assertEquals("S2f:S1f:L1f:S2c:S1c:L1c:L2c:", result);
+    }
+    
+    /**
+     * This will verify that there is a default HandlerInvokerFactory registered
+     * with the FactoryRegistry and that the factory returns a non-null HandlerInvoker.
+     */
+    public void testRegisterHandlerFactory() {
+        HandlerInvokerFactory factory = (HandlerInvokerFactory) 
+            FactoryRegistry.getFactory(HandlerInvokerFactory.class);
+        assertNotNull(factory);
+        assertNotNull(factory.createHandlerInvoker(new MessageContext()));
     }
 
 

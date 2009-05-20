@@ -30,7 +30,10 @@ import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.util.StAXUtils;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
-import org.apache.axis2.util.ObjectStateUtils;
+import org.apache.axis2.context.externalize.ExternalizeConstants;
+import org.apache.axis2.context.externalize.SafeObjectInputStream;
+import org.apache.axis2.context.externalize.SafeObjectOutputStream;
+import org.apache.axis2.context.externalize.SafeSerializable;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -38,11 +41,12 @@ import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Externalizable;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -51,11 +55,16 @@ import java.util.Map;
  * Since the models for this in Submission and Final versions are different, lets make this to comply with
  * WS-A Final version. So any information found with WS-A submission will be "pumped" in to this model.
  */
-public class EndpointReference implements Serializable {
+public class EndpointReference implements Externalizable, SafeSerializable {
 
     private static final long serialVersionUID = 5278892171162372439L;
 
     private static final Log log = LogFactory.getLog(EndpointReference.class);
+    
+    //  supported revision levels, add a new level to manage compatible changes
+    private static final int REVISION_2 = 2;
+    // current revision level of this object
+    private static final int revisionID = REVISION_2;
 
     private static final String myClassName = "EndpointReference";
 
@@ -63,7 +72,13 @@ public class EndpointReference implements Serializable {
      * An ID which can be used to correlate operations on an instance of
      * this object in the log files
      */
-    private String logCorrelationIDString = null;
+    private String logCorrelationIDString;
+    
+    /**
+     * The list of URIs that should be considered equivalent to 
+     * the WS-Addressing anonymous URI
+     */
+    private static volatile List<String> anonymousEquivalentURIs = new ArrayList<String>();
 
 
     /**
@@ -77,13 +92,37 @@ public class EndpointReference implements Serializable {
 
     private String name;
     private String address;
-    private ArrayList addressAttributes;
-    private ArrayList metaData;
-    private ArrayList metaDataAttributes;
-    private Map referenceParameters;
-    private ArrayList extensibleElements;
-    private ArrayList attributes;
+    private ArrayList<OMAttribute> addressAttributes;
+    private ArrayList<OMNode> metaData;
+    private ArrayList<OMAttribute> metaDataAttributes;
+    private Map<QName, OMElement> referenceParameters;
+    private ArrayList<OMElement> extensibleElements;
+    private ArrayList<OMAttribute> attributes;
 
+    /**
+     * No-Arg Constructor
+     * Required for Externalizable objects
+     */
+    public EndpointReference() {}
+    
+    /**
+     * Adds a parameter to the list of anonymous equivalent URIs. 
+     * @param anonymousEquivalentURI any URI that has an address that
+     * begins with this value will be considered to be anonymous
+     */
+    public static void addAnonymousEquivalentURI(String anonymousEquivalentURI){
+        if (log.isTraceEnabled())
+        	log.trace("addAnonymousEquivalentURI: " + anonymousEquivalentURI);
+        
+        // Avoid synchronization in hasAnonymousAddress by using the
+        // technique outlined at http://is.gd/gv3
+        synchronized (anonymousEquivalentURIs) {
+        	ArrayList<String> newList = new ArrayList<String>(anonymousEquivalentURIs);
+        	newList.add(anonymousEquivalentURI);
+            anonymousEquivalentURIs = newList;
+        }
+    }
+ 
 
     /**
      * @param address
@@ -100,7 +139,7 @@ public class EndpointReference implements Serializable {
             return;
         }
         if (referenceParameters == null) {
-            referenceParameters = new HashMap();
+            referenceParameters = new HashMap<QName, OMElement>();
         }
         referenceParameters.put(omElement.getQName(), omElement);
     }
@@ -126,7 +165,7 @@ public class EndpointReference implements Serializable {
      * @return - map of the reference parameters, where the key is the QName of the reference parameter
      *         and the value is an OMElement
      */
-    public Map getAllReferenceParameters() {
+    public Map<QName, OMElement> getAllReferenceParameters() {
         return referenceParameters;
     }
 
@@ -141,41 +180,68 @@ public class EndpointReference implements Serializable {
         this.address = address;
     }
 
-    public ArrayList getAddressAttributes() {
+    public ArrayList<OMAttribute> getAddressAttributes() {
         return addressAttributes;
     }
 
-    public void setAddressAttributes(ArrayList al) {
+    public void setAddressAttributes(ArrayList<OMAttribute> al) {
         addressAttributes = al;
     }
 
-    public ArrayList getMetadataAttributes() {
+    public ArrayList<OMAttribute> getMetadataAttributes() {
         return metaDataAttributes;
     }
 
-    public void setMetadataAttributes(ArrayList al) {
+    public void setMetadataAttributes(ArrayList<OMAttribute> al) {
         metaDataAttributes = al;
     }
-
+    
+    /** 
+     * This method identifies whether the address is a WS-Addressing spec defined
+     * anonymous URI.
+     * 
+     * @return true if the address is a WS-Addressing spec defined anonymous URI.
+     * 
+     * @see #hasAnonymousAddress()
+     */ 
+    public boolean isWSAddressingAnonymous() {
+        return (AddressingConstants.Final.WSA_ANONYMOUS_URL.equals(address) ||
+                AddressingConstants.Submission.WSA_ANONYMOUS_URL.equals(address));
+    }
+    
     /**
-     * hasAnonymousAddress
+     * This method is used to identify when response messages should be sent using
+     * the back channel of a two-way transport.
      *
-     * @return true if address is 'Anonymous URI'
+     * @return true if the address is a WS-Addressing spec defined anonymous URI,
+     * or starts with a string that is specified to be equivalent to an anonymous
+     * URI.
+     * 
+     * @see #addAnonymousEquivalentURI(String)
      */
     public boolean hasAnonymousAddress() {
-        boolean result = (AddressingConstants.Final.WSA_ANONYMOUS_URL.equals(address) ||
-                AddressingConstants.Submission.WSA_ANONYMOUS_URL.equals(address) ||
+        boolean result = isWSAddressingAnonymous();
+        
+        if(!result && address != null) {
+        	// If the address is not WS-A anonymous it might still be considered anonymous
+        	// Avoid synchronization by using the
+            // technique outlined at http://is.gd/gv3
+        	List<String> localList = anonymousEquivalentURIs;
+        	if(!localList.isEmpty()){
+        		Iterator<String> it = localList.iterator();
+        		while(it.hasNext()){
+        			result = address.startsWith((String)it.next());
+        			if(result){
+        				break;
+        			}
+        		}	
+        	}    	
+        }
 
-                //The following is added to give WS-RM anonymous a semantics to indicate
-                //that any response messages should be sent synchronously, using the
-                //transports back channel, as opposed to asynchronously. No other
-                //semantics normally associated with WS-Addressing anonymous values should
-                //be assumed, by it's presence here.
-                (address != null && address.startsWith(
-                        "http://docs.oasis-open.org/ws-rx/wsmc/200702/anonymous?id=")));
         if (log.isTraceEnabled()) {
             log.trace("hasAnonymousAddress: " + address + " is Anonymous: " + result);
         }
+        
         return result;
     }
 
@@ -199,12 +265,12 @@ public class EndpointReference implements Serializable {
      */
     public void addAttribute(String localName, OMNamespace ns, String value) {
         if (attributes == null) {
-            attributes = new ArrayList();
+            attributes = new ArrayList<OMAttribute>();
         }
         attributes.add(OMAbstractFactory.getOMFactory().createOMAttribute(localName, ns, value));
     }
 
-    public ArrayList getAttributes() {
+    public ArrayList<OMAttribute> getAttributes() {
         return attributes;
     }
 
@@ -214,12 +280,12 @@ public class EndpointReference implements Serializable {
      */
     public void addAttribute(OMAttribute omAttribute) {
         if (attributes == null) {
-            attributes = new ArrayList();
+            attributes = new ArrayList<OMAttribute>();
         }
         attributes.add(omAttribute);
     }
 
-    public ArrayList getExtensibleElements() {
+    public ArrayList<OMElement> getExtensibleElements() {
         return extensibleElements;
     }
 
@@ -228,27 +294,27 @@ public class EndpointReference implements Serializable {
      *
      * @param extensibleElements
      */
-    public void setExtensibleElements(ArrayList extensibleElements) {
+    public void setExtensibleElements(ArrayList<OMElement> extensibleElements) {
         this.extensibleElements = extensibleElements;
     }
 
     public void addExtensibleElement(OMElement extensibleElement) {
         if (extensibleElement != null) {
             if (this.extensibleElements == null) {
-                this.extensibleElements = new ArrayList();
+                this.extensibleElements = new ArrayList<OMElement>();
             }
             this.extensibleElements.add(extensibleElement);
         }
     }
 
-    public ArrayList getMetaData() {
+    public ArrayList<OMNode> getMetaData() {
         return metaData;
     }
 
     public void addMetaData(OMNode metaData) {
         if (metaData != null) {
             if (this.metaData == null) {
-                this.metaData = new ArrayList();
+                this.metaData = new ArrayList<OMNode>();
             }
             this.metaData.add(metaData);
         }
@@ -276,7 +342,7 @@ public class EndpointReference implements Serializable {
      *
      * @param referenceParameters
      */
-    public void setReferenceParameters(Map referenceParameters) {
+    public void setReferenceParameters(Map<QName, OMElement> referenceParameters) {
         this.referenceParameters = referenceParameters;
     }
 
@@ -293,6 +359,10 @@ public class EndpointReference implements Serializable {
 
         if (metaData != null) {
             buffer.append(", Metadata: ").append(metaData);
+        }
+        
+        if (metaDataAttributes != null) {
+            buffer.append(", Metadata Attributes: ").append(metaDataAttributes);
         }
 
         if (referenceParameters != null) {
@@ -319,7 +389,7 @@ public class EndpointReference implements Serializable {
         setAddress(addressElement.getText());
         Iterator allAddrAttributes = addressElement.getAllAttributes();
         if (addressAttributes == null) {
-            addressAttributes = new ArrayList();
+            addressAttributes = new ArrayList<OMAttribute>();
         }
 
         while (allAddrAttributes.hasNext()) {
@@ -485,7 +555,7 @@ public class EndpointReference implements Serializable {
 
         // TODO: is a strict test ok to use?
 
-        ArrayList eprMetaData = epr.getMetaData();
+        ArrayList<OMNode> eprMetaData = epr.getMetaData();
 
         if ((this.metaData != null) && (eprMetaData != null)) {
             if (!this.metaData.equals(eprMetaData)) {
@@ -506,7 +576,7 @@ public class EndpointReference implements Serializable {
         }
 
 
-        ArrayList eprExtensibleElements = epr.getExtensibleElements();
+        ArrayList<OMElement> eprExtensibleElements = epr.getExtensibleElements();
 
         if ((this.extensibleElements != null) && (eprExtensibleElements != null)) {
             if (!this.extensibleElements.equals(eprExtensibleElements)) {
@@ -527,7 +597,7 @@ public class EndpointReference implements Serializable {
         }
 
 
-        ArrayList eprAttributes = epr.getAttributes();
+        ArrayList<OMAttribute> eprAttributes = epr.getAttributes();
 
         if ((this.attributes != null) && (eprAttributes != null)) {
             if (!this.attributes.equals(eprAttributes)) {
@@ -561,14 +631,21 @@ public class EndpointReference implements Serializable {
      * OMElements/Attributes, we need to actually serialize the OM structures
      * (at least in some cases.)
      */
-    private void writeObject(java.io.ObjectOutputStream out)
+    public synchronized void writeExternal(java.io.ObjectOutput o)
             throws IOException {
+        SafeObjectOutputStream out = SafeObjectOutputStream.install(o);
+        
+        // revision ID
+        out.writeInt(revisionID);
+        
+        // Correlation ID
         String logCorrelationIDString = getLogCorrelationIDString();
 
         // String object id
-        ObjectStateUtils.writeString(out, logCorrelationIDString, logCorrelationIDString
-                + ".logCorrelationIDString");
+        out.writeObject(logCorrelationIDString);
 
+        // Write out the content as xml
+        out.writeUTF("start xml"); // write marker
         OMElement om =
                 EndpointReferenceHelper.toOM(OMAbstractFactory.getOMFactory(),
                                              this,
@@ -594,7 +671,8 @@ public class EndpointReference implements Serializable {
         }
 
         out.writeInt(baos.size());
-        out.write(baos.toByteArray());
+        out.write(baos.toByteArray());  
+        out.writeUTF("end xml"); // write marker
 
         if (log.isDebugEnabled()) {
             byte[] buffer = baos.toByteArray();
@@ -610,12 +688,23 @@ public class EndpointReference implements Serializable {
     /**
      * Read the EPR to the specified InputStream.
      */
-    private void readObject(java.io.ObjectInputStream in)
+    public void readExternal(java.io.ObjectInput inObject)
             throws IOException, ClassNotFoundException {
-
+        SafeObjectInputStream in = SafeObjectInputStream.install(inObject);
+        
+        // revision ID
+        int revID = in.readInt();
+        
+        // make sure the object data is in a revision level we can handle
+        if (revID != REVISION_2) {
+            throw new ClassNotFoundException(ExternalizeConstants.UNSUPPORTED_REVID);
+        }
+        
         // String object id
-        logCorrelationIDString = ObjectStateUtils.readString(in, "EndpointReference.logCorrelationIDString");
+        logCorrelationIDString = (String) in.readObject();
 
+        // Read xml content
+        in.readUTF(); // read marker
         int numBytes = in.readInt();
 
         byte[] serBytes = new byte[numBytes];
@@ -655,6 +744,7 @@ public class EndpointReference implements Serializable {
 
             throw ioe;
         }
+        in.readUTF(); // read marker
 
         ByteArrayInputStream bais = new ByteArrayInputStream(serBytes);
 

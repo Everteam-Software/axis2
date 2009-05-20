@@ -16,9 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.injection;
 
-import org.apache.axis2.jaxws.TestLogger;
+import org.apache.axis2.jaxws.unitTest.TestLogger;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;

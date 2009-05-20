@@ -16,12 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.engine;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import org.apache.axiom.om.OMElement;
-import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.EndpointReference;
 import org.apache.axis2.client.ServiceClient;
 import org.apache.axis2.description.AxisService;
@@ -61,7 +61,7 @@ public class WSDLClientTest extends UtilServerBasedTestCase implements TestConst
                                                         new QName(
                                                                 "http://engine.axis2.apache.org",
                                                                 "EchoXMLService"),
-                                                        "EchoXMLServiceSOAP11port_http");
+                                                        "EchoHttpSoap11Endpoint");
         OMElement payload =
                 TestingUtils.createDummyOMElement("http://engine.axis2.apache.org");
         String epr = "http://127.0.0.1:" + UtilServer.TESTING_PORT +

@@ -16,24 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.populate.simple;
 
 import org.apache.axis2.databinding.utils.ConverterUtil;
 
 import java.util.Date;
-import java.util.TimeZone;
-import java.text.SimpleDateFormat;
 
 public class SimpleTypeDatePopulateTest extends AbstractSimplePopulater{
     private String values[]={
                 "2002-10-10Z",
-                "2000-12-31Z",
+                "2000-12-31+05:30",
                 "2002-02-28Z"
     } ;
     private String xmlString[] = {
-            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+values[0]+"</dateParam>",
-            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+values[1]+"</dateParam>",
-            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+values[2]+"</dateParam>"
+            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDate(values[0])) +"</dateParam>",
+            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDate(values[1]))+"</dateParam>",
+            "<dateParam xmlns=\"http://soapinterop.org/xsd\">"+
+                    ConverterUtil.convertToString(ConverterUtil.convertToDate(values[2]))+"</dateParam>"
     };
 
     protected void setUp() throws Exception {
@@ -44,13 +46,11 @@ public class SimpleTypeDatePopulateTest extends AbstractSimplePopulater{
     // force others to implement this method
     public void testPopulate() throws Exception {
 
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd'Z'");
-        simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         Date date = null;
 
         for (int i = 0; i < values.length; i++) {
             date = ConverterUtil.convertToDate(values[i]);
-            checkValue(xmlString[i],simpleDateFormat.format(date));
+            checkValue(xmlString[i],ConverterUtil.convertToString(date));
         }
     }
 

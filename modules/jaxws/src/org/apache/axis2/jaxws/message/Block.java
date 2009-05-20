@@ -16,9 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message;
 
-import org.apache.axiom.om.OMDataSource;
+import org.apache.axiom.om.OMDataSourceExt;
 import org.apache.axiom.om.OMElement;
 import org.apache.axis2.jaxws.message.factory.BlockFactory;
 
@@ -43,7 +44,7 @@ import javax.xml.ws.WebServiceException;
  * longer valid after the message is called. (i.e. the implementation does not need to cache the
  * information)
  */
-public interface Block extends OMDataSource {
+public interface Block extends OMDataSourceExt {
 
     /**
      * Get a reference to the Business Object represented by this Block

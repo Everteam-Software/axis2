@@ -19,13 +19,16 @@
 
 package org.apache.axis2.databinding;
 
+import org.apache.axiom.om.OMFactory;
 import org.apache.axiom.soap.SOAPConstants;
 import org.apache.axiom.soap.SOAPEnvelope;
 import org.apache.axiom.soap.SOAPFactory;
 import org.apache.axiom.soap.impl.builder.StAXSOAPModelBuilder;
+import org.apache.axis2.databinding.utils.writer.MTOMAwareXMLStreamWriter;
 import org.apache.axis2.util.StreamWrapper;
 
 import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
 /** Builds a SOAPEnvelope around an ADB pull parser */
@@ -65,6 +68,21 @@ public class ADBSOAPModelBuilder extends StAXSOAPModelBuilder {
                     new StreamWrapper(new org.apache.axis2.databinding.utils.reader.
                             ADBXMLStreamReaderImpl(qName, elementList.toArray(), null));
         }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter)
+                throws XMLStreamException, ADBException {
+            serialize(parentQName,factory,xmlWriter,false);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter,
+                              boolean serializeType)
+                throws XMLStreamException, ADBException {
+            throw new UnsupportedOperationException("Un implemented method");
+        }
     }
 
     protected void identifySOAPVersion(String soapVersionURIFromTransport) {
@@ -87,6 +105,21 @@ public class ADBSOAPModelBuilder extends StAXSOAPModelBuilder {
                                                                                         elementList.toArray(),
                                                                                         null);
         }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter)
+                throws XMLStreamException, ADBException {
+            serialize(parentQName,factory,xmlWriter,false);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter,
+                              boolean serializeType)
+                throws XMLStreamException, ADBException {
+            throw new UnsupportedOperationException("Un implemented method");
+        }
     }
 
     public static class Header
@@ -96,6 +129,20 @@ public class ADBSOAPModelBuilder extends StAXSOAPModelBuilder {
             return new org.apache.axis2.databinding.utils.reader.ADBXMLStreamReaderImpl(qName,
                                                                                         elementList.toArray(),
                                                                                         null);
+        }
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter)
+                throws XMLStreamException, ADBException {
+            serialize(parentQName,factory,xmlWriter,false);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter,
+                              boolean serializeType)
+                throws XMLStreamException, ADBException {
+            throw new UnsupportedOperationException("Un implemented method");
         }
     }
 
@@ -109,6 +156,20 @@ public class ADBSOAPModelBuilder extends StAXSOAPModelBuilder {
 
         public javax.xml.stream.XMLStreamReader getPullParser(javax.xml.namespace.QName qName) {
             return parser;
+        }
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter)
+                throws XMLStreamException, ADBException {
+            serialize(parentQName,factory,xmlWriter,false);
+        }
+
+        public void serialize(final QName parentQName,
+                              final OMFactory factory,
+                              MTOMAwareXMLStreamWriter xmlWriter,
+                              boolean serializeType)
+                throws XMLStreamException, ADBException {
+            throw new UnsupportedOperationException("Un implemented method");
         }
     }
 }

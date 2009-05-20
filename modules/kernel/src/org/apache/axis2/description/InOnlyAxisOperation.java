@@ -16,12 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.description;
 
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.client.OperationClient;
+import org.apache.axis2.client.Options;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
+import org.apache.axis2.context.ServiceContext;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.wsdl.WSDLConstants;
 
@@ -53,6 +57,11 @@ public class InOnlyAxisOperation extends AxisOperation {
         setMessageExchangePattern(WSDL2Constants.MEP_URI_IN_ONLY);
     }
 
+    public OperationClient createClient(ServiceContext sc, Options options) {
+        throw new UnsupportedOperationException(
+                Messages.getMessage("mepnotyetimplemented", mepURI));
+    }
+
     public void addMessage(AxisMessage message, String label) {
         if (WSDLConstants.MESSAGE_LABEL_IN_VALUE.equals(label)) {
 //            inMessage = message;
@@ -74,7 +83,7 @@ public class InOnlyAxisOperation extends AxisOperation {
 
     public void addFaultMessageContext(MessageContext msgContext, OperationContext opContext)
             throws AxisFault {
-        HashMap mep = opContext.getMessageContexts();
+        HashMap<String, MessageContext> mep = opContext.getMessageContexts();
         MessageContext faultMessageCtxt = (MessageContext) mep.get(MESSAGE_LABEL_FAULT_VALUE);
         if (faultMessageCtxt != null) {
             throw new AxisFault(Messages.getMessage("mepcompleted"));

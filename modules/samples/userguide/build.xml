@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <project name="userguide" default="generate.service">
     <property name="mainDir" value="../.."/>
     <property name="classes.dir" value="build/classes"/>
@@ -74,7 +75,7 @@
         <copy file="build/WsaMappingService.aar" tofile="../../repository/services/sample-WsaMappingService.aar" overwrite="true"/>
     </target>
     
-    <target name="generate.module">
+    <target name="generate.module" depends="compile">
        <jar destfile="build/logging.mar">
             <fileset dir="src/userguide/loggingmodule/">
                 <include name="META-INF/**"/>

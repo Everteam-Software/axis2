@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
 import junit.framework.TestCase;
 import org.apache.axis2.AbstractTestCase;
-import org.apache.axis2.deployment.deployers.CustomDeployer;
 import org.apache.axis2.context.ConfigurationContextFactory;
+import org.apache.axis2.deployment.deployers.CustomDeployer;
 import org.apache.axis2.engine.AxisConfiguration;
 
 public class CustomDeployerTest extends TestCase {

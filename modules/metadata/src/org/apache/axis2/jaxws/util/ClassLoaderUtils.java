@@ -19,26 +19,29 @@
 
 package org.apache.axis2.jaxws.util;
 
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+
+/**
+ * @deprecated - Security Risk. Please don't use this class, As a general rule
+ * end user code should not be able to access AccessController.doPrivileged  
+ */
 public class ClassLoaderUtils {
 
     private static final Log log = LogFactory.getLog(ClassLoaderUtils.class);
-    
-    private ClassLoaderUtils() {        
-    }
-    
-    /** @return ClassLoader */
+
+    /**
+     * @return ClassLoader
+     */
     public static ClassLoader getClassLoader(final Class cls) {
         ClassLoader cl = null;
         try {
-            cl = (ClassLoader)AccessController.doPrivileged(
+            cl = (ClassLoader) AccessController.doPrivileged(
                     new PrivilegedExceptionAction() {
                         public Object run() throws ClassNotFoundException {
                             return cls.getClassLoader();
@@ -54,15 +57,17 @@ public class ClassLoaderUtils {
 
         return cl;
     }
-    
-    /** @return ClassLoader */
-    public static ClassLoader getContextClassLoader() {
-        ClassLoader cl = null;
+
+    /**
+     * @return ClassLoader
+     */
+    public static ClassLoader getContextClassLoader(final ClassLoader classLoader) {
+        ClassLoader cl;
         try {
-            cl = (ClassLoader)AccessController.doPrivileged(
+            cl = (ClassLoader) AccessController.doPrivileged(
                     new PrivilegedExceptionAction() {
                         public Object run() throws ClassNotFoundException {
-                            return Thread.currentThread().getContextClassLoader();
+                            return classLoader != null ? classLoader : Thread.currentThread().getContextClassLoader();
                         }
                     }
             );
@@ -85,7 +90,7 @@ public class ClassLoaderUtils {
                                 final ClassLoader classloader) throws ClassNotFoundException {
         Class cl = null;
         try {
-            cl = (Class)AccessController.doPrivileged(
+            cl = (Class) AccessController.doPrivileged(
                     new PrivilegedExceptionAction() {
                         public Object run() throws ClassNotFoundException {
                             return Class.forName(className, initialize, classloader);
@@ -96,7 +101,7 @@ public class ClassLoaderUtils {
             if (log.isDebugEnabled()) {
                 log.debug("Exception thrown from AccessController: " + e.getMessage(), e);
             }
-            throw (ClassNotFoundException)e.getException();
+            throw (ClassNotFoundException) e.getException();
         }
 
         return cl;
@@ -110,7 +115,7 @@ public class ClassLoaderUtils {
     public static Class forName(final String className) throws ClassNotFoundException {
         Class cl = null;
         try {
-            cl = (Class)AccessController.doPrivileged(
+            cl = (Class) AccessController.doPrivileged(
                     new PrivilegedExceptionAction() {
                         public Object run() throws ClassNotFoundException {
                             return Class.forName(className);
@@ -121,7 +126,7 @@ public class ClassLoaderUtils {
             if (log.isDebugEnabled()) {
                 log.debug("Exception thrown from AccessController: " + e.getMessage(), e);
             }
-            throw (ClassNotFoundException)e.getException();
+            throw (ClassNotFoundException) e.getException();
         }
 
         return cl;

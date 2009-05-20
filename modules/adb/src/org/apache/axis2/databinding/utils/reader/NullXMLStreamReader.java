@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.databinding.utils.reader;
 
 import javax.xml.namespace.NamespaceContext;
@@ -143,7 +144,7 @@ public class NullXMLStreamReader implements ADBXMLStreamReader {
     }
 
     public String getAttributeType(int i) {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     public String getAttributeValue(int i) {

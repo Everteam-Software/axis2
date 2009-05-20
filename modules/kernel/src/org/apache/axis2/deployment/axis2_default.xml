@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <axisconfig name="AxisJava2.0">
     <!-- ================================================= -->
     <!-- Parameters -->
@@ -23,6 +24,10 @@
     <parameter name="hotdeployment">true</parameter>
     <parameter name="hotupdate">false</parameter>
     <parameter name="enableMTOM">false</parameter>
+
+    <!--If turned on with use the Accept header of the request to determine the contentType of the
+    response-->
+    <parameter name="httpContentNegotiation">false</parameter>
 
     <!--During a fault, stacktrace can be sent with the fault message. The following flag will control -->
     <!--that behaviour.-->
@@ -58,10 +63,11 @@
     <!--<parameter name="restPath">rest</parameter>-->
 
     <!-- Following parameter will completely disable REST handling in Axis2-->
-    <parameter name="disableREST" locked="true">false</parameter>
+    <parameter name="disableREST" locked="false">false</parameter>
 
     <!--POJO deployer , this will alow users to drop .class file and make that into a service-->
     <deployer extension=".class" directory="pojo" class="org.apache.axis2.deployment.POJODeployer"/>
+    <deployer extension=".jar" directory="transports" class="org.apache.axis2.deployment.TransportDeployer"/>
 
     <!-- Following parameter will set the host name for the epr-->
     <!--<parameter name="hostname" locked="true">myhost.com</parameter>-->
@@ -96,6 +102,10 @@
                          class="org.apache.axis2.transport.http.MultipartFormDataFormatter"/>
         <messageFormatter contentType="application/xml"
                          class="org.apache.axis2.transport.http.ApplicationXMLFormatter"/>
+        <messageFormatter contentType="text/xml"
+                         class="org.apache.axis2.transport.http.SOAPMessageFormatter"/>
+        <messageFormatter contentType="application/soap+xml"
+                         class="org.apache.axis2.transport.http.SOAPMessageFormatter"/>
     </messageFormatters>
 
     <!-- ================================================= -->
@@ -144,15 +154,13 @@
         <!--uncomment following parameter , and set as you required.-->
         <!--<parameter name="hostname">tcp://myApp.com/ws</parameter>-->
     <!--</transportReceiver>-->
+    <!--<transportSender name="tcp"-->
+                   <!--class="org.apache.axis2.transport.tcp.TCPTransportSender"/>-->
 
     <!-- ================================================= -->
     <!-- Transport Outs -->
     <!-- ================================================= -->
 
-    <!--<transportSender name="jms"-->
-                     <!--class="org.apache.axis2.transport.jms.JMSSender"/>-->
-    <transportSender name="tcp"
-                     class="org.apache.axis2.transport.tcp.TCPTransportSender"/>
     <transportSender name="local"
                      class="org.apache.axis2.transport.local.LocalTransportSender"/>
     <transportSender name="http"
@@ -165,6 +173,22 @@
         <parameter name="PROTOCOL">HTTP/1.1</parameter>
         <parameter name="Transfer-Encoding">chunked</parameter>
     </transportSender>
+    <!--<transportSender name="java"-->
+                     <!--class="org.apache.axis2.transport.java.JavaTransportSender"/>-->
+
+
+    <!-- ================================================= -->
+    <!--  SOAP Role Configuration                          -->
+    <!-- ================================================= -->
+    <!-- Use the following pattern to configure this axis2
+         instance to act in particular roles. Note that in
+         the absence of any configuration, Axis2 will act 
+         only in the ultimate receiver role -->
+    <!--
+    <SOAPRoleConfiguration isUltimateReceiver="true">
+    	<role>http://my/custom/role</role>
+    </SOAPRoleConfiguration>
+	-->
 
     <!-- ================================================= -->
     <!-- Phases  -->
@@ -249,5 +273,6 @@
         <phase name="RMPhase"/>
         <phase name="PolicyDetermination"/>
         <phase name="MessageOut"/>
+        <phase name="Security"/>
     </phaseOrder>
 </axisconfig>

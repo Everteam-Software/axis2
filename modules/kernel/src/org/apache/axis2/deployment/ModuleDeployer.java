@@ -16,24 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
-import org.apache.axis2.util.Utils;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.deployment.repository.util.ArchiveReader;
 import org.apache.axis2.deployment.repository.util.DeploymentFileData;
 import org.apache.axis2.description.AxisModule;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.i18n.Messages;
+import org.apache.axis2.util.Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.File;
 import java.net.MalformedURLException;
+import java.net.URL;
 
 public class ModuleDeployer implements Deployer {
 
@@ -67,11 +69,13 @@ public class ModuleDeployer implements Deployer {
             metaData.setModuleClassLoader(deploymentFileData.getClassLoader());
             metaData.setParent(axisConfig);
             archiveReader.readModuleArchive(deploymentFileData, metaData, isDirectory, axisConfig);
-            metaData.setFileName(deploymentFileData.getFile().toURL());
+            URL url = deploymentFileData.getFile().toURL();
+            metaData.setFileName(url);
             DeploymentEngine.addNewModule(metaData, axisConfig);
             log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_MODULE,
                                          Utils.getModuleName(metaData.getName(),
-                                                             metaData.getVersion())));
+                                                             metaData.getVersion()),
+                                         url.toString()));
         } catch (DeploymentException e) {
             log.error(Messages.getMessage(DeploymentErrorMsgs.INVALID_MODULE,
                                           deploymentFileData.getName(),

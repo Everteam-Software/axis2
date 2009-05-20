@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.typemap;
 
 import java.util.Map;
@@ -26,4 +27,7 @@ import java.util.Map;
 public interface TypeMap {
 
     public Map getTypeMap();
+
+    public Map getSoapEncodingTypesMap();
+    
 }

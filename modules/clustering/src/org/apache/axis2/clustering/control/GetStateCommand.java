@@ -16,10 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.control;
 
-import org.apache.axis2.clustering.ClusteringFault;
 import org.apache.axis2.clustering.ClusterManager;
+import org.apache.axis2.clustering.ClusteringFault;
 import org.apache.axis2.clustering.context.ContextClusteringCommand;
 import org.apache.axis2.clustering.context.ContextClusteringCommandFactory;
 import org.apache.axis2.clustering.context.ContextManager;
@@ -47,12 +48,12 @@ public class GetStateCommand extends ControlCommand {
         ContextManager contextManager = clusterManager.getContextManager();
         if (contextManager != null) {
             Map excludedPropPatterns = contextManager.getReplicationExcludePatterns();
-            List cmdList = new ArrayList();
+            List<ContextClusteringCommand> cmdList = new ArrayList<ContextClusteringCommand>();
 
             // Add the service group contexts, service contexts & their respective properties
             String[] sgCtxIDs = configCtx.getServiceGroupContextIDs();
-            for (int i  = 0; i < sgCtxIDs.length; i ++) {
-                ServiceGroupContext sgCtx = configCtx.getServiceGroupContext(sgCtxIDs[i]);
+            for (String sgCtxID : sgCtxIDs) {
+                ServiceGroupContext sgCtx = configCtx.getServiceGroupContext(sgCtxID);
                 ContextClusteringCommand updateServiceGroupCtxCmd =
                         ContextClusteringCommandFactory.getUpdateCommand(sgCtx,
                                                                          excludedPropPatterns,
@@ -82,8 +83,7 @@ public class GetStateCommand extends ControlCommand {
                 cmdList.add(updateCmd);
             }
             if (!cmdList.isEmpty()) {
-                commands = (ContextClusteringCommand[]) cmdList.
-                        toArray(new ContextClusteringCommand[cmdList.size()]);
+                commands = cmdList.toArray(new ContextClusteringCommand[cmdList.size()]);
             }
         }
     }

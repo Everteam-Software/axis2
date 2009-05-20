@@ -16,21 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.scripting;
+
+import junit.framework.TestCase;
+import org.apache.axis2.AxisFault;
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.deployment.util.Utils;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.engine.AxisConfiguration;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-
-import junit.framework.TestCase;
-
-import org.apache.axis2.AxisFault;
-import org.apache.axis2.deployment.util.Utils;
-import org.apache.axis2.context.ConfigurationContext;
-import org.apache.axis2.description.Parameter;
-import org.apache.axis2.engine.AxisConfiguration;
 
 public class ScriptModuleTest extends TestCase {
 

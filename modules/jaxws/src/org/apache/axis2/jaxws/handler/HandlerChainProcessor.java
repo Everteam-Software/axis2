@@ -16,10 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
+import org.apache.axis2.jaxws.Constants;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.context.factory.MessageContextFactory;
+import org.apache.axis2.jaxws.handler.factory.HandlerPostInvokerFactory;
+import org.apache.axis2.jaxws.handler.factory.HandlerPreInvokerFactory;
 import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.marshaller.impl.alt.MethodMarshallerUtils;
 import org.apache.axis2.jaxws.message.Message;
@@ -41,7 +45,6 @@ import javax.xml.ws.WebServiceException;
 import javax.xml.ws.handler.Handler;
 import javax.xml.ws.handler.LogicalHandler;
 import javax.xml.ws.handler.soap.SOAPHandler;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -49,6 +52,8 @@ import java.util.List;
 public class HandlerChainProcessor {
 
     private static final Log log = LogFactory.getLog(HandlerChainProcessor.class);
+    private HandlerPreInvoker handlerPreInvoker = null;
+    private HandlerPostInvoker handlerPostInvoker = null;
     
     public enum Direction {
         IN, OUT
@@ -122,15 +127,11 @@ public class HandlerChainProcessor {
                 // instanceof ProtocolHandler
                 protocolHandlers.add((SOAPHandler) handler);
             else if (Handler.class.isAssignableFrom(handler.getClass())) {
-                // TODO: NLS better error message
                 throw ExceptionFactory.makeWebServiceException(Messages
-                    .getMessage("handlerChainErr1", handler
-                            .getClass().getName()));
+                    .getMessage("handlerChainErr1", handler.getClass().getName()));
             } else {
-                // TODO: NLS better error message
                 throw ExceptionFactory.makeWebServiceException(Messages
-                    .getMessage("handlerChainErr2", handler
-                            .getClass().getName()));
+                    .getMessage("handlerChainErr2", handler.getClass().getName()));
             }
         }
         
@@ -163,15 +164,16 @@ public class HandlerChainProcessor {
         this.mepCtx = mepCtx;
         sortChain();
         initContext(direction);
+        boolean result = true;
 
         if (direction == Direction.OUT) { // 9.3.2 outbound
             currentMC.put(javax.xml.ws.handler.MessageContext.MESSAGE_OUTBOUND_PROPERTY,
                             (direction == Direction.OUT));
-            callGenericHandlers(mep, expectResponse, 0, handlers.size() - 1, direction);
+            result = callGenericHandlers(mep, expectResponse, 0, handlers.size() - 1, direction);
         } else { // IN case - 9.3.2 inbound
             currentMC.put(javax.xml.ws.handler.MessageContext.MESSAGE_OUTBOUND_PROPERTY,
                             (direction == Direction.OUT));
-            callGenericHandlers(mep, expectResponse, handlers.size() - 1, 0, direction);
+            result = callGenericHandlers(mep, expectResponse, handlers.size() - 1, 0, direction);
         }
 
         // message context may have been changed to be response, and message
@@ -179,7 +181,7 @@ public class HandlerChainProcessor {
         // according to the JAXWS spec 9.3.2.1 footnote 2
         if ((Boolean) (currentMC.get(javax.xml.ws.handler.MessageContext.MESSAGE_OUTBOUND_PROPERTY)) != (direction == Direction.OUT))
             return false;
-        return true;
+        return result;
 
 	}
 
@@ -187,7 +189,7 @@ public class HandlerChainProcessor {
     /*
       * This is the implementation of JAX-WS 2.0 section 9.3.2.1
       */
-    private void callGenericHandlers(MEP mep, boolean expectResponse, int start, int end,
+    private boolean callGenericHandlers(MEP mep, boolean expectResponse, int start, int end,
                                      Direction direction) throws RuntimeException {
 
         // if this is a response message, expectResponse should always be false
@@ -227,7 +229,7 @@ public class HandlerChainProcessor {
         }
 
         if (newDirection == direction) // we didn't actually process anything, probably due to empty list
-            return;  // no need to continue
+            return true;  // no need to continue
 
         // 9.3.2.3 in all situations, we want to close as many handlers as
         // were invoked prior to completion or exception throwing
@@ -242,13 +244,11 @@ public class HandlerChainProcessor {
                     callCloseHandlers(newStart_inclusive, newEnd, newDirection);
                 } catch (RuntimeException re) {
                     callCloseHandlers(newStart_inclusive, newEnd, newDirection);
-                    // TODO: NLS log and throw
                     throw re;
                 }
             } else if (result == OTHER_EXCEPTION) {
                 callCloseHandlers(newStart_inclusive, newEnd, newDirection);
                 // savedException initialized in HandlerChainProcessor.handleMessage
-                // TODO: NLS log and throw
                 throw savedException;
             }
         } else { // everything was successful OR finished processing handlers
@@ -267,6 +267,16 @@ public class HandlerChainProcessor {
                 // a request that requires no response is a one-way message
                 // and we should only close whomever got invoked
                 callCloseHandlers(newStart_inclusive, newEnd, newDirection);
+                
+                // As according to the Sun "experts", exceptions raised by
+                // handlers in one way invocation are discarded. They
+                // are NOT propagated to the user code.
+                if (savedException != null) {
+                    log.warn("Exception thrown by a handler in one way invocation",
+                             savedException);
+                    //But do return failure so that we know not to send to server
+                    return false;
+                }
             }
             else {
                 // it's a response, so we can safely assume that 
@@ -277,13 +287,18 @@ public class HandlerChainProcessor {
                 } else {
                     callCloseHandlers(0, handlers.size() - 1, direction);
                 }
+ 
                 if (savedException != null) {
-                    // we have a saved exception, throw it (JAX-WS 9.3.2.1 "Throw any
-                    // other runtime exception --> No response" case.
+                    // we have a saved exception, throw it (JAX-WS 9.3.2.1 "Throw 
+                    // ProtocolException or any other runtime exception --> No 
+                    // response" case.
                     throw savedException;
                 }
             }
         }
+        // If we've failed before this, we would have already thrown exception
+        // or returned false, so just return true here ... don't need to check result again.
+        return true;
     }
 
     /*
@@ -332,7 +347,14 @@ public class HandlerChainProcessor {
             if (log.isDebugEnabled()) {
                 log.debug("Invoking handleMessage on: " + handler.getClass().getName()); 
             }
+            
+            // The pre and post invokers will likely need more than just the handler message context.
+            // They may need access to the axis service object or description objects.
+            currentMC.put(Constants.MEP_CONTEXT, mepCtx);
+
+            getPreInvoker().preInvoke(currentMC);
             boolean success = handler.handleMessage(currentMC);
+            getPostInvoker().postInvoke(currentMC);
             if (success) {
                 if (log.isDebugEnabled()) {
                     log.debug("handleMessage() returned true");
@@ -353,7 +375,7 @@ public class HandlerChainProcessor {
             // RuntimeException and ProtocolException
             if(log.isDebugEnabled()) {
                log.debug("An exception was thrown during the handleMessage() invocation");
-               log.debug("Exception: " + re.getClass().getName() + ":" +re.getMessage());
+               log.debug("Exception: ", re);
             }
             
             savedException = re;
@@ -542,7 +564,7 @@ public class HandlerChainProcessor {
                 mepCtx.setMessage(msg);
 
             } else {
-                throw ExceptionFactory.makeWebServiceException("We only support SOAP11 and SOAP12 for JAXWS handlers");
+                throw ExceptionFactory.makeWebServiceException(Messages.getMessage("cFaultMsgErr"));
             }
 
         } catch (Exception ex) {
@@ -584,5 +606,22 @@ public class HandlerChainProcessor {
                 currentMC = logicalMC; //MessageContextFactory.createLogicalMessageContext(mepCtx.getMessageContext());
         }
     }
+    
+    private HandlerPreInvoker getPreInvoker() {
+    	if (handlerPreInvoker == null) {
+    		HandlerPreInvokerFactory preInvokerFactory = (HandlerPreInvokerFactory)FactoryRegistry.getFactory(HandlerPreInvokerFactory.class);
+    		handlerPreInvoker = (HandlerPreInvoker)preInvokerFactory.createHandlerPreInvoker();
+    	}
+    	return handlerPreInvoker;
+    }
+    
+    private HandlerPostInvoker getPostInvoker() {
+    	if (handlerPostInvoker == null) {
+    		HandlerPostInvokerFactory postInvokerFactory = (HandlerPostInvokerFactory)FactoryRegistry.getFactory(HandlerPostInvokerFactory.class);
+    		handlerPostInvoker = (HandlerPostInvoker)postInvokerFactory.createHandlerPostInvoker();
+    	}
+    	return handlerPostInvoker;
+    }
+    
 
 }

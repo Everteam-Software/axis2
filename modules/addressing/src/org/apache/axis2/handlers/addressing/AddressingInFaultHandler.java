@@ -37,7 +37,6 @@ import org.apache.axis2.addressing.AddressingFaultsHelper;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.handlers.AbstractHandler;
 
-import javax.xml.namespace.QName;
 import java.util.Iterator;
 
 /**
@@ -56,7 +55,8 @@ public class AddressingInFaultHandler extends AbstractHandler implements Address
             SOAPFault fault = envelope.getBody().getFault();
 
             if (fault == null) {
-                throw new AxisFault("Problem");
+                throw new AxisFault("A Soap envelope with fault action -" + action + " has been received without " +
+                        "a fault element in the soap body");
             }
 
             SOAPFactory sf = ((SOAPFactory)envelope.getOMFactory());

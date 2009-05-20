@@ -16,17 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.utility;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.activation.DataHandler;
-import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 import javax.xml.transform.Result;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
@@ -34,13 +33,10 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.ws.WebServiceException;
-
-import java.awt.Image;
-import java.awt.image.BufferedImage;
+import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -106,6 +102,8 @@ public class ConvertUtils {
         // If it's List -> Array or vice versa, we're good.
         if ((Collection.class.isAssignableFrom(src) || src.isArray()) &&
                 (Collection.class.isAssignableFrom(dest) || dest.isArray())) {
+            
+            // TODO this should consider the component types instead of returning true.
             return true;
         }
 
@@ -275,7 +273,7 @@ public class ConvertUtils {
         }
 
         if (arg == null) {
-            return arg;
+            return null;
         }
 
         // The arg may be an array or List 
@@ -286,82 +284,93 @@ public class ConvertUtils {
         } else {
             length = ((Collection)arg).size();
         }
-        if (destClass.isArray()) {
-            if (destClass.getComponentType().isPrimitive()) {
+        
+        try {
+            if (destClass.isArray()) {
+                if (destClass.getComponentType().isPrimitive()) {
 
-                Object array = Array.newInstance(destClass.getComponentType(),
-                                                 length);
-                // Assign array elements
-                if (arg.getClass().isArray()) {
-                    for (int i = 0; i < length; i++) {
-                        Array.set(array, i, Array.get(arg, i));
+                    Object array = Array.newInstance(destClass.getComponentType(),
+                                                     length);
+                    // Assign array elements
+                    if (arg.getClass().isArray()) {
+                        for (int i = 0; i < length; i++) {
+                            Array.set(array, i, Array.get(arg, i));
+                        }
+                    } else {
+                        int idx = 0;
+                        for (Iterator i = ((Collection)arg).iterator();
+                             i.hasNext();) {
+                            Array.set(array, idx++, i.next());
+                        }
                     }
+                    destValue = array;
+
                 } else {
-                    int idx = 0;
-                    for (Iterator i = ((Collection)arg).iterator();
-                         i.hasNext();) {
-                        Array.set(array, idx++, i.next());
+                    Object [] array;
+                    try {
+                        array = (Object [])Array.newInstance(destClass.getComponentType(),
+                                                             length);
+                    } catch (Exception e) {
+                        return arg;
                     }
-                }
-                destValue = array;
 
-            } else {
-                Object [] array;
+                    // Use convert to assign array elements.
+                    if (arg.getClass().isArray()) {
+                        for (int i = 0; i < length; i++) {
+                            array[i] = convert(Array.get(arg, i),
+                                               destClass.getComponentType());
+                        }
+                    } else {
+                        int idx = 0;
+                        for (Iterator i = ((Collection)arg).iterator();
+                             i.hasNext();) {
+                            array[idx++] = convert(i.next(),
+                                                   destClass.getComponentType());
+                        }
+                    }
+                    destValue = array;
+                }
+            } else if (Collection.class.isAssignableFrom(destClass)) {
+                Collection newList = null;
                 try {
-                    array = (Object [])Array.newInstance(destClass.getComponentType(),
-                                                         length);
+                    // if we are trying to create an interface, build something
+                    // that implements the interface
+                    if (destClass == Collection.class || destClass == List.class) {
+                        newList = new ArrayList();
+                    } else if (destClass == Set.class) {
+                        newList = new HashSet();
+                    } else {
+                        newList = (Collection)destClass.newInstance();
+                    }
                 } catch (Exception e) {
+                    // No FFDC code needed
+                    // Couldn't build one for some reason... so forget it.
                     return arg;
                 }
 
-                // Use convert to assign array elements.
                 if (arg.getClass().isArray()) {
-                    for (int i = 0; i < length; i++) {
-                        array[i] = convert(Array.get(arg, i),
-                                           destClass.getComponentType());
+                    for (int j = 0; j < length; j++) {
+                        newList.add(Array.get(arg, j));
                     }
                 } else {
-                    int idx = 0;
-                    for (Iterator i = ((Collection)arg).iterator();
-                         i.hasNext();) {
-                        array[idx++] = convert(i.next(),
-                                               destClass.getComponentType());
+                    for (Iterator j = ((Collection)arg).iterator();
+                         j.hasNext();) {
+                        newList.add(j.next());
                     }
                 }
-                destValue = array;
-            }
-        } else if (Collection.class.isAssignableFrom(destClass)) {
-            Collection newList = null;
-            try {
-                // if we are trying to create an interface, build something
-                // that implements the interface
-                if (destClass == Collection.class || destClass == List.class) {
-                    newList = new ArrayList();
-                } else if (destClass == Set.class) {
-                    newList = new HashSet();
-                } else {
-                    newList = (Collection)destClass.newInstance();
-                }
-            } catch (Exception e) {
-                // No FFDC code needed
-                // Couldn't build one for some reason... so forget it.
-                return arg;
-            }
-
-            if (arg.getClass().isArray()) {
-                for (int j = 0; j < length; j++) {
-                    newList.add(Array.get(arg, j));
-                }
+                destValue = newList;
             } else {
-                for (Iterator j = ((Collection)arg).iterator();
-                     j.hasNext();) {
-                    newList.add(j.next());
-                }
+                destValue = arg;
             }
-            destValue = newList;
-        } else {
-            destValue = arg;
+        } catch (Throwable t) {
+            throw ExceptionFactory.
+              makeWebServiceException( 
+                                    Messages.getMessage("convertUtils", 
+                                                        arg.getClass().toString(), 
+                                                        destClass.toString()),
+                                    t);                        
         }
+        
         return destValue;
     }
     

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.rpc.receivers;
 
 import org.apache.axiom.om.OMElement;
@@ -66,6 +67,7 @@ public class RPCInOnlyMessageReceiver extends AbstractInMessageReceiver {
                         methodElement,inMessage);
 
             }
+            replicateState(inMessage);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
             if (cause != null) {

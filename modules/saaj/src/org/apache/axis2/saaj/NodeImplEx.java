@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
 import org.apache.axiom.om.OMContainer;
@@ -160,30 +161,37 @@ public abstract class NodeImplEx extends NodeImpl implements Node {
      * @return the SAAJ Node corresponding to the domNode
      */
     javax.xml.soap.Node toSAAJNode(org.w3c.dom.Node domNode) {
+        return toSAAJNode(domNode, this);
+    }
+    
+    /**
+     * Converts or extracts the SAAJ node from the given DOM Node (domNode)
+     *
+     * @param domNode
+     * @return the SAAJ Node corresponding to the domNode
+     */
+    static javax.xml.soap.Node toSAAJNode(org.w3c.dom.Node domNode, Node parentNode) {
         if (domNode == null) {
             return null;
         }
+        Node saajNode = (Node)((NodeImpl)domNode).getUserData(SAAJ_NODE);
+        if (saajNode == null) {  // if SAAJ node has not been set in userData, try to construct it
+            return toSAAJNode2(domNode, parentNode);
+        }
+        // update siblings for text nodes
         if (domNode instanceof org.w3c.dom.Text || domNode instanceof org.w3c.dom.Comment) {
             org.w3c.dom.Node prevSiblingDOMNode = domNode.getPreviousSibling();
             org.w3c.dom.Node nextSiblingDOMNode = domNode.getNextSibling();
-
-            TextImplEx saajTextNode = (TextImplEx)((NodeImpl)domNode).getUserData(SAAJ_NODE);
-            if (saajTextNode == null) {
-                // if SAAJ node has not been set in userData, try to construct it
-                return toSAAJNode2(domNode);
-            }
+            
+            TextImplEx saajTextNode = (TextImplEx)saajNode;
+            
             saajTextNode.setPreviousSibling(prevSiblingDOMNode);
             saajTextNode.setNextSibling(nextSiblingDOMNode);
-            return saajTextNode;
-        }
-        Node saajNode = (Node)((NodeImpl)domNode).getUserData(SAAJ_NODE);
-        if (saajNode == null) {  // if SAAJ node has not been set in userData, try to construct it
-            return toSAAJNode2(domNode);
         }
         return saajNode;
     }
 
-    private javax.xml.soap.Node toSAAJNode2(org.w3c.dom.Node domNode) {
+    private static javax.xml.soap.Node toSAAJNode2(org.w3c.dom.Node domNode, Node parentNode) {
         if (domNode == null) {
             return null;
         }
@@ -201,9 +209,7 @@ public abstract class NodeImplEx extends NodeImpl implements Node {
             org.w3c.dom.Node prevSiblingDOMNode = comment.getPreviousSibling();
             org.w3c.dom.Node nextSiblingDOMNode = comment.getNextSibling();
             SOAPElementImpl parent = new SOAPElementImpl((ElementImpl)domNode.getParentNode());
-            TextImplEx saajTextNode = new TextImplEx("<!--" +
-                    comment.getData() +
-                    "-->",
+            CommentImpl saajTextNode = new CommentImpl(comment.getData(),
                                                      parent, prevSiblingDOMNode,
                                                      nextSiblingDOMNode);
             ((NodeImpl)domNode).setUserData(SAAJ_NODE, saajTextNode, null);
@@ -256,6 +262,30 @@ public abstract class NodeImplEx extends NodeImpl implements Node {
                     = new org.apache.axis2.saaj.SOAPHeaderImpl(doomSOAPHeader);
             doomSOAPHeader.setUserData(SAAJ_NODE, saajSOAPHeader, null);
             return saajSOAPHeader;
+        } else if (domNode instanceof org.apache.axiom.om.impl.dom.DocumentImpl) {
+            
+            // Must be a SOAPEnvelope
+            if (!(parentNode instanceof org.apache.axis2.saaj.SOAPEnvelopeImpl)) {
+                return null;
+            }
+            org.apache.axiom.om.impl.dom.DocumentImpl doomDocument
+                = (org.apache.axiom.om.impl.dom.DocumentImpl)domNode;
+            org.apache.axis2.saaj.SOAPEnvelopeImpl saajEnv = 
+                (org.apache.axis2.saaj.SOAPEnvelopeImpl) parentNode;
+            javax.xml.soap.SOAPPart saajSOAPPart = null;
+            if (saajEnv.getSOAPPartParent() != null) {
+                // return existing SOAPPart
+                saajSOAPPart = saajEnv.getSOAPPartParent();
+                
+            } else {
+                // Create Message and SOAPPart
+                SOAPMessageImpl saajSOAPMessage = 
+                        new SOAPMessageImpl(saajEnv);
+                saajSOAPPart = saajSOAPMessage.getSOAPPart();
+            }
+            
+            domNode.setUserData(SAAJ_NODE, saajSOAPPart, null);
+            return saajSOAPPart;
         } else { // instanceof org.apache.axis2.om.impl.dom.ElementImpl
             ElementImpl doomElement = (ElementImpl)domNode;
             SOAPElementImpl saajSOAPElement = new SOAPElementImpl(doomElement);

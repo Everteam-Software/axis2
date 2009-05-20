@@ -16,35 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.schema.populate.other;
 
 import junit.framework.TestCase;
+import org.apache.axiom.om.util.StAXUtils;
+import org.apache.axis2.schema.populate.Util;
 
-import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Method;
 
-import org.apache.axiom.om.util.StAXUtils;
-
 public class PopulateAnyTypeTest extends TestCase {
 
-     private String xmlString = "<myObject xmlns=\"http://soapinterop.org/xsd2\">" +
-            "<soapStructures>" +
-            "<varFloat>3.3</varFloat>" +
-            "<varInt>5</varInt>" +
-            "<varString>Hello11</varString>" +
-            "<varString>Hello11</varString>" +
-            "<varString>Hello12</varString>" +
-            "<varString>Hello13</varString>" +
-            "</soapStructures>" +
+     private String xmlString = "<myObject xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns=\"http://soapinterop.org/xsd2\" xsi:type=\"xsd:int\">" +
+            "5" +
             "</myObject>";
 
     public void testPopulate() throws Exception{
 
                XMLStreamReader reader = StAXUtils.createXMLStreamReader(new ByteArrayInputStream(xmlString.getBytes()));
                Class clazz = Class.forName("org.soapinterop.xsd2.MyObject");
-               Class innerClazz = clazz.getDeclaredClasses()[0];
+               Class innerClazz = Util.getFactory(clazz);
                Method parseMethod = innerClazz.getMethod("parse",new Class[]{XMLStreamReader.class});
                Object obj = parseMethod.invoke(null,new Object[]{reader});
 

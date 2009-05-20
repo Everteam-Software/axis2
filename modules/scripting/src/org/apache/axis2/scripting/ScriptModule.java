@@ -16,14 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.scripting;
 
-import java.io.File;
-import java.io.OutputStreamWriter;
-import java.io.UnsupportedEncodingException;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLDecoder;
+package org.apache.axis2.scripting;
 
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.context.ConfigurationContext;
@@ -37,6 +31,12 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.neethi.Assertion;
 import org.apache.neethi.Policy;
+
+import java.io.File;
+import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.URL;
+import java.net.URLDecoder;
 
 /**
  * Axis2 module to initialize script services. Uses a ScriptDeploymentEngine to
@@ -65,7 +65,7 @@ public class ScriptModule implements Module {
             deploymentEngine.loadRepository(scriptServicesDirectory);
             deploymentEngine.loadServices();
         }
-        log.info("script module activated");
+        log.debug("script module activated");
     }
 
     /**

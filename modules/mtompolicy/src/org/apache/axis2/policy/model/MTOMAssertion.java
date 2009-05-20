@@ -20,69 +20,37 @@
 package org.apache.axis2.policy.model;
 
 import org.apache.neethi.Assertion;
-import org.apache.neethi.Constants;
-import org.apache.neethi.PolicyComponent;
 
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
+/**
+ * 
+ * This abstract class specifies the common features of a MTOM assertion. 
+ *
+ */
+public abstract class MTOMAssertion implements Assertion {
 
-/** Assertion to pick up the QName <wsoma:OptimizedMimeSerialization xmlns:wsoma="http://schemas.xmlsoap.org/ws/2004/09/policy/optimizedmimeserialization"/> */
-public class MTOMAssertion implements Assertion {
-
-    private boolean isOptional = false;
-
-    public final static String NS =
-            "http://schemas.xmlsoap.org/ws/2004/09/policy/optimizedmimeserialization";
-
-    public final static String MTOM_SERIALIZATION_CONFIG_LN = "OptimizedMimeSerialization";
-    public final static String PREFIX = "wsoma";
-
-    public QName getName() {
-        return new QName(NS, MTOM_SERIALIZATION_CONFIG_LN);
-    }
-
-    public short getType() {
-        return Constants.TYPE_ASSERTION;
-    }
-
-    public boolean equal(PolicyComponent policyComponent) {
-        throw new UnsupportedOperationException("TODO");
-    }
-
-
+	/** Specifies if the MTOM assertion is optional. The request can be MTOMised or non-MTOMised,</br>
+	 *  but the response will be MTOMised only if request is MTOMised. */
+    protected boolean optional = false;
+    
+    /**
+     * Checks if the MTOM assertion is optional. The request can be MTOMised or non-MTOMised,</br>
+	 * but the response will be MTOMised only if request is MTOMised.
+	 * 
+	 * @return <code>true</code> if the MTOM assertion is optional, otherwise returns <code>false</code>.
+     */
     public boolean isOptional() {
-
-        return isOptional;
+        return optional;
     }
-
+    
+    /**
+     * Sets the <code>optional</code> parameter.  
+     * 
+     * @param isOptional sets if the MTOM assertion is optional or not. If set to <code>true</code> </br>
+     * then if the request is MTOMised then the response should be MTOMised, too.
+     */
     public void setOptional(boolean isOptional) {
-        this.isOptional = isOptional;
+        this.optional = isOptional;
     }
-
-    public void serialize(XMLStreamWriter writer) throws XMLStreamException {
-        String prefix = writer.getPrefix(NS);
-
-        if (prefix == null) {
-            prefix = PREFIX;
-            writer.setPrefix(PREFIX, NS);
-        }
-
-        writer.writeStartElement(PREFIX, MTOM_SERIALIZATION_CONFIG_LN, NS);
-
-        if (isOptional)
-            writer.writeAttribute("Optional", "true");
-
-        writer.writeNamespace(PREFIX, NS);
-        writer.writeEndElement();
-
-    }
-
-
-    public PolicyComponent normalize() {
-        throw new UnsupportedOperationException("TODO");
-    }
-
 
 }
 	

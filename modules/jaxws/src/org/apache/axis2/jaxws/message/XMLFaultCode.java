@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.message;
 
 import org.apache.axiom.soap.SOAP12Constants;
@@ -27,15 +28,80 @@ import javax.xml.namespace.QName;
  *
  * @see XMLFault
  */
-public enum XMLFaultCode {
+public class XMLFaultCode {
+
+
+    //   SENDER             -> SOAP 1.2 Sender              / SOAP 1.1  Client
+    //   RECEIVER           -> SOAP 1.2 Receiver            / SOAP 1.1  Server
+    //   MUSTUNDERSTAND     -> SOAP 1.2 MustUnderstand      / SOAP 1.1  MustUnderstand
+    //   DATAENCODINGUNKNOWN-> SOAP 1.2 DataEncodingUnknown / SOAP 1.1  Server
+    //   VERSIONMISMATCH    -> SOAP 1.2 VersionMismatch     / SOAP 1.1  VersionMismatch
+    //   CUSTOM_SOAP11_ONLY -> SOAP 1.2 Receiver            / SOAP 1.1  "custom qname"
+
     // Rendered as qnames with the following local names
     //     (the namespace is the corresponding envelope namespace)
-    SENDER,                 // SOAP 1.2 Sender                SOAP 1.1  Client
-    RECEIVER,               // SOAP 1.2 Receiver              SOAP 1.1  Server
-    MUSTUNDERSTAND,         // SOAP 1.2 MustUnderstand        SOAP 1.1  MustUnderstand
-    DATAENCODINGUNKNOWN,    // SOAP 1.2 DataEncodingUnknown   SOAP 1.1  Server
-    VERSIONMISMATCH;       // SOAP 1.2 VersionMismatch       SOAP 1.1  VersionMismatch
+    
+    public static final XMLFaultCode SENDER = (new XMLFaultCode() {
+        public QName toQName(String namespace) {
+            String localPart;
+            if (namespace.equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
+                localPart = "Sender";
+            } else {
+                localPart = "Client";
+            }
+            return new QName(namespace, localPart);
+        }
+    });
+    
+    public static final XMLFaultCode RECEIVER = (new XMLFaultCode() {
+        public QName toQName(String namespace) {
+            String localPart;
+            if (namespace.equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
+                localPart = "Receiver";
+            } else {
+                localPart = "Server";
+            }
+            return new QName(namespace, localPart);
+        }
+    });
+    
+    public static final XMLFaultCode MUSTUNDERSTAND = (new XMLFaultCode() {
+        public QName toQName(String namespace) {
+            return new QName(namespace, "MustUnderstand");
+        }
+    });
+    
+    public static final XMLFaultCode DATAENCODINGUNKNOWN = (new XMLFaultCode() {
+        public QName toQName(String namespace) {
+            String localPart;
+            if (namespace.equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
+                localPart = "DataEncodingUnknown";
+            } else {
+                localPart = "Server";
+            }
+            return new QName(namespace, localPart);
+        }
+    });
+    
+    public static final XMLFaultCode VERSIONMISMATCH = (new XMLFaultCode() {
+        public QName toQName(String namespace) {
+            return new QName(namespace, "VersionMismatch");
+        }
+    });
+    
 
+    private QName faultCode;
+    
+    private XMLFaultCode() {        
+    }
+        
+    public XMLFaultCode(QName faultCode) {
+        if (faultCode == null) {
+            throw new NullPointerException("Null fault code");
+        }
+        this.faultCode = faultCode;
+    }
+    
     // Utility Methods
 
     /**
@@ -44,49 +110,8 @@ public enum XMLFaultCode {
      * @param namespace of the envelope for the protocol
      * @return
      */
-    public QName toQName(String namespace) {
-        String localPart = null;
-        if (namespace.equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
-            // SOAP 1.2
-            switch (this) {
-                case SENDER:
-                    localPart = "Sender";
-                    break;
-                case RECEIVER:
-                    localPart = "Receiver";
-                    break;
-                case MUSTUNDERSTAND:
-                    localPart = "MustUnderstand";
-                    break;
-                case DATAENCODINGUNKNOWN:
-                    localPart = "DataEncodingUnknown";
-                    break;
-                case VERSIONMISMATCH:
-                    localPart = "VersionMismatch";
-                    break;
-            }
-
-        } else {
-            // Assume SOAP 1.1
-            switch (this) {
-                case SENDER:
-                    localPart = "Client";
-                    break;
-                case RECEIVER:
-                    localPart = "Server";
-                    break;
-                case MUSTUNDERSTAND:
-                    localPart = "MustUnderstand";
-                    break;
-                case DATAENCODINGUNKNOWN:
-                    localPart = "Server";
-                    break;
-                case VERSIONMISMATCH:
-                    localPart = "VersionMismatch";
-                    break;
-            }
-        }
-        return new QName(namespace, localPart);
+    public QName toQName(String protocolNamespace) {
+        return this.faultCode;
     }
 
     /**
@@ -102,7 +127,7 @@ public enum XMLFaultCode {
         }
         String namespace = qName.getNamespaceURI();
         String localPart = qName.getLocalPart();
-        XMLFaultCode xmlFaultCode = RECEIVER;
+        XMLFaultCode xmlFaultCode = null;
         // Due to problems in the OM, sometimes that qname is not retrieved correctly.
         // So use the localName to find the XMLFaultCode
         if (localPart.equalsIgnoreCase("Sender")) {          // SOAP 1.2
@@ -119,35 +144,10 @@ public enum XMLFaultCode {
             xmlFaultCode = DATAENCODINGUNKNOWN;
         } else if (localPart.equalsIgnoreCase("VersionMismatch")) { // Both
             xmlFaultCode = VERSIONMISMATCH;
-        }
-        /*
-         * TODO: Due to problems in the OM, sometimes that qname is not retrieved correctly.
-        if (namespace.equals(SOAP12Constants.SOAP_ENVELOPE_NAMESPACE_URI)) {
-            // SOAP 1.2
-            if (localPart.equals("Sender")) {
-                xmlFaultCode = SENDER;
-            } else if (localPart.equals("Receiver")) {
-                xmlFaultCode = RECEIVER;
-            } else if (localPart.equals("MustUnderstand")) {
-                xmlFaultCode = MUSTUNDERSTAND;
-            } else if (localPart.equals("DataEncodingUnknown")) {
-                xmlFaultCode = DATAENCODINGUNKNOWN;
-            } else if (localPart.equals("VersionMismatch")) {
-                xmlFaultCode = VERSIONMISMATCH;
-            }
         } else {
-            // SOAP 1.1
-            if (localPart.equals("Client")) {
-                xmlFaultCode = SENDER;
-            } else if (localPart.equals("Server")) {
-                xmlFaultCode = RECEIVER;
-            } else if (localPart.equals("MustUnderstand")) {
-                xmlFaultCode = MUSTUNDERSTAND;
-            } else if (localPart.equals("VersionMismatch")) {
-                xmlFaultCode = VERSIONMISMATCH;
-            }
+            xmlFaultCode = new XMLFaultCode(qName);
         }
-        */
+        
         return xmlFaultCode;
     }
 }

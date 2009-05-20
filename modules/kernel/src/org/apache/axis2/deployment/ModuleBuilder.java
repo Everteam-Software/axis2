@@ -28,12 +28,13 @@ import org.apache.axis2.description.AxisModule;
 import org.apache.axis2.description.AxisOperation;
 import org.apache.axis2.description.AxisOperationFactory;
 import org.apache.axis2.description.InOnlyAxisOperation;
-import org.apache.axis2.description.PolicyInclude;
 import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.axis2.engine.Deployable;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.modules.Module;
+import org.apache.axis2.phaseresolver.PhaseMetadata;
 import org.apache.axis2.util.Loader;
 
 import javax.xml.namespace.QName;
@@ -83,12 +84,21 @@ public class ModuleBuilder extends DescriptionBuilder {
         }
     }
 
+    /**
+     * Fill in the AxisModule I'm holding from the module.xml configuration.
+     *
+     * @throws DeploymentException if there's a problem with the module.xml
+     */
     public void populateModule() throws DeploymentException {
         try {
             OMElement moduleElement = buildOM();
             // Setting Module Class , if it is there
             OMAttribute moduleClassAtt = moduleElement.getAttribute(new QName(TAG_CLASS_NAME));
+            // processing Parameters
+            // Processing service level parameters
+            Iterator itr = moduleElement.getChildrenWithName(new QName(TAG_PARAMETER));
 
+            processParameters(itr, module, module.getParent());
             if (moduleClassAtt != null) {
                 String moduleClass = moduleClassAtt.getAttributeValue();
 
@@ -130,6 +140,10 @@ public class ModuleBuilder extends DescriptionBuilder {
                 module.setModuleDescription("module description not found");
             }
 
+            // Processing Dynamic Phase
+            Iterator phaseItr = moduleElement.getChildrenWithName(new QName(TAG_PHASE));
+            processModulePhase(phaseItr);
+            
             // setting the PolicyInclude
 
             // processing <wsp:Policy> .. </..> elements
@@ -137,8 +151,7 @@ public class ModuleBuilder extends DescriptionBuilder {
                     moduleElement.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY));
 
             if (policyElements != null && policyElements.hasNext()) {
-                processPolicyElements(PolicyInclude.AXIS_MODULE_POLICY, policyElements,
-                                      module.getPolicyInclude());
+                processPolicyElements(policyElements, module.getPolicySubject());
             }
 
             // processing <wsp:PolicyReference> .. </..> elements
@@ -146,46 +159,34 @@ public class ModuleBuilder extends DescriptionBuilder {
                     moduleElement.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY_REF));
 
             if (policyRefElements != null && policyElements.hasNext()) {
-                processPolicyRefElements(PolicyInclude.AXIS_MODULE_POLICY, policyRefElements,
-                                         module.getPolicyInclude());
+                processPolicyRefElements(policyRefElements, module.getPolicySubject());
             }
-
-            // processing Parameters
-            // Processing service level parameters
-            Iterator itr = moduleElement.getChildrenWithName(new QName(TAG_PARAMETER));
-
-            processParameters(itr, module, module.getParent());
 
             // process INFLOW
             OMElement inFlow = moduleElement.getFirstChildWithName(new QName(TAG_FLOW_IN));
-
             if (inFlow != null) {
                 module.setInFlow(processFlow(inFlow, module));
             }
 
             OMElement outFlow = moduleElement.getFirstChildWithName(new QName(TAG_FLOW_OUT));
-
             if (outFlow != null) {
                 module.setOutFlow(processFlow(outFlow, module));
             }
 
             OMElement inFaultFlow =
                     moduleElement.getFirstChildWithName(new QName(TAG_FLOW_IN_FAULT));
-
             if (inFaultFlow != null) {
                 module.setFaultInFlow(processFlow(inFaultFlow, module));
             }
 
             OMElement outFaultFlow =
                     moduleElement.getFirstChildWithName(new QName(TAG_FLOW_OUT_FAULT));
-
             if (outFaultFlow != null) {
                 module.setFaultOutFlow(processFlow(outFaultFlow, module));
             }
 
             OMElement supportedPolicyNamespaces =
                     moduleElement.getFirstChildWithName(new QName(TAG_SUPPORTED_POLICY_NAMESPACES));
-
             if (supportedPolicyNamespaces != null) {
                 module.setSupportedPolicyNamespaces(
                         processSupportedPolicyNamespaces(supportedPolicyNamespaces));
@@ -197,7 +198,6 @@ public class ModuleBuilder extends DescriptionBuilder {
             */
             OMElement localPolicyAssertionElement =
                     moduleElement.getFirstChildWithName(new QName("local-policy-assertions"));
-
             if (localPolicyAssertionElement != null) {
                 module.setLocalPolicyAssertions(
                         getLocalPolicyAssertionNames(localPolicyAssertionElement));
@@ -205,45 +205,40 @@ public class ModuleBuilder extends DescriptionBuilder {
 
             // processing Operations
             Iterator op_itr = moduleElement.getChildrenWithName(new QName(TAG_OPERATION));
-            ArrayList operations = processOperations(op_itr);
+            ArrayList<AxisOperation> operations = processOperations(op_itr);
 
-            for (int i = 0; i < operations.size(); i++) {
-                AxisOperation operation = (AxisOperation) operations.get(i);
-
-                module.addOperation(operation);
+            for (AxisOperation op : operations) {
+                module.addOperation(op);
             }
+
         } catch (XMLStreamException e) {
+            throw new DeploymentException(e);
+        } catch(AxisFault e) {
             throw new DeploymentException(e);
         }
     }
 
-    private ArrayList processOperations(Iterator operationsIterator) throws DeploymentException {
+    private ArrayList<AxisOperation> processOperations(Iterator operationsIterator)
+            throws DeploymentException {
         ArrayList operations = new ArrayList();
 
         while (operationsIterator.hasNext()) {
             OMElement operation = (OMElement) operationsIterator.next();
+            AxisOperation op_descrip;
 
             //getting operation name
-            OMAttribute op_name_att = operation.getAttribute(new QName(ATTRIBUTE_NAME));
+            String opname = operation.getAttributeValue(new QName(ATTRIBUTE_NAME));
 
-            if (op_name_att == null) {
+            if (opname == null) {
                 throw new DeploymentException(
                         Messages.getMessage(
                                 Messages.getMessage(
                                         DeploymentErrorMsgs.INVALID_OP, "operation name missing")));
             }
 
-            OMAttribute op_mep_att = operation.getAttribute(new QName(TAG_MEP));
-            String mepURL = null;
-            AxisOperation op_descrip;
-
-            if (op_mep_att != null) {
-                mepURL = op_mep_att.getAttributeValue();
-            }
+            String mepURL = operation.getAttributeValue(new QName(TAG_MEP));
 
             if (mepURL == null) {
-
-                // assuming in-out MEP
                 op_descrip = new InOnlyAxisOperation();
             } else {
                 try {
@@ -256,8 +251,6 @@ public class ModuleBuilder extends DescriptionBuilder {
                                             axisFault.getMessage())));
                 }
             }
-
-            String opname = op_name_att.getAttributeValue();
 
             op_descrip.setName(new QName(opname));
 
@@ -282,22 +275,25 @@ public class ModuleBuilder extends DescriptionBuilder {
                 MessageReceiver msgReceiver = loadDefaultMessageReceiver(mepURL, null);
                 op_descrip.setMessageReceiver(msgReceiver);
             }
+
             // Process Module Refs
             Iterator modules = operation.getChildrenWithName(new QName(TAG_MODULE));
             processOperationModuleRefs(modules, op_descrip);
             
 //          processing <wsp:Policy> .. </..> elements
-            Iterator policyElements = operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY));
+            Iterator policyElements =
+                    operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY));
 
             if (policyElements != null && policyElements.hasNext()) {
-                processPolicyElements(PolicyInclude.AXIS_MODULE_OPERATION_POLICY, policyElements, op_descrip.getPolicyInclude());
+                processPolicyElements(policyElements, op_descrip.getPolicySubject());
             }
 
             // processing <wsp:PolicyReference> .. </..> elements
-            Iterator policyRefElements = operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY_REF));
+            Iterator policyRefElements =
+                    operation.getChildrenWithName(new QName(POLICY_NS_URI, TAG_POLICY_REF));
 
-            if (policyRefElements != null && policyElements.hasNext()) {
-                processPolicyRefElements(PolicyInclude.AXIS_MODULE_OPERATION_POLICY, policyRefElements, module.getPolicyInclude());
+            if (policyRefElements != null && policyRefElements.hasNext()) {
+                processPolicyRefElements(policyRefElements, module.getPolicySubject());
             }
 
             // setting Operation phase
@@ -314,5 +310,65 @@ public class ModuleBuilder extends DescriptionBuilder {
         }
 
         return operations;
+    }
+
+    /**
+     * This will process the phase list and then add the specified phases to
+     * our AxisConfiguration.  The format of a phase element looks like this:
+     *
+     *  &lt;phase name="Foo" after="After_phase_Name" before="Before_Phase_Name"
+     *  flow="[InFlow,OutFlow,OutFaultFlow,InFaultFlow]"/&gt;
+     *
+     *  Here bef
+     *
+     * @param phases : OMElement iterator
+     * @throws AxisFault : If something went wrong
+     */
+    private void processModulePhase(Iterator phases) throws AxisFault {
+        if (phases == null){
+            return;
+        }
+
+        while (phases.hasNext()) {
+            OMElement element = (OMElement) phases.next();
+            String phaseName = element.getAttributeValue(new QName(ATTRIBUTE_NAME));
+
+            Deployable d = new Deployable(phaseName);
+            String after = element.getAttributeValue(new QName(TAG_AFTER));
+            if (after != null) {
+                String [] afters = after.split(",");
+                for (String s : afters) {
+                    d.addPredecessor(s);
+                }
+            }
+            String before = element.getAttributeValue(new QName(TAG_BEFORE));
+            if (before != null) {
+                String [] befores = before.split(",");
+                for (String s : befores) {
+                    d.addSuccessor(s);
+                }
+            }
+            String flowName = element.getAttributeValue(new QName("flow"));
+            if (flowName == null) {
+                throw new DeploymentException("Flow can not be null for the phase name " +
+                                              phaseName);
+            }
+            String[] flows = flowName.split(",");
+            for (String flow : flows) {
+                int flowIndex;
+                if (TAG_FLOW_IN.equalsIgnoreCase(flow)) {
+                    flowIndex = PhaseMetadata.IN_FLOW;
+                } else if (TAG_FLOW_OUT.equalsIgnoreCase(flow)) {
+                    flowIndex = PhaseMetadata.OUT_FLOW;
+                } else if (TAG_FLOW_OUT_FAULT.equalsIgnoreCase(flow)) {
+                    flowIndex = PhaseMetadata.FAULT_OUT_FLOW;
+                } else if (TAG_FLOW_IN_FAULT.equalsIgnoreCase(flow)) {
+                    flowIndex = PhaseMetadata.FAULT_IN_FLOW;
+                } else {
+                    throw new DeploymentException("Unknown flow name '" + flow + "'");
+                }
+                axisConfig.insertPhase(d, flowIndex);
+            }
+        }
     }
 }

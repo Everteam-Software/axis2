@@ -16,20 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
-
-import java.lang.reflect.Proxy;
-import java.net.URL;
-
-import javax.xml.namespace.QName;
-import javax.xml.ws.Dispatch;
-import javax.xml.ws.Service;
 
 import junit.framework.TestCase;
 import org.apache.axis2.description.AxisService;
 import org.apache.axis2.jaxws.spi.BindingProvider;
 import org.apache.axis2.jaxws.spi.ServiceDelegate;
-import org.apache.ws.axis2.tests.EchoPort;
+import org.apache.axis2.jaxws.unitTest.echo.EchoPort;
+
+import javax.xml.namespace.QName;
+import javax.xml.ws.Dispatch;
+import javax.xml.ws.Service;
+import java.lang.reflect.Proxy;
+import java.net.URL;
 
 /**
  * Test that the EndpointDescription can be gotten from
@@ -39,7 +39,7 @@ import org.apache.ws.axis2.tests.EchoPort;
  */
 public class GetDescFromBindingProviderTests extends TestCase {
     
-    private static final String wsdlSOAPAddress = "http://localhost:8080/axis2/services/EchoService";
+    private static final String wsdlSOAPAddress = "http://localhost:6060/axis2/services/EchoService";
     
     public void testForProxy() {
         String namespaceURI = "http://ws.apache.org/axis2/tests";
@@ -122,7 +122,7 @@ public class GetDescFromBindingProviderTests extends TestCase {
         assertNull(endpointAddress);
         
         QName validPortQName2 = new QName(namespaceURI, "EchoPortAdded2");
-        final String port2EndpointAddress = "http://testAddress:8080/my/test/address"; 
+        final String port2EndpointAddress = "http://testAddress:6060/my/test/address"; 
         service.addPort(validPortQName2, null, port2EndpointAddress);
         dispatch = service.createDispatch(validPortQName2, String.class, null);
         assertNotNull(dispatch);

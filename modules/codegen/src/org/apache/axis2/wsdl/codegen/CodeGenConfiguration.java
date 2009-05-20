@@ -216,6 +216,7 @@ public class CodeGenConfiguration implements CommandLineOptionConstants {
     private boolean skipMessageReceiver = false;
     private boolean skipWriteWSDLs = false;
     private boolean skipBuildXML = false;
+    private boolean setoutputSourceLocation = false;
     private String packageName = URLProcessor.DEFAULT_PACKAGE;
 
     // Default packClasses is true, which means the classes generated
@@ -241,7 +242,9 @@ public class CodeGenConfiguration implements CommandLineOptionConstants {
     public void setServerSideInterface(boolean serverSideInterface) {
         this.serverSideInterface = serverSideInterface;
     }
-
+    public boolean isSetoutputSourceLocation(){
+      return  setoutputSourceLocation;
+    }
 
     public String getPortName() {
         return portName;
@@ -541,6 +544,7 @@ public class CodeGenConfiguration implements CommandLineOptionConstants {
 
     private boolean isAllPorts;
     private boolean isOverride;
+    
 
     public boolean isAllPorts() {
         return isAllPorts;
@@ -571,5 +575,69 @@ public class CodeGenConfiguration implements CommandLineOptionConstants {
 
     public void addXmlFileName(String fileName){
        this.outputXmlFileNamesList.add(fileName);
+    }
+    public void setoutputSourceLocation(boolean setoutputsourcelocation)
+    {
+        setoutputSourceLocation = true;
+        
+    }
+
+    private String excludeProperties;
+
+    public String getExcludeProperties() {
+        return excludeProperties;
+    }
+
+    public void setExcludeProperties(String excludeProperties) {
+        this.excludeProperties = excludeProperties;
+    }
+
+    private String skeltonInterfaceName;
+    private String skeltonClassName;
+
+    public String getSkeltonInterfaceName() {
+        return skeltonInterfaceName;
+    }
+
+    public void setSkeltonInterfaceName(String skeltonInterfaceName) {
+        this.skeltonInterfaceName = skeltonInterfaceName;
+    }
+
+    public String getSkeltonClassName() {
+        return skeltonClassName;
+    }
+
+    public void setSkeltonClassName(String skeltonClassName) {
+        this.skeltonClassName = skeltonClassName;
+    }
+
+    private boolean overrideAbsoluteAddress;
+
+    public boolean isOverrideAbsoluteAddress() {
+        return overrideAbsoluteAddress;
+    }
+
+    public void setOverrideAbsoluteAddress(boolean overrideAbsoluteAddress) {
+        this.overrideAbsoluteAddress = overrideAbsoluteAddress;
+    }
+
+    private String exceptionBaseClassName;
+
+    public String getExceptionBaseClassName() {
+        return exceptionBaseClassName;
+    }
+
+    public void setExceptionBaseClassName(String exceptionBaseClassName) {
+        this.exceptionBaseClassName = exceptionBaseClassName;
+    }
+
+    private boolean isUseOperationName;
+
+    public boolean isUseOperationName() {
+        return isUseOperationName;
+    }
+
+    public void setUseOperationName(boolean useOperationName) {
+        isUseOperationName = useOperationName;
     }
 }

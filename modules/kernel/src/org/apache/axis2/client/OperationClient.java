@@ -23,8 +23,8 @@ import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.UUIDGenerator;
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.addressing.EndpointReference;
-import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.client.async.AxisCallback;
+import org.apache.axis2.client.async.Callback;
 import org.apache.axis2.context.ConfigurationContext;
 import org.apache.axis2.context.MessageContext;
 import org.apache.axis2.context.OperationContext;
@@ -38,6 +38,8 @@ import org.apache.axis2.wsdl.WSDLConstants;
 
 import java.util.Iterator;
 import java.util.Map;
+
+import javax.xml.namespace.QName;
 
 /**
  * An operation client is the way an advanced user interacts with Axis2. Actual
@@ -254,9 +256,9 @@ public abstract class OperationClient {
                 options.getParent().isManageSession())) {
             EndpointReference tepr = sc.getTargetEPR();
             if (tepr != null) {
-                Map map = tepr.getAllReferenceParameters();
+                Map<QName, OMElement> map = tepr.getAllReferenceParameters();
                 if (map != null) {
-                    Iterator valuse = map.values().iterator();
+                    Iterator<OMElement> valuse = map.values().iterator();
                     while (valuse.hasNext()) {
                         Object refparaelement = valuse.next();
                         if (refparaelement instanceof OMElement) {

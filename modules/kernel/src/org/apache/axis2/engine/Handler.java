@@ -110,24 +110,20 @@ public interface Handler {
      * runtime.  The returned instruction will determine the next step in
      * the processing.
      */
-    public class InvocationResponse {
-        public static InvocationResponse CONTINUE =
+    public final class InvocationResponse {
+        public static final InvocationResponse CONTINUE =
                 new InvocationResponse(0, "InvocationResponse.CONTINUE");
-        public static InvocationResponse SUSPEND =
+        public static final InvocationResponse SUSPEND =
                 new InvocationResponse(1, "InvocationResponse.SUSPEND");
-        public static InvocationResponse ABORT =
+        public static final InvocationResponse ABORT =
                 new InvocationResponse(2, "InvocationResponse.ABORT");
 
-        private int instructionID;
-        private String description;
+        private final int instructionID;
+        private final String description;
 
         private InvocationResponse(int instructionID, String description) {
             this.instructionID = instructionID;
             this.description = description;
-        }
-
-        public boolean equals(InvocationResponse instruction) {
-            return this.instructionID == instruction.instructionID;
         }
 
         public int hashCode() {
@@ -135,6 +131,9 @@ public interface Handler {
         }
 
         public boolean equals(Object obj) {
+        	if(this==obj) {
+        		return true;
+        	}
             if (!(obj instanceof InvocationResponse)) {
                 return false;
             }

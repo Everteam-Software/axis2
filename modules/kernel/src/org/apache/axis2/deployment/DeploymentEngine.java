@@ -22,18 +22,27 @@ package org.apache.axis2.deployment;
 
 import org.apache.axiom.om.OMElement;
 import org.apache.axis2.AxisFault;
+import org.apache.axis2.classloader.JarFileClassLoader;
 import org.apache.axis2.Constants;
 import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.context.ServiceContext;
 import org.apache.axis2.deployment.repository.util.ArchiveReader;
 import org.apache.axis2.deployment.repository.util.DeploymentFileData;
 import org.apache.axis2.deployment.repository.util.WSInfo;
+import org.apache.axis2.deployment.resolver.AARBasedWSDLLocator;
+import org.apache.axis2.deployment.resolver.AARFileBasedURIResolver;
 import org.apache.axis2.deployment.scheduler.DeploymentIterator;
 import org.apache.axis2.deployment.scheduler.Scheduler;
 import org.apache.axis2.deployment.scheduler.SchedulerTask;
 import org.apache.axis2.deployment.util.Utils;
-import org.apache.axis2.deployment.resolver.AARBasedWSDLLocator;
-import org.apache.axis2.deployment.resolver.AARFileBasedURIResolver;
-import org.apache.axis2.description.*;
+import org.apache.axis2.description.AxisModule;
+import org.apache.axis2.description.AxisOperation;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.description.Flow;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.description.WSDL11ToAxisServiceBuilder;
+import org.apache.axis2.description.WSDL2Constants;
 import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.engine.MessageReceiver;
 import org.apache.axis2.i18n.Messages;
@@ -43,15 +52,20 @@ import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 
 public abstract class DeploymentEngine implements DeploymentConstants {
     private static final Log log = LogFactory.getLog(DeploymentEngine.class);
@@ -107,12 +121,11 @@ public abstract class DeploymentEngine implements DeploymentConstants {
     //To deploy modules (both mar and expanded)
     protected ModuleDeployer moduleDeployer;
 
-    //To keep the mapping that which directory will contain which type ,
-    // for exmaple directory services will contains .aar
-    private HashMap directoryToExtensionMappingMap = new HashMap();
     //to keep map of which deployer can process which file extension ,
     // for example ServiceDeployer will process .aar file
     private HashMap extensionToDeployerMappingMap = new HashMap();
+    
+    private Map<String, Map<String, Deployer>> deployerMap = new HashMap<String, Map<String, Deployer>>();
 
     public void loadServices() {
         repoListener.checkServices();
@@ -161,6 +174,70 @@ public abstract class DeploymentEngine implements DeploymentConstants {
         }
     }
 
+    private void loadCustomServices(URL repoURL){
+        for (Map.Entry<String, Map<String, Deployer>> entry : getDeployers().entrySet()) {
+            String directory = entry.getKey();
+            Map<String, Deployer> extensionMap = entry.getValue();
+            try {
+                String listName;
+                if (!directory.endsWith("/")) {
+                    listName = directory + ".list";
+                    directory += "/";
+                } else {
+                    listName = directory.replaceAll("/","") + ".list";
+                }
+                String repoPath = repoURL.getPath();
+                if (!repoPath.endsWith("/")) {
+                    repoPath += "/";
+                    repoURL = new URL(repoURL.getProtocol() + "://" + repoPath);
+                }
+
+                URL servicesDir = new URL(repoURL, directory);
+                URL filelisturl = new URL(servicesDir, listName);
+                ArrayList files = getFileList(filelisturl);
+                for (int i = 0; i < files.size(); i++) {
+                    String fileName = (String) files.get(i);
+                    String extension = getExtension(fileName);
+                    Deployer deployer = extensionMap.get(extension);
+                    if (deployer == null) {
+                        continue;
+                    }
+                    URL servicesURL = new URL(servicesDir, fileName);
+
+                    // We are calling reflection code here , to avoid changes to the interface
+                    Class classToLoad = deployer.getClass();
+                    // We can not call classToLoad.getDeclaredMethed() , since there
+                    //  can be insatnce where mutiple services extends using one class
+                    // just for init and other reflection methods
+                    Method method = null;
+                    try {
+                        method = classToLoad.getMethod("deployFromURL", new Class[]{URL.class});
+                    } catch (Exception e) {
+                        //We do not need to inform this to user , since this something
+                        // Axis2 is checking to support Session. So if the method is
+                        // not there we should ignore that
+                    }
+                    if (method != null) {
+                        try {
+                            method.invoke(deployer, new Object[]{servicesURL});
+                        } catch (Exception e) {
+                            log.info("Exception trying to call " + "deployFromURL for the deployer" + deployer.getClass() , e);
+                        }
+                    }
+                }
+
+            } catch (MalformedURLException e) {
+                //I am just ignoring the error at the moment , but need to think how to handle this
+            }
+
+        }
+    }
+
+    private String getExtension(String fileName){
+        int lastIndex = fileName.lastIndexOf(".");
+        return fileName.substring(lastIndex +1);
+    }
+
     public void loadServicesFromUrl(URL repoURL) {
         try {
             String path = servicesPath == null ? DeploymentConstants.SERVICE_PATH : servicesPath;
@@ -188,9 +265,12 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                             fileUrl.substring(0, fileUrl.indexOf(".aar")));
                     addServiceGroup(serviceGroup, servicelist, servicesURL, null, axisConfig);
                     log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_WS,
-                                                 org.apache.axis2.util.Utils.getModuleName(serviceGroup.getServiceGroupName())));
+                                                 org.apache.axis2.util.Utils.getModuleName(serviceGroup.getServiceGroupName()),
+                                                 servicesURL.toString()));
                 }
             }
+            //Loading other type of services such as custom deployers
+            loadCustomServices(repoURL);
         } catch (MalformedURLException e) {
             log.error(e.getMessage(), e);
         } catch (IOException e) {
@@ -236,7 +316,8 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                     addNewModule(module, axisConfig);
                     log.info(Messages.getMessage(DeploymentErrorMsgs.DEPLOYING_MODULE,
                                                  org.apache.axis2.util.Utils.getModuleName(module.getName(),
-                                                                                           module.getVersion())));
+                                                                                           module.getVersion()),
+                                                 moduleurl.toString()));
                 }
             }
             org.apache.axis2.util.Utils.
@@ -336,10 +417,12 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                 String wsdlLocation =  "META-INF/service.wsdl";
                 InputStream wsdlStream =
                         serviceClassLoader.getResourceAsStream(wsdlLocation);
+                URL wsdlURL = serviceClassLoader.getResource(metainf + "/service.wsdl");
                 if (wsdlStream == null) {
                     wsdlLocation =  "META-INF/" + serviceName + ".wsdl";
                     wsdlStream = serviceClassLoader
                             .getResourceAsStream(wsdlLocation);
+                    wsdlURL = serviceClassLoader.getResource(wsdlLocation);
                 }
                 if (wsdlStream != null) {
                     WSDL11ToAxisServiceBuilder wsdl2AxisServiceBuilder =
@@ -350,6 +433,9 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                     new AARBasedWSDLLocator(wsdlLocation, file, wsdlStream));
                         wsdl2AxisServiceBuilder.setCustomResolver(
                                 new AARFileBasedURIResolver(file));
+                    }
+                    if (wsdlURL != null) {
+                        wsdl2AxisServiceBuilder.setDocumentBaseUri(wsdlURL.toString());
                     }
                     axisService = wsdl2AxisServiceBuilder.populateService();
                     axisService.setWsdlFound(true);
@@ -379,10 +465,13 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                     String wsdlLocation =  "META-INF/service.wsdl";
                     InputStream wsdlStream =
                             serviceClassLoader.getResourceAsStream(wsdlLocation);
+                    URL wsdlURL = serviceClassLoader.getResource(wsdlLocation);
                     if (wsdlStream == null) {
                         wsdlLocation =  "META-INF/" + serviceName + ".wsdl";
                         wsdlStream = serviceClassLoader
                                 .getResourceAsStream(wsdlLocation);
+                        wsdlURL =
+                                serviceClassLoader.getResource(wsdlLocation);
                     }
                     if (wsdlStream != null) {
                         WSDL11ToAxisServiceBuilder wsdl2AxisServiceBuilder =
@@ -393,6 +482,9 @@ public abstract class DeploymentEngine implements DeploymentConstants {
                                         new AARBasedWSDLLocator(wsdlLocation, file, wsdlStream));
                             wsdl2AxisServiceBuilder.setCustomResolver(
                                     new AARFileBasedURIResolver(file));
+                        }
+                        if (wsdlURL != null) {
+                            wsdl2AxisServiceBuilder.setDocumentBaseUri(wsdlURL.toString());
                         }
                         axisService = wsdl2AxisServiceBuilder.populateService();
                         axisService.setWsdlFound(true);
@@ -743,7 +835,7 @@ public abstract class DeploymentEngine implements DeploymentConstants {
         }
     }
 
-    public String getWebLocationString() {
+    public static String getWebLocationString() {
         return webLocationString;
     }
 
@@ -895,14 +987,14 @@ public abstract class DeploymentEngine implements DeploymentConstants {
 
     private void initializeDeployers(ConfigurationContext configContext) {
         serviceDeployer = new ServiceDeployer();
-        serviceDeployer.init(configContext);
-        Iterator deployers = extensionToDeployerMappingMap.values().iterator();
-        while (deployers.hasNext()) {
-            Deployer deployer = (Deployer) deployers.next();
-            deployer.init(configContext);
+        serviceDeployer.init(configContext);        
+        for (Map<String, Deployer> extensionMap : deployerMap.values()) {
+            for (Deployer deployer : extensionMap.values()) {
+                deployer.init(configContext);
+            }
         }
     }
-
+    
     /**
      * Builds an AxisModule for a given module archive file. This does not
      * called the init method since there is no reference to configuration context
@@ -1035,9 +1127,7 @@ public abstract class DeploymentEngine implements DeploymentConstants {
             throws AxisFault {
         try {
             DeploymentFileData currentDeploymentFile = new DeploymentFileData(serviceFile, null);
-            DeploymentClassLoader classLoader = new DeploymentClassLoader(new URL[]{serviceFile.toURL()},
-                                                                          new ArrayList(),
-                                                                          Thread.currentThread().getContextClassLoader());
+            DeploymentClassLoader classLoader = Utils.createClassLoader(serviceFile);
             currentDeploymentFile.setClassLoader(classLoader);
             AxisServiceGroup serviceGroup = new AxisServiceGroup();
             serviceGroup.setServiceGroupClassLoader(classLoader);
@@ -1062,7 +1152,6 @@ public abstract class DeploymentEngine implements DeploymentConstants {
         }
     }
 
-
     public File getServicesDir() {
         return servicesDir;
     }
@@ -1079,16 +1168,15 @@ public abstract class DeploymentEngine implements DeploymentConstants {
     public void setExtensionToDeployerMappingMap(HashMap extensionToDeployerMappingMap) {
         this.extensionToDeployerMappingMap = extensionToDeployerMappingMap;
     }
-
-    public void setDirectoryToExtensionMappingMap(HashMap directoryToExtensionMappingMap) {
-        this.directoryToExtensionMappingMap = directoryToExtensionMappingMap;
+    
+    public void setDeployers(Map<String, Map<String, Deployer>> deployerMap) {
+        this.deployerMap = deployerMap;
+    }    
+    
+    public Map<String, Map<String, Deployer>> getDeployers() {
+        return this.deployerMap;
     }
-
-
-    public HashMap getDirectoryToExtensionMappingMap() {
-        return directoryToExtensionMappingMap;
-    }
-
+    
     public RepositoryListener getRepoListener() {
         return repoListener;
     }
@@ -1101,7 +1189,12 @@ public abstract class DeploymentEngine implements DeploymentConstants {
     public ModuleDeployer getModuleDeployer() {
         return moduleDeployer;
     }
-
+    
+    public Deployer getDeployer(String directory, String extension) {
+        Map<String, Deployer> extensionMap = deployerMap.get(directory);
+        return (extensionMap != null) ? extensionMap.get(extension) : null;
+    }
+    
     public Deployer getDeployerForExtension(String extension) {
         return (Deployer) extensionToDeployerMappingMap.get(extension);
     }
@@ -1110,6 +1203,15 @@ public abstract class DeploymentEngine implements DeploymentConstants {
      * Clean up the mess
      */
     public void cleanup() {
+        if (axisConfig.getModuleClassLoader() instanceof JarFileClassLoader) {
+            ((JarFileClassLoader)axisConfig.getModuleClassLoader()).destroy();
+        }
+        if (axisConfig.getServiceClassLoader() instanceof JarFileClassLoader) {
+            ((JarFileClassLoader)axisConfig.getServiceClassLoader()).destroy();
+        }
+        if (axisConfig.getSystemClassLoader() instanceof JarFileClassLoader) {
+            ((JarFileClassLoader)axisConfig.getSystemClassLoader()).destroy();
+        }
         if (scheduler != null) {
             scheduler.cleanup();
         }

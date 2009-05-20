@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.xmlbeans;
 
 public class TestConstants {
@@ -30,7 +31,6 @@ public class TestConstants {
 
     public interface Databinding {
         public static final String XML_BEANS = "xmlbeans";
-        public static final String JAXME = "jaxme";
         public static final String ADB = "adb";
         public static final String NONE = "none";
     }

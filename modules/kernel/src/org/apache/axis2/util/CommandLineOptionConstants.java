@@ -51,6 +51,10 @@ public interface CommandLineOptionConstants {
         String OUTPUT_LOCATION_OPTION_LONG = "output";
         String OVERRIDE_OPTION = "or";
         String OVERRIDE_OPTION_LONG = "over-ride";
+        String EXCEPTION_BASE_CLASS_OPTION = "ebc";
+        String EXCEPTION_BASE_CLASS_OPTION_LONG = "exception-base-class";
+        String OVERRIDE_ABSOLUTE_ADDRESS_OPTION = "oaa";
+        String OVERRIDE_ABSOLUTE_ADDRESS_OPTION_LONG = "override-absolute-address";
         String PACKAGE_OPTION = "p";
         String PACKAGE_OPTION_LONG = "package";
         String PORT_NAME_OPTION = "pn";
@@ -78,6 +82,16 @@ public interface CommandLineOptionConstants {
         String WSDL_LOCATION_URI_OPTION = "uri";
         String WSDL_VERSION_OPTION = "wv";
         String WSDL_VERSION_OPTION_LONG = "wsdl-version";
+        String HTTP_PROXY_HOST_OPTION_LONG = "http-proxy-host";
+        String HTTP_PROXY_PORT_OPTION_LONG = "http-proxy-port";
+        String EXCLUDE_PAKAGES_OPTION = "ep";
+        String EXCLUDE_PAKAGES_OPTION_LONG = "exclude-packages";
+        String SKELTON_INTERFACE_NAME_OPTION = "sin";
+        String SKELTON_INTERFACE_NAME_OPTION_LONG = "skelton-interface-name";
+        String USE_OPERATION_NAME = "uon";
+        String USE_OPERATION_NAME_LONG = "use-operation-name";
+        String SKELTON_CLASS_NAME_OPTION = "scn";
+        String SKELTON_CLASS_NAME_OPTION_LONG = "skelton-class-name";
 
         String INVALID_OPTION = "INVALID_OPTION";
         String EXTRA_OPTIONTYPE_PREFIX = "E";
@@ -85,6 +99,10 @@ public interface CommandLineOptionConstants {
         String WSDL_VERSION_2 = "2.0";
         String WSDL_VERSION_2_OPTIONAL = "2";
         String WSDL_VERSION_1 = "1.1";
+    }
+
+    interface ExtensionArguments {
+        String WITHOUT_DATABIND_CODE = "wdc";
     }
 
     public static final String SOLE_INPUT = "SOLE_INPUT";

@@ -19,8 +19,6 @@
 
 package org.apache.axis2.fastinfoset;
 
-import java.rmi.RemoteException;
-
 import org.apache.axis2.AxisFault;
 import org.apache.axis2.Constants;
 import org.apache.axis2.addressing.EndpointReference;
@@ -36,10 +34,8 @@ import org.apache.axis2.fastinfoset.SimpleAddServiceStub.AddIntsResponse;
 import org.apache.axis2.fastinfoset.SimpleAddServiceStub.AddStrings;
 import org.apache.axis2.fastinfoset.SimpleAddServiceStub.AddStringsResponse;
 
-/**
- * @author Sanjaya Karunasena (sanjayak@yahoo.com)
- * @date Feb 16, 2007
- */
+import java.rmi.RemoteException;
+
 public class SimpleAddServiceClient {
 	
 	private SimpleAddServiceStub serviceStub;

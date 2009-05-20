@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.context;
 
 import java.io.Serializable;
@@ -29,11 +30,6 @@ public class PropertyDifference implements Serializable {
     private String key;
     private Object value;
     private boolean isRemoved;
-
-    public PropertyDifference(String key, boolean isRemoved) {
-        this.key = key;
-        this.isRemoved = isRemoved;
-    }
 
     public PropertyDifference(String key, Object value, boolean isRemoved) {
         this.key = key;

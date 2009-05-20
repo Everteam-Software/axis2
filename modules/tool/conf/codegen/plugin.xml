@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.0"?>
+
 <!--
   ~ Licensed to the Apache Software Foundation (ASF) under one
   ~ or more contributor license agreements. See the NOTICE file
@@ -18,6 +19,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <plugin
    id="Axis2_Codegen_Wizard"
    name="Axis2 Codegen Wizard Plug-in"
@@ -32,19 +34,16 @@
       <library name="lib/geronimo-activation_1.1_spec-@geronimo.spec.activation.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/annogen-@annogen.version@.jar">
+      <library name="lib/geronimo-stax-api_1.0_spec-@geronimo.spec.stax.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/ant-@ant.version@.jar">
+      <library name="./lib/axiom-api-@axiom.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/axiom-api-@axiom.version@.jar">
+      <library name="./lib/axiom-dom-@axiom.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/axiom-dom-@axiom.version@.jar">
-         <export name="*"/>
-      </library>
-      <library name="lib/axiom-impl-@axiom.version@.jar">
+      <library name="./lib/axiom-impl-@axiom.version@.jar">
          <export name="*"/>
       </library>
       <library name="lib/commons-logging-@commons.logging.version@.jar">
@@ -59,16 +58,10 @@
       <library name="lib/neethi-@neethi.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/stax-api-@stax.api.version@.jar">
-         <export name="*"/>
-      </library>
       <library name="lib/wsdl4j-@wsdl4j.version@.jar">
          <export name="*"/>
       </library>
-      <library name="lib/wstx-asl-@stax.impl.version@.jar">
-         <export name="*"/>
-      </library>
-      <library name="lib/xbean-@xbean.version@.jar">
+      <library name="lib/xmlbeans-@xmlbeans.version@.jar">
          <export name="*"/>
       </library>
       <library name="lib/XmlSchema-@xmlschema.version@.jar">
@@ -87,6 +80,12 @@
          <export name="*"/>
       </library>
       <library name="lib/jibx-run-@jibx.version@.jar">
+         <export name="*"/>
+      </library>
+      <library name="lib/mail-@javax.mail.version@.jar">
+         <export name="*"/>
+      </library>
+      <library name="lib/geronimo-ws-metadata_2.0_spec-@geronimo.spec.metadata.version@.jar">
          <export name="*"/>
       </library>
    </runtime>

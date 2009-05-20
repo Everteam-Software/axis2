@@ -1,23 +1,25 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership. The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * 
- *      http://www.apache.org/licenses/LICENSE-2.0
- *      
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
+import org.apache.axis2.i18n.Messages;
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.transport.http.HTTPConstants;
@@ -143,8 +145,8 @@ public class TransportHeadersAdapter implements Map {
             l.add(o);
             return l;
         } else {
-            throw ExceptionFactory.makeWebServiceException("Cannot convert from " + o.getClass()
-                    + " to List<String>");
+            throw ExceptionFactory.makeWebServiceException(
+            		Messages.getMessage("inputConvertionErr",o.getClass().toString()));
         }
     }
 
@@ -162,8 +164,8 @@ public class TransportHeadersAdapter implements Map {
                 return (String) l.get(0);
             }
         }
-        throw ExceptionFactory.makeWebServiceException("Cannot convert from " + o.getClass()
-                + " to String");
+        throw ExceptionFactory.makeWebServiceException(
+        		Messages.getMessage("inputConvertionErr1",o.getClass().toString()));
     }
 
 
@@ -224,15 +226,20 @@ public class TransportHeadersAdapter implements Map {
     }
 
     public Collection values() {
-        Map tempMap = new HashMap<String, List<String>>();
-        tempMap.putAll(this);
-        return tempMap.values();
+        return copy().values();
     }
 
     public Set entrySet() {
+        return copy().entrySet();
+    }
+    
+    private Map copy() {
         Map tempMap = new HashMap<String, List<String>>();
-        tempMap.putAll(this);
-        return tempMap.entrySet();
+        for (Object key : keySet()) {
+            List<String> value = (List<String>)get(key);
+            tempMap.put(key, value);
+        }
+        return tempMap;
     }
     
     public String toString() {

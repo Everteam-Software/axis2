@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
     <!-- Incldue the test object creation template  -->
@@ -171,7 +172,8 @@
                                      <xsl:if test="@type!=''"><xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@name"/></xsl:if>
                                  </xsl:otherwise>
                              </xsl:choose>
-                        </xsl:for-each>,
+                        </xsl:for-each>
+                     <xsl:if test="count(input/param[@type!='']) > 0">,</xsl:if>
                     new <xsl:value-of select="$tempCallbackName"/>()
                 );
               </xsl:when>

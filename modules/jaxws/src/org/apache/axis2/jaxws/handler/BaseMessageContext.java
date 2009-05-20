@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.handler;
 
 import org.apache.axis2.jaxws.core.MessageContext;
@@ -27,8 +28,6 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * @author rott
- * 
  * BaseMessageContext is the base class for the two handler message contexts:
  * SoapMessageContext and LogicalMessageContext.  It delegates everything up to
  * the MEPContext, which itself delegates to the requestMC or responseMC, as
@@ -51,6 +50,7 @@ public class BaseMessageContext implements javax.xml.ws.handler.MessageContext {
         // MessageContext Attachments implementation.
         AttachmentsAdapter.install(messageCtx);
         TransportHeadersAdapter.install(messageCtx);
+        SOAPHeadersAdapter.install(messageCtx);
     }
 
     /* (non-Javadoc)

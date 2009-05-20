@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.validator;
 
 import org.apache.axis2.jaxws.description.OperationDescription;
@@ -46,7 +47,7 @@ public class OperationDescriptionValidator extends Validator {
             return VALID;
         }
 
-        // TODO Auto-generated method stub
+        // REVIEW: Should there be operation-level validation performed here?
         return VALID;
     }
 

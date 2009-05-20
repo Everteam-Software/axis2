@@ -16,20 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
 
-import junit.extensions.TestSetup;
-import junit.framework.Test;
 import junit.framework.TestCase;
-import junit.framework.TestSuite;
-
-import org.apache.axis2.description.AxisService;
-import org.apache.axis2.description.Parameter;
-import org.apache.axis2.saaj.integration.EchoService;
-import org.apache.axis2.saaj.integration.IntegrationTest;
-import org.apache.axis2.saaj.integration.UtilServer;
 import org.apache.axis2.saaj.util.SAAJDataSource;
-import org.apache.axis2.util.Utils;
 
 import javax.activation.DataHandler;
 import javax.xml.namespace.QName;

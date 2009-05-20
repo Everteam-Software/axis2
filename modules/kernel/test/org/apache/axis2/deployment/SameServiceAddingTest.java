@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.deployment;
 
 import junit.framework.TestCase;
@@ -38,7 +39,7 @@ public class SameServiceAddingTest extends TestCase {
         final String SERVICE4 = "serevice4";
         final String SERVICE_GROUP2 = "ServiceGroup2";
 
-        config = ConfigurationContextFactory.createConfigurationContextFromFileSystem(null, null)
+        config = ConfigurationContextFactory.createEmptyConfigurationContext()
                 .getAxisConfiguration();
 
         // First create a ServiceGroup with S1 and S4

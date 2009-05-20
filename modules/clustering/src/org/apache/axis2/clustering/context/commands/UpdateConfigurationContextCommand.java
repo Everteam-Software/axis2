@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering.context.commands;
 
 import org.apache.axis2.clustering.ClusteringFault;
@@ -31,6 +32,6 @@ public class UpdateConfigurationContextCommand extends UpdateContextCommand {
     }
 
     public String toString() {
-        return "UpdateConfigurationContextCommand(" + uniqueId + ")";
+        return "UpdateConfigurationContextCommand";
     }
 }

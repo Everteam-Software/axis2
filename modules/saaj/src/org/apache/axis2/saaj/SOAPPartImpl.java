@@ -16,32 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.saaj;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.Iterator;
-
-import javax.xml.soap.MimeHeader;
-import javax.xml.soap.MimeHeaders;
-import javax.xml.soap.SOAPElement;
-import javax.xml.soap.SOAPEnvelope;
-import javax.xml.soap.SOAPException;
-import javax.xml.soap.SOAPMessage;
-import javax.xml.soap.SOAPPart;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
-import javax.xml.transform.Result;
-import javax.xml.transform.Source;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.TransformerFactoryConfigurationError;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 
 import org.apache.axiom.attachments.Attachments;
 import org.apache.axiom.om.impl.MTOMConstants;
@@ -76,6 +52,30 @@ import org.w3c.dom.ProcessingInstruction;
 import org.w3c.dom.Text;
 import org.w3c.dom.UserDataHandler;
 
+import javax.xml.soap.MimeHeader;
+import javax.xml.soap.MimeHeaders;
+import javax.xml.soap.SOAPElement;
+import javax.xml.soap.SOAPEnvelope;
+import javax.xml.soap.SOAPException;
+import javax.xml.soap.SOAPMessage;
+import javax.xml.soap.SOAPPart;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Result;
+import javax.xml.transform.Source;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.Iterator;
+
 public class SOAPPartImpl extends SOAPPart {
 
     private static final Log log = LogFactory.getLog(SOAPPartImpl.class);
@@ -95,6 +95,7 @@ public class SOAPPartImpl extends SOAPPart {
         soapMessage = parentSoapMsg;
         envelope = soapEnvelope;
         document = soapEnvelope.getOwnerDocument();
+        envelope.setSOAPPartParent(this);
     }
 
     public SOAPPartImpl(SOAPMessageImpl parentSoapMsg,
@@ -219,6 +220,7 @@ public class SOAPPartImpl extends SOAPPart {
                     (org.apache.axiom.soap.impl.dom.SOAPEnvelopeImpl)soapEnvelope);
             envelope.element.build();
             this.document = envelope.getOwnerDocument();
+            envelope.setSOAPPartParent(this);
             javax.xml.transform.Source xmlSource =
                     new javax.xml.transform.stream.StreamSource( isReader);
             this.source = xmlSource;
@@ -401,6 +403,7 @@ public class SOAPPartImpl extends SOAPPart {
                     (org.apache.axiom.soap.impl.dom.SOAPEnvelopeImpl)soapEnvelope);
             envelope.element.build();
             this.document = envelope.getOwnerDocument();
+            envelope.setSOAPPartParent(this);
         } catch (TransformerFactoryConfigurationError e) {
             log.error(e);
             throw new SOAPException(e);
@@ -841,7 +844,7 @@ public class SOAPPartImpl extends SOAPPart {
      * been removed from the tree, this is <code>null</code>.
      */
     public Node getParentNode() {
-        return document.getParentNode();
+        return toSAAJNode(document.getParentNode());
     }
 
     /**
@@ -849,17 +852,22 @@ public class SOAPPartImpl extends SOAPPart {
      * this is a <code>NodeList</code> containing no nodes.
      */
     public NodeList getChildNodes() {
-        return document.getChildNodes();
+        NodeList childNodes = document.getChildNodes();
+        NodeListImpl nodes = new NodeListImpl();
+        for (int i = 0; i < childNodes.getLength(); i++) {
+            nodes.addNode(toSAAJNode(childNodes.item(i)));
+        }
+        return nodes;
     }
 
     /** The first child of this node. If there is no such node, this returns <code>null</code>. */
     public Node getFirstChild() {
-        return document.getFirstChild();
+        return toSAAJNode(document.getFirstChild());
     }
 
     /** The last child of this node. If there is no such node, this returns <code>null</code>. */
     public Node getLastChild() {
-        return document.getLastChild();
+        return toSAAJNode(document.getLastChild());
     }
 
     /**
@@ -867,7 +875,7 @@ public class SOAPPartImpl extends SOAPPart {
      * <code>null</code>.
      */
     public Node getPreviousSibling() {
-        return document.getPreviousSibling();
+        return toSAAJNode(document.getPreviousSibling());
     }
 
     /**
@@ -875,7 +883,7 @@ public class SOAPPartImpl extends SOAPPart {
      * <code>null</code>.
      */
     public Node getNextSibling() {
-        return document.getNextSibling();
+        return toSAAJNode(document.getNextSibling());
     }
 
     /**
@@ -954,6 +962,11 @@ public class SOAPPartImpl extends SOAPPart {
      *                      this node.
      */
     public Node removeChild(Node oldChild) throws DOMException {
+        if (oldChild instanceof SOAPElementImpl) {
+            oldChild = ((SOAPElementImpl)oldChild).getElement();
+        } else if (oldChild instanceof TextImplEx) {
+            // TODO: handle text nodes somehow
+        }
         return document.removeChild(oldChild);
     }
 
@@ -1221,5 +1234,9 @@ public class SOAPPartImpl extends SOAPPart {
 
     public void setValue(String value) {
     	throw new IllegalStateException("Cannot set value of SOAPPart.");
+    }
+    
+    javax.xml.soap.Node toSAAJNode(org.w3c.dom.Node domNode) {
+        return NodeImplEx.toSAAJNode(domNode, this);
     }
 }

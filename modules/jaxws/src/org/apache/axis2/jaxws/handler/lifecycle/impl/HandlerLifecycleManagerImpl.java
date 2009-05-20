@@ -16,25 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.axis2.jaxws.handler.lifecycle.impl;
 
-import javax.xml.ws.handler.Handler;
+package org.apache.axis2.jaxws.handler.lifecycle.impl;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
 import org.apache.axis2.jaxws.core.MessageContext;
 import org.apache.axis2.jaxws.description.ServiceDescription;
 import org.apache.axis2.jaxws.handler.lifecycle.factory.HandlerLifecycleManager;
+import org.apache.axis2.jaxws.i18n.Messages;
 import org.apache.axis2.jaxws.injection.ResourceInjectionException;
 import org.apache.axis2.jaxws.lifecycle.BaseLifecycleManager;
 import org.apache.axis2.jaxws.lifecycle.LifecycleException;
 import org.apache.axis2.jaxws.runtime.description.injection.ResourceInjectionServiceRuntimeDescription;
 import org.apache.axis2.jaxws.runtime.description.injection.ResourceInjectionServiceRuntimeDescriptionFactory;
 
+import javax.xml.ws.handler.Handler;
+
 public class HandlerLifecycleManagerImpl extends BaseLifecycleManager implements HandlerLifecycleManager {
         
     public Handler createHandlerInstance(MessageContext mc, Class handlerClass) throws LifecycleException, ResourceInjectionException {
         if (handlerClass == null) {
-            throw ExceptionFactory.makeWebServiceException("Handler class must be passed");
+            throw ExceptionFactory.
+              makeWebServiceException(Messages.getMessage("createHandlerInstanceErr"));
         }
         
         ServiceDescription serviceDesc = mc.getEndpointDescription().getServiceDescription();        
@@ -57,6 +60,32 @@ public class HandlerLifecycleManagerImpl extends BaseLifecycleManager implements
         }
         
         return (Handler)this.instance;
+    }
+    
+    /**
+     * destroyHandlerInstance calls the handler's annotated PreDestroy method,
+     * if it exists.  A handler instance that has been passed through this method SHOULD NOT be used again
+     * 
+     * @param handler
+     */
+    public void destroyHandlerInstance(MessageContext mc, Handler handler) throws LifecycleException, ResourceInjectionException {
+        if (handler == null) {
+            throw ExceptionFactory.
+              makeWebServiceException(Messages.getMessage("destroyHandlerInstanceErr"));
+        }
+        
+        this.instance = handler;
+        
+        ServiceDescription serviceDesc = mc.getEndpointDescription().getServiceDescription();        
+        ResourceInjectionServiceRuntimeDescription injectionDesc = null;
+        if (serviceDesc != null) {
+            injectionDesc = ResourceInjectionServiceRuntimeDescriptionFactory.get(serviceDesc, handler.getClass());            
+        }
+
+        //Invoke PreDestroy
+        if (injectionDesc != null && injectionDesc.getPreDestroyMethod() != null) {
+            invokePreDestroy(injectionDesc.getPreDestroyMethod());
+        }
     }
   
 }

@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
 <!-- #################################################################################  -->
@@ -35,7 +36,7 @@
 
         <xsl:for-each select="param[not(@type = preceding-sibling::param/@type)]">
             <xsl:if test="@type!=''">
-                private static final javax.xml.bind.JAXBContext _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                private static javax.xml.bind.JAXBContext _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
             </xsl:if>
         </xsl:for-each>
 
@@ -54,7 +55,7 @@
                         Runtime.getRuntime().exit(-1);
                     }
                     finally {
-                        _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/> = jc;
+                        _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/> = jc;
                         classContextMap.put(<xsl:value-of select="@type"/>.class, jc);
                     }
                 </xsl:if>
@@ -67,7 +68,7 @@
                 private org.apache.axiom.om.OMElement toOM(<xsl:value-of select="@type"/> param, boolean optimizeContent)
                 throws org.apache.axis2.AxisFault {
                     try {
-                        javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                        javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                         javax.xml.bind.Marshaller marshaller = context.createMarshaller();
                         marshaller.setProperty(javax.xml.bind.Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
 
@@ -78,7 +79,7 @@
                                                                         marshaller,
                                                                         "<xsl:value-of select="qname/@nsuri"/>",
                                                                         "<xsl:value-of select="qname/@localname"/>");
-                        org.apache.axiom.om.OMNamespace namespace = factory.createOMNamespace("<xsl:value-of select="qame/@nsuri"/>",
+                        org.apache.axiom.om.OMNamespace namespace = factory.createOMNamespace("<xsl:value-of select="qname/@nsuri"/>",
                                                                            null);
                         return factory.createOMElement(source, "<xsl:value-of select="qname/@localname"/>", namespace);
                     } catch (javax.xml.bind.JAXBException bex){
@@ -100,7 +101,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Byte ret = (java.lang.Integer)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), byte.class).getValue();
@@ -115,7 +116,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Character ret = (java.lang.Character)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), char.class).getValue();
@@ -130,7 +131,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Double ret = (java.lang.Double)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), double.class).getValue();
@@ -145,7 +146,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Float ret = (java.lang.Float)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), float.class).getValue();
@@ -160,7 +161,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Integer ret = (java.lang.Integer)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), int.class).getValue();
@@ -175,7 +176,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Long ret = (java.lang.Long)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), long.class).getValue();
@@ -190,7 +191,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Short ret = (java.lang.Short)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), short.class).getValue();
@@ -205,7 +206,7 @@
                             org.apache.axiom.om.OMElement param,
                             java.util.Map extraNamespaces) throws org.apache.axis2.AxisFault{
                             try {
-                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;','___')"/>;
+                                javax.xml.bind.JAXBContext context = _<xsl:value-of select="translate(@type,'.&gt;&lt;[]','_____')"/>;
                                 javax.xml.bind.Unmarshaller unmarshaller = context.createUnmarshaller();
 
                                 java.lang.Boolean ret = (java.lang.Boolean)unmarshaller.unmarshal(param.getXMLStreamReaderWithoutCaching(), boolean.class).getValue();

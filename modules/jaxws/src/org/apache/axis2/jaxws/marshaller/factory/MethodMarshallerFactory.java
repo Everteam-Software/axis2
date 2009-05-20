@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.factory;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
@@ -32,6 +33,8 @@ import org.apache.axis2.jaxws.marshaller.impl.alt.RPCLitMethodMarshaller;
 import org.apache.axis2.jaxws.message.databinding.JAXBUtils;
 import org.apache.axis2.jaxws.runtime.description.marshal.MarshalServiceRuntimeDescription;
 import org.apache.axis2.jaxws.runtime.description.marshal.MarshalServiceRuntimeDescriptionFactory;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import javax.jws.soap.SOAPBinding;
 import javax.xml.bind.JAXBContext;
@@ -43,8 +46,9 @@ import javax.xml.ws.Holder;
  * SOAPBinding information
  */
 public class MethodMarshallerFactory {
-
-
+	
+	private static Log log = LogFactory.getLog(MethodMarshallerFactory.class);
+	
     private enum SUBTYPE {
         NORMAL, PLUS, MINIMAL }
 
@@ -90,32 +94,30 @@ public class MethodMarshallerFactory {
         }
         return null;
     }
-
+    
     public static MethodMarshaller getMarshaller(OperationDescription op, boolean isClient) {
+        return getMarshaller(op, isClient, null);
+    }
+
+    public static MethodMarshaller getMarshaller(OperationDescription op, boolean isClient,
+                                                 ClassLoader cl) {
 
         MethodMarshaller marshaller = null;
-        if (isClient) {
-            if (op.getSoapBindingStyle() == SOAPBinding.Style.DOCUMENT) {
-                marshaller = createDocLitMethodMarshaller(op, isClient);
-            } else if (op.getSoapBindingStyle() == SOAPBinding.Style.RPC) {
-                marshaller = createRPCLitMethodMarshaller(isClient);
-            }
-        } else { // SERVER
-            if (op.getSoapBindingStyle() == SOAPBinding.Style.DOCUMENT) {
-                marshaller = createDocLitMethodMarshaller(op, isClient);
-            } else if (op.getSoapBindingStyle() == SOAPBinding.Style.RPC) {
-                marshaller = createRPCLitMethodMarshaller(isClient);
-            }
+        if (op.getSoapBindingStyle() == SOAPBinding.Style.DOCUMENT) {
+            marshaller = createDocLitMethodMarshaller(op, isClient, cl);
+        } else if (op.getSoapBindingStyle() == SOAPBinding.Style.RPC) {
+            marshaller = createRPCLitMethodMarshaller(isClient);
         }
         return marshaller;
     }
 
     private static MethodMarshaller createDocLitMethodMarshaller(OperationDescription op,
-                                                                 boolean isClient) {
+                                                                 boolean isClient,
+                                                                 ClassLoader cl) {
         SOAPBinding.ParameterStyle parameterStyle = null;
         SUBTYPE subType = SUBTYPE.NORMAL;
         if (isDocLitBare(op)) {
-            if (isDocLitBareMinimal(op)) {
+            if (isDocLitBareMinimal(op, cl)) {
                 subType = SUBTYPE.MINIMAL;
             }
             parameterStyle = SOAPBinding.ParameterStyle.BARE;
@@ -190,15 +192,15 @@ public class MethodMarshallerFactory {
      * @param op
      * @return
      */
-    protected static boolean isDocLitBareMinimal(OperationDescription op) {
-        return isDocLitBare(op) && !isContextPathConstruction(op);
+    protected static boolean isDocLitBareMinimal(OperationDescription op, ClassLoader cl) {
+        return isDocLitBare(op) && !isContextPathConstruction(op, cl);
     }
 
     /**
      * @param op
      * @return true if JAXBContext constructed using CONTEXT PATH
      */
-    private static boolean isContextPathConstruction(OperationDescription op) {
+    private static boolean isContextPathConstruction(OperationDescription op, ClassLoader cl) {
         ServiceDescription serviceDesc = op.getEndpointInterfaceDescription()
                 .getEndpointDescription().getServiceDescription();
         MarshalServiceRuntimeDescription marshalDesc =
@@ -207,7 +209,7 @@ public class MethodMarshallerFactory {
         Holder<JAXBUtils.CONSTRUCTION_TYPE> holder = new Holder<JAXBUtils.CONSTRUCTION_TYPE>();
         try {
             JAXBContext context = JAXBUtils.getJAXBContext(marshalDesc.getPackages(), holder,
-                                                           marshalDesc.getPackagesKey());
+                                                           marshalDesc.getPackagesKey(), cl, null);
         } catch (JAXBException e) {
             throw ExceptionFactory.makeWebServiceException(e);
         }
@@ -237,13 +239,18 @@ public class MethodMarshallerFactory {
                     MarshalServiceRuntimeDescriptionFactory.get(serviceDesc);
             String requestWrapper = marshalDesc.getRequestWrapperClassName(op);
             if (!exists(requestWrapper)) {
-                // TODO DEBUG
+            	if(log.isDebugEnabled()){
+            		log.debug("Request wrapper class name is NULL.");
+            	}
                 return true;
             }
 
-            String responseWrapper = marshalDesc.getRequestWrapperClassName(op);
+            //String responseWrapper = marshalDesc.getRequestWrapperClassName(op);
+            String responseWrapper = marshalDesc.getResponseWrapperClassName(op);
             if (!exists(responseWrapper)) {
-                // TODO DEBUG
+            	if(log.isDebugEnabled()){
+            		log.debug("Response wrapper class name is NULL.");
+            	}
                 return true;
             }
             // TODO Do the same for the fault beans

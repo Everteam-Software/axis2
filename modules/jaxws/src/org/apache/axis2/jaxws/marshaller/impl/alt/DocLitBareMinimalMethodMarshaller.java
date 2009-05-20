@@ -16,9 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.marshaller.impl.alt;
 
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.description.AttachmentDescription;
+import org.apache.axis2.jaxws.description.AttachmentType;
 import org.apache.axis2.jaxws.description.EndpointDescription;
 import org.apache.axis2.jaxws.description.EndpointInterfaceDescription;
 import org.apache.axis2.jaxws.description.OperationDescription;
@@ -36,7 +39,6 @@ import org.apache.commons.logging.LogFactory;
 
 import javax.xml.namespace.QName;
 import javax.xml.ws.WebServiceException;
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -87,33 +89,45 @@ public class DocLitBareMinimalMethodMarshaller implements MethodMarshaller {
             Object returnValue = null;
             boolean hasReturnInBody = false;
             if (returnType != void.class) {
-                // Use "byJavaType" unmarshalling if necessary
-                Class byJavaType = null;
-                if (MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
-                    byJavaType = returnType;
-                }
-                // If the webresult is in the header, we need the name of the header so that we can find it.
-                Element returnElement = null;
-                if (operationDesc.isResultHeader()) {
-                    returnElement = MethodMarshallerUtils
-                            .getReturnElement(packages, message, byJavaType, operationDesc.isListType(), true,
-                                              operationDesc.getResultTargetNamespace(),
-                                              operationDesc.getResultName(),
-                                              MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
-
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                       String cid = message.getAttachmentID(0);
+                       returnValue = message.getDataHandler(cid);
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
+                    }
                 } else {
-                    returnElement = MethodMarshallerUtils
-                            .getReturnElement(packages, message, byJavaType, operationDesc.isListType(), false, null, null,
-                                    MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
-                    hasReturnInBody = true;
+                    // Use "byJavaType" unmarshalling if necessary
+                    Class byJavaType = null;
+                    if (MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
+                        byJavaType = returnType;
+                    }
+                    // If the webresult is in the header, we need the name of the header so that we can find it.
+                    Element returnElement = null;
+                    if (operationDesc.isResultHeader()) {
+                        returnElement = MethodMarshallerUtils
+                        .getReturnElement(packages, message, byJavaType, operationDesc.isListType(), true,
+                                          operationDesc.getResultTargetNamespace(),
+                                          operationDesc.getResultName(),
+                                          MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
+
+                    } else {
+                        returnElement = MethodMarshallerUtils
+                        .getReturnElement(packages, message, byJavaType, operationDesc.isListType(), false, null, null,
+                                          MethodMarshallerUtils.numOutputBodyParams(pds) > 0);
+                        hasReturnInBody = true;
+                    }
+                    //TODO should we allow null if the return is a header?
+                    //Validate input parameters for operation and make sure no input parameters are null.
+                    //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
+                    //to a method then an implementation MUST throw WebServiceException.
+                    returnValue = returnElement.getTypeValue();
                 }
-                //TODO should we allow null if the return is a header?
-                //Validate input parameters for operation and make sure no input parameters are null.
-                //As per JAXWS Specification section 3.6.2.3 if a null value is passes as an argument 
-                //to a method then an implementation MUST throw WebServiceException.
-                returnValue = returnElement.getTypeValue();
                 if (ConvertUtils.isConvertable(returnValue, returnType)) {
-                	returnValue = ConvertUtils.convert(returnValue, returnType);
+                    returnValue = ConvertUtils.convert(returnValue, returnType);
                 }               
             }
 
@@ -243,25 +257,44 @@ public class DocLitBareMinimalMethodMarshaller implements MethodMarshaller {
             // Put the return object onto the message
             Class returnType = operationDesc.getResultActualType();
             if (returnType != void.class) {
-
-                // Use byJavaType marshalling if necessary
-                Class byJavaType = null;
-                if (MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
-                    byJavaType = returnType;
-                }
-
-                Element returnElement = null;
-                QName returnQName = new QName(operationDesc.getResultTargetNamespace(),
-                                              operationDesc.getResultName());
-                if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
-                    returnElement = new Element(returnObject, returnQName);
+                
+                AttachmentDescription attachmentDesc = 
+                    operationDesc.getResultAttachmentDescription();
+                if (attachmentDesc != null) {
+                    if (attachmentDesc.getAttachmentType() == AttachmentType.SWA) {
+                        // Create an Attachment object with the signature value
+                        Attachment attachment = new Attachment(returnObject, 
+                                                               returnType, 
+                                                               attachmentDesc,
+                                                               operationDesc.getResultPartName());
+                        m.addDataHandler(attachment.getDataHandler(), 
+                                         attachment.getContentID());
+                        m.setDoingSWA(true);
+                    } else {
+                        throw ExceptionFactory.
+                          makeWebServiceException(Messages.getMessage("pdElementErr"));
+                    }
                 } else {
-                    returnElement = new Element(returnObject, returnQName, returnType);
+
+                    // Use byJavaType marshalling if necessary
+                    Class byJavaType = null;
+                    if (MethodMarshallerUtils.isNotJAXBRootElement(returnType, marshalDesc)) {
+                        byJavaType = returnType;
+                    }
+
+                    Element returnElement = null;
+                    QName returnQName = new QName(operationDesc.getResultTargetNamespace(),
+                                                  operationDesc.getResultName());
+                    if (marshalDesc.getAnnotationDesc(returnType).hasXmlRootElement()) {
+                        returnElement = new Element(returnObject, returnQName);
+                    } else {
+                        returnElement = new Element(returnObject, returnQName, returnType);
+                    }
+                    MethodMarshallerUtils.toMessage(returnElement, returnType, operationDesc.isListType(),
+                                                    marshalDesc, m,
+                                                    byJavaType,
+                                                    operationDesc.isResultHeader());
                 }
-                MethodMarshallerUtils.toMessage(returnElement, returnType, operationDesc.isListType(),
-                                                marshalDesc, m,
-                                                byJavaType,
-                                                operationDesc.isResultHeader());
             }
 
             // Convert the holder objects into a list of JAXB objects for marshalling
@@ -283,6 +316,11 @@ public class DocLitBareMinimalMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasResponseSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {
@@ -343,6 +381,11 @@ public class DocLitBareMinimalMethodMarshaller implements MethodMarshaller {
 
             // Put values onto the message...marshalling by type
             MethodMarshallerUtils.toMessage(pdeList, m, packages);
+            
+            // Enable SWA for nested SwaRef attachments
+            if (operationDesc.hasRequestSwaRefAttachments()) {
+                m.setDoingSWA(true);
+            }
 
             return m;
         } catch (Exception e) {

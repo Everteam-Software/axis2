@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <axisconfig name="AxisJava2.0">
     <!-- ================================================= -->
     <!-- Parameters -->
@@ -60,9 +61,9 @@
     <!-- Following parameter will completely disable REST handling in Axis2-->
     <parameter name="disableREST" locked="true">false</parameter>
 
-    <!--POJO deployer , this will alow users to drop .class file and make that into a service-->
-    <deployer extension=".class" directory="pojo" class="org.apache.axis2.deployment.POJODeployer"/>
-
+    <!--JAXWS deployer for servicejars, this will allow users to drop .jar files and have them deployed as a service -->
+    <deployer extension="jar" directory="servicejars" class="org.apache.axis2.jaxws.framework.JAXWSDeployer"/>
+    
     <!-- Following parameter will set the host name for the epr-->
     <!--<parameter name="hostname" locked="true">myhost.com</parameter>-->
 
@@ -136,22 +137,10 @@
         <!--<parameter name="hostname">http://myApp.com/ws</parameter>-->
     </transportReceiver>
 
-    <transportReceiver name="tcp"
-                       class="org.apache.axis2.transport.tcp.TCPServer">
-        <parameter name="port">6061</parameter>
-        <!--If you want to give your own host address for EPR generation-->
-        <!--uncomment following parameter , and set as you required.-->
-        <!--<parameter name="hostname">tcp://myApp.com/ws</parameter>-->
-    </transportReceiver>
-
     <!-- ================================================= -->
     <!-- Transport Outs -->
     <!-- ================================================= -->
 
-    <!--<transportSender name="jms"-->
-                     <!--class="org.apache.axis2.transport.jms.JMSSender"/>-->
-    <transportSender name="tcp"
-                     class="org.apache.axis2.transport.tcp.TCPTransportSender"/>
     <transportSender name="local"
                      class="org.apache.axis2.transport.local.LocalTransportSender"/>
     <transportSender name="http"
@@ -180,6 +169,12 @@
                 <order phase="Transport"/>
             </handler>
         </phase>
+        <phase name="Addressing">
+             <handler name="AddressingBasedDispatcher"
+                     class="org.apache.axis2.dispatchers.AddressingBasedDispatcher">
+                 <order phase="Addressing"/>
+            </handler>
+        </phase>
         <phase name="Security"/>
         <phase name="PreDispatch"/>
         <phase name="Dispatch" class="org.apache.axis2.engine.DispatchPhase">
@@ -193,10 +188,6 @@
                 <order phase="Dispatch"/>
             </handler>
 
-            <handler name="AddressingBasedDispatcher"
-                     class="org.apache.axis2.dispatchers.AddressingBasedDispatcher">
-                <order phase="Dispatch"/>
-            </handler>
             <handler name="RequestURIOperationDispatcher"
                      class="org.apache.axis2.dispatchers.RequestURIOperationDispatcher">
                 <order phase="Dispatch"/>
@@ -247,6 +238,12 @@
         <phase name="Security"/>
     </phaseOrder>
     <phaseOrder type="InFaultFlow">
+        <phase name="Addressing">
+             <handler name="AddressingBasedDispatcher"
+                     class="org.apache.axis2.dispatchers.AddressingBasedDispatcher">
+                 <order phase="Addressing"/>
+            </handler>
+        </phase>
         <phase name="PreDispatch"/>
         <phase name="Dispatch" class="org.apache.axis2.engine.DispatchPhase">
             <handler name="RequestURIBasedDispatcher"
@@ -259,10 +256,6 @@
                 <order phase="Dispatch"/>
             </handler>
 
-            <handler name="AddressingBasedDispatcher"
-                     class="org.apache.axis2.dispatchers.AddressingBasedDispatcher">
-                <order phase="Dispatch"/>
-            </handler>
             <handler name="RequestURIOperationDispatcher"
                      class="org.apache.axis2.dispatchers.RequestURIOperationDispatcher">
                 <order phase="Dispatch"/>

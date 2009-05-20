@@ -24,6 +24,10 @@ import javax.xml.namespace.QName;
 import java.net.URL;
 import java.util.ArrayList;
 
+/**
+ * Defines WSDL Access methods
+ *
+ */
 public interface WSDLWrapper {
     public static final QName POLICY = new QName(Constants.POLICY, "Policy");
     public static final QName POLICY_REFERENCE =
@@ -65,4 +69,6 @@ public interface WSDLWrapper {
     public String getTargetNamespace();
 
     public Definition getDefinition();
+
+    public Definition getUnwrappedDefinition();
 }

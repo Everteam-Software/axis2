@@ -1,29 +1,34 @@
-/*                                                                             
- * Copyright 2004,2005 The Apache Software Foundation.                         
- *                                                                             
- * Licensed under the Apache License, Version 2.0 (the "License");             
- * you may not use this file except in compliance with the License.            
- * You may obtain a copy of the License at                                     
- *                                                                             
- *      http://www.apache.org/licenses/LICENSE-2.0                             
- *                                                                             
- * Unless required by applicable law or agreed to in writing, software         
- * distributed under the License is distributed on an "AS IS" BASIS,           
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.    
- * See the License for the specific language governing permissions and         
- * limitations under the License.                                              
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
+
 package org.apache.axis2.clustering.control;
 
 import org.apache.axis2.clustering.ClusteringConstants;
 import org.apache.axis2.clustering.ClusteringFault;
 import org.apache.axis2.clustering.ClusteringUtils;
 import org.apache.axis2.context.ConfigurationContext;
-import org.apache.axis2.engine.AxisConfiguration;
-import org.apache.axis2.description.AxisServiceGroup;
-import org.apache.axis2.description.AxisService;
 import org.apache.axis2.description.AxisModule;
-import org.apache.axis2.AxisFault;
+import org.apache.axis2.description.AxisService;
+import org.apache.axis2.description.AxisServiceGroup;
+import org.apache.axis2.engine.AxisConfiguration;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.io.FileNotFoundException;
 import java.util.Iterator;
@@ -33,6 +38,8 @@ import java.util.Iterator;
  */
 public class GetConfigurationResponseCommand extends ControlCommand {
 
+    private static final Log log = LogFactory.getLog(GetConfigurationResponseCommand.class);
+
     private String[] serviceGroups;
 
     public void execute(ConfigurationContext configContext) throws ClusteringFault {
@@ -40,7 +47,10 @@ public class GetConfigurationResponseCommand extends ControlCommand {
 
         // Run this code only if this node is not already initialized
         if (configContext.
-                getPropertyNonReplicable(ClusteringConstants.CLUSTER_INITIALIZED) == null) {
+                getPropertyNonReplicable(ClusteringConstants.RECD_CONFIG_INIT_MSG) == null) {
+            log.info("Received configuration initialization message");
+            configContext.
+                setNonReplicableProperty(ClusteringConstants.RECD_CONFIG_INIT_MSG, "true");
             if (serviceGroups != null) {
 
                 // Load all the service groups that are sent by the neighbour
@@ -58,6 +68,8 @@ public class GetConfigurationResponseCommand extends ControlCommand {
                         }
                     }
                 }
+
+                //TODO: We support only AAR files for now
 
                 // Unload all service groups which were not sent by the neighbour,
                 // but have been currently loaded
@@ -79,9 +91,9 @@ public class GetConfigurationResponseCommand extends ControlCommand {
                              serviceIter.hasNext();) {
                             AxisService service = (AxisService) serviceIter.next();
                             if (service.isClientSide() ||
-                                service.getParameter(AxisModule.MODULE_SERVICE) != null) {
+                                service.getParameter(AxisModule.MODULE_SERVICE) != null) { // Do not unload service groups containing client side services or ones deployed from within modules
                                 mustUnloadServiceGroup = false;
-                                break; // Do not unload service groups containing client side services
+                                break;
                             }
                         }
                         if (mustUnloadServiceGroup) {

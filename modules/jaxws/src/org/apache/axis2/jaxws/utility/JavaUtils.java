@@ -19,7 +19,13 @@
 
 package org.apache.axis2.jaxws.utility;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
@@ -27,6 +33,8 @@ import java.util.StringTokenizer;
 /** Common Java Utilites */
 public class JavaUtils extends org.apache.axis2.util.JavaUtils {
 
+    private static Log log = LogFactory.getLog(JavaUtils.class);
+    
     /** Private Constructor...All methods of this class are static */
     private JavaUtils() {
     }
@@ -40,6 +48,9 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
     public static String getPackageFromNamespace(String namespace) {
         // The following steps correspond to steps described in the JAXB Specification
 
+        if (log.isDebugEnabled()) {
+            log.debug("namespace (" +namespace +")");
+        }
         // Step 1: Scan off the host name
         String hostname = null;
         String path = null;
@@ -57,6 +68,11 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
                 hostname = namespace;
             }
         }
+        if (log.isDebugEnabled()) {
+            log.debug("hostname (" +hostname +")");
+            log.debug("path (" +path +")");
+        }
+        
 
         // Step 3: Tokenize the host name using ":" and "/"
         StringTokenizer st = new StringTokenizer(hostname, ":/");
@@ -95,16 +111,22 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
 
         // Step 6: Tokenize the first word with "." and reverse the order. (the www is also removed).
         // TODO This is not exactly equivalent to the JAXB Rule.
-        StringTokenizer st2 = new StringTokenizer(words[0], ".");
         ArrayList<String> list = new ArrayList<String>();
-        while (st2.hasMoreTokens()) {
-            // Add the strings so they are in reverse order
-            list.add(0, st2.nextToken());
+        if (words.length > 0) {
+            StringTokenizer st2 = new StringTokenizer(words[0], ".");
+        
+            while (st2.hasMoreTokens()) {
+                // Add the strings so they are in reverse order
+                list.add(0, st2.nextToken());
+            }
         }
+        
         // Remove www
-        String last = list.get(list.size() - 1);
-        if (last.equals("www")) {
-            list.remove(list.size() - 1);
+        if (list.size() > 0) {
+            String last = list.get(list.size() - 1);
+            if (last.equals("www")) {
+                list.remove(list.size() - 1);
+            }
         }
         // Now each of words is represented by list
         for (int i = 1; i < words.length; i++) {
@@ -132,7 +154,7 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
                 word = word + "_";
             }
             // 8c: prepend _ if first character cannot be the first character of a java identifier
-            if (!Character.isJavaIdentifierPart(word.charAt(0))) {
+            if (!Character.isJavaIdentifierStart(word.charAt(0))) {
                 word = "_" + word;
             }
 
@@ -148,45 +170,13 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
                 name = name + "." + list.get(i);
             }
         }
+        
+        if (log.isDebugEnabled()) {
+            log.debug("package name (" +name +")");
+        }
         return name;
     }
 
-    /**
-     * replace: Like String.replace except that the old new items are strings.
-     *
-     * @param name string
-     * @param oldT old text to replace
-     * @param newT new text to use
-     * @return replacement string
-     */
-    public static final String replace(String name,
-                                       String oldT, String newT) {
-
-        if (name == null) return "";
-
-        // Create a string buffer that is twice initial length.
-        // This is a good starting point.
-        StringBuffer sb = new StringBuffer(name.length() * 2);
-
-        int len = oldT.length();
-        try {
-            int start = 0;
-            int i = name.indexOf(oldT, start);
-
-            while (i >= 0) {
-                sb.append(name.substring(start, i));
-                sb.append(newT);
-                start = i + len;
-                i = name.indexOf(oldT, start);
-            }
-            if (start < name.length())
-                sb.append(name.substring(start));
-        } catch (NullPointerException e) {
-            // No FFDC code needed
-        }
-
-        return new String(sb);
-    }
 
     /**
      * Get a string containing the stack of the current location
@@ -214,5 +204,69 @@ public class JavaUtils extends org.apache.axis2.util.JavaUtils {
         text = text.substring(text.indexOf("at"));
         text = replace(text, "at ", "DEBUG_FRAME = ");
         return text;
+    }
+    
+    /**
+     * Get checked exception
+     * @param throwable Throwable
+     * @param method Method
+     * @return Class of the checked exception or null
+     */
+    public static Class getCheckedException(Throwable throwable, Method method) {
+        if (method == null) {
+            return null;
+        }
+        Class[] exceptions = method.getExceptionTypes();
+        if (exceptions != null) {
+            for (int i=0; i< exceptions.length; i++ ) {
+                if (exceptions[i].isAssignableFrom(throwable.getClass())) {
+                    return exceptions[i];
+                }
+            }
+        }
+        return null;
+    }
+        
+    /**
+     * Convert a String to a URI, handling special characters in the String such as
+     * spaces.
+     * 
+     * @param pathString The String to be converted to a URI
+     * @return a URI or null if the String can't be converted.
+     */
+    public static URI createURI(String pathString) {
+        URI pathURI = null;
+        if (pathString == null || "".equals(pathString)) {
+            if (log.isDebugEnabled()) {
+                log.debug("Path string argument is invalid [" + pathString + "]; returning null");
+            }
+            return null;
+        }
+
+        try {
+            pathURI = new URI(pathString);
+        }
+        catch (URISyntaxException ex1) {
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to create URI from [" + pathString + 
+                          "], trying alternative approach");
+            }
+            /*
+             * The URI creation requires special characters, such as spaces, be escaped or
+             * converted.  The 5 argument constuctor will do that for us.
+             */
+            try {
+                pathURI = new URI(null, null, pathString, null);
+            } catch (URISyntaxException ex2) {
+                if (log.isTraceEnabled()) {
+                    log.trace("Unable to create URI using alternative approach; returning null.  Exception caught during inital attempt: "
+                              + JavaUtils.stackToString(ex1));
+                    log.trace("Exception caught during alternet attemt "
+                              + JavaUtils.stackToString(ex2));
+                }
+                log.error(ex2.toString(), ex2);
+            }
+        }
+        return pathURI;
     }
 }

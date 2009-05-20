@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.ws.java2wsdl.utils;
 
 import org.apache.axis2.description.java2wsdl.Java2WSDLConstants;
@@ -65,10 +66,12 @@ public class Java2WSDLOptionsValidator implements Java2WSDLConstants {
                 Java2WSDLConstants.USE_OPTION.equalsIgnoreCase(optionType) ||
                 Java2WSDLConstants.USE_OPTION_LONG.equalsIgnoreCase(optionType)||
                 Java2WSDLConstants.WSDL_VERSION_OPTION.equalsIgnoreCase(optionType)||
+                Java2WSDLConstants.CUSTOM_SCHEMA_LOCATION.equalsIgnoreCase(optionType)||
+                Java2WSDLConstants.CUSTOM_SCHEMA_LOCATION_LONG.equalsIgnoreCase(optionType)||
+                Java2WSDLConstants.SCHEMA_MAPPING_FILE_LOCATION.equalsIgnoreCase(optionType)||
+                Java2WSDLConstants.SCHEMA_MAPPING_FILE_LOCATION_LONG.equalsIgnoreCase(optionType)||
                 Java2WSDLConstants.WSDL_VERSION_OPTION_LONG.equalsIgnoreCase(optionType)
         );
-
-
         return invalid;
     }
 }

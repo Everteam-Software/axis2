@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="xml" indent="yes" omit-xml-declaration="yes"/>
 
@@ -64,8 +65,9 @@
             <parameter name="modifyUserWSDLPortAddress">true</parameter>
             <xsl:for-each select="method">
 				<operation>
-					<xsl:attribute name="name"><xsl:value-of select="@name"/></xsl:attribute>
+					<xsl:attribute name="name"><xsl:value-of select="@originalName"/></xsl:attribute>
 					<xsl:attribute name="mep"><xsl:value-of select="@mepURI"/></xsl:attribute>
+					<xsl:attribute name="namespace"><xsl:value-of select="@namespace"/></xsl:attribute>
 					<actionMapping>
 						<xsl:value-of select="@soapaction"/>
 					</actionMapping>

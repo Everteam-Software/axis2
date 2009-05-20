@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.clustering;
 
 /**
@@ -23,7 +24,7 @@ package org.apache.axis2.clustering;
  */
 public interface MessageSender {
 
-    public long sendToGroup(ClusteringCommand msg) throws ClusteringFault;
+    public void sendToGroup(ClusteringCommand msg) throws ClusteringFault;
 
     public void sendToSelf(ClusteringCommand msg) throws ClusteringFault;
 

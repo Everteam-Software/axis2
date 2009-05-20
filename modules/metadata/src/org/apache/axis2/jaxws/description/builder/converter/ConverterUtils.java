@@ -16,8 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.builder.converter;
 
+import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.description.builder.DescriptionBuilderComposite;
 import org.apache.axis2.jaxws.description.builder.FieldDescriptionComposite;
 import org.apache.axis2.jaxws.description.builder.HandlerChainAnnot;
@@ -39,6 +41,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
+import java.security.PrivilegedAction;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ConverterUtils {
@@ -51,8 +55,46 @@ public class ConverterUtils {
      *                        the annotation (i.e. Class, Method, Field)
      * @return - <code>Annotation</code> annotation represented by the given <code>Class</code>
      */
-    public static Annotation getAnnotation(Class annotationClass, AnnotatedElement element) {
-        return element.getAnnotation(annotationClass);
+    public static Annotation getAnnotation(final Class annotationClass, final AnnotatedElement element) {
+        return (Annotation) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                return element.getAnnotation(annotationClass);
+            }
+        });
+     }
+    
+    /**
+     * Helper method to retrieve a list of all annotations that match the following
+     * conditions:
+     * 
+     * - Annotations that extend the parameterized type T
+     * - Annotations that themselves are annotated with type T
+     * 
+     * @param annotationClass
+     * @param element
+     * @return
+     */
+    public static <T extends Annotation> List<Annotation> getAnnotations(final Class<T> annotationClass, final AnnotatedElement element) {
+        List<Annotation> matches = new ArrayList<Annotation>();
+        Annotation[] annotations = null;
+        
+        // Get the complete list of annotations from the class that was provided.
+        annotations = (Annotation[]) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                return element.getAnnotations();
+            }
+        });
+        
+        for (Annotation a: annotations) {        
+            // If the annotation matches the parameter type we're looking
+            // for, add it to the list.
+            if (a.annotationType().isAnnotationPresent(annotationClass) || 
+                annotationClass.isAssignableFrom(a.annotationType())) {
+                matches.add(a);
+            }
+        }
+        
+        return matches;
     }
 
     /**

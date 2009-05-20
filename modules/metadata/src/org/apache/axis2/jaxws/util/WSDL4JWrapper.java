@@ -19,12 +19,20 @@
 
 package org.apache.axis2.jaxws.util;
 
+import org.apache.axis2.Constants;
+import org.apache.axis2.context.ConfigurationContext;
+import org.apache.axis2.description.Parameter;
+import org.apache.axis2.engine.AxisConfiguration;
 import org.apache.axis2.java.security.AccessController;
 import org.apache.axis2.jaxws.ExceptionFactory;
+import org.apache.axis2.jaxws.catalog.JAXWSCatalogManager;
+import org.apache.axis2.jaxws.catalog.impl.OASISCatalogManager;
 import org.apache.axis2.jaxws.i18n.Messages;
+import org.apache.axis2.jaxws.wsdl.WSDLReaderConfigurator;
 import org.apache.axis2.metadata.factory.ResourceFinderFactory;
 import org.apache.axis2.metadata.registry.MetadataFactoryRegistry;
 import org.apache.axis2.metadata.resource.ResourceFinder;
+import org.apache.axis2.wsdl.util.WSDLDefinitionWrapper;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -44,7 +52,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLConnection;
@@ -61,16 +68,106 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 
+/**
+ * Implementation of WSDLWrapper interface which controls access
+ * to the underlying Definition (WSDLDefinitionWrapper).
+ * The WSDLDefinitionWrapper implementation uses various strategies
+ * to control its in-memory footprint.
+ */
 public class WSDL4JWrapper implements WSDLWrapper {
     private static final Log log = LogFactory.getLog(WSDL4JWrapper.class);
-    private Definition wsdlDefinition = null;
-    private URL wsdlURL;
 
+    private WSDLDefinitionWrapper wsdlDefinition = null;
+
+    private URL wsdlURL;
+    private String wsdlExplicitURL;
+    private ConfigurationContext configContext;
+    private JAXWSCatalogManager catalogManager = null;
+    
+    // By default, use a reload strategy for the WSDLWrapper
+    private boolean limitMemory = true;
+    private int memoryType = 2;
+    
+   /**
+    * Constructor
+    *
+    * @param URL   The URL for the WSDL
+    * @deprecated Use a constructor that passes in the ConfigContext, or memoryLimit parameter
+    */
     public WSDL4JWrapper(URL wsdlURL) throws FileNotFoundException, UnknownHostException,
             ConnectException, IOException, WSDLException {
         super();
+        this.commonPartsURLConstructor(wsdlURL, (ConfigurationContext)null);
+    }
+    
+    /**
+     * @param wsdlURL
+     * @param limitMemory true if memory should be limited
+     * @throws FileNotFoundException
+     * @throws UnknownHostException
+     * @throws ConnectException
+     * @throws IOException
+     * @throws WSDLException
+     */
+    public WSDL4JWrapper(URL wsdlURL, boolean limitMemory, int memoryType) throws FileNotFoundException, UnknownHostException,
+    ConnectException, IOException, WSDLException {
+        super();
+        this.limitMemory = limitMemory;
+        this.memoryType = memoryType;
+        this.commonPartsURLConstructor(wsdlURL, (ConfigurationContext)null);
+    }
+
+    /**
+     * @param wsdlURL
+     * @param catalogManager
+     * @throws FileNotFoundException
+     * @throws UnknownHostException
+     * @throws ConnectException
+     * @throws IOException
+     * @throws WSDLException
+     * @deprecated use a constructor with a ConfigurationContext or limitMemory parameter
+     */
+    public WSDL4JWrapper(URL wsdlURL, JAXWSCatalogManager catalogManager) throws FileNotFoundException, 
+    UnknownHostException, ConnectException, IOException, WSDLException {
+        this(wsdlURL, catalogManager, false, 0);
+    }
+    
+    public WSDL4JWrapper(URL wsdlURL, JAXWSCatalogManager catalogManager, boolean limitMemory) throws FileNotFoundException, 
+    UnknownHostException, ConnectException, IOException, WSDLException {
+        super();
+        this.catalogManager = catalogManager;
+        this.limitMemory = limitMemory;
+        this.commonPartsURLConstructor(wsdlURL, (ConfigurationContext)null);
+    }
+    public WSDL4JWrapper(URL wsdlURL, JAXWSCatalogManager catalogManager, boolean limitMemory, int memoryType) throws FileNotFoundException, 
+    UnknownHostException, ConnectException, IOException, WSDLException {
+        super();
+        this.catalogManager = catalogManager;
+        this.limitMemory = limitMemory;
+        this.memoryType = memoryType;
+        this.commonPartsURLConstructor(wsdlURL, (ConfigurationContext)null);
+    }
+        
+    public WSDL4JWrapper(URL wsdlURL, ConfigurationContext configContext, 
+            JAXWSCatalogManager catalogManager) throws FileNotFoundException, 
+    UnknownHostException, ConnectException, IOException, WSDLException {
+        super();
+        this.catalogManager = catalogManager;
+        this.commonPartsURLConstructor(wsdlURL, configContext);
+    }
+    
+    public WSDL4JWrapper(URL wsdlURL, ConfigurationContext configContext) throws FileNotFoundException, 
+    UnknownHostException, ConnectException, IOException, WSDLException {
+        super();
+        this.commonPartsURLConstructor(wsdlURL, configContext);
+    }
+    
+    private void commonPartsURLConstructor(URL wsdlURL, ConfigurationContext configContext) throws FileNotFoundException, UnknownHostException,
+            ConnectException, IOException, WSDLException {
+        this.configContext = configContext;
+    // debugMemoryParms(configContext);
         if(log.isDebugEnabled()) {
-            log.debug("Looking for wsdl file on client: " + (wsdlURL != null ? 
+            log.debug("WSDL4JWrapper(URL,ConfigurationContext) - Looking for wsdl file on client: " + (wsdlURL != null ? 
                     wsdlURL.getPath():null));
         }
         ClassLoader classLoader = (ClassLoader) AccessController.doPrivileged(
@@ -80,45 +177,14 @@ public class WSDL4JWrapper implements WSDLWrapper {
                     }
                 });
         this.wsdlURL = wsdlURL;
-        try {
-            URL url = wsdlURL;
-            String filePath = null;
-            boolean isFileProtocol =
-                    (url != null && "file".equals(url.getProtocol())) ? true : false;
-            if (isFileProtocol) {
-                filePath = (url != null) ? url.getPath() : null;
-                //Check is the uri has relative path i.e path is not absolute and is not starting with a "/"
-                boolean isRelativePath =
-                        (filePath != null && !new File(filePath).isAbsolute()) ? true : false;
-                if (isRelativePath) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("WSDL URL has a relative path");
-                    }
-                    //Lets read the complete WSDL URL for relative path from class loader
-                    //Use relative path of url to fetch complete URL.
-                    url = getAbsoluteURL(classLoader, filePath);
-                    if (url == null) {
-                        if (log.isDebugEnabled()) {
-                            log.debug("WSDL URL for relative path not found in ClassLoader");
-                            log.warn(
-                                    "Unable to read WSDL from relative path, check the relative path");
-                            log.info("Relative path example: file:/WEB-INF/wsdl/<wsdlfilename>");
-                            log.warn(
-                                    "Using relative path as default wsdl URL to create wsdl Definition.");
-                        }
-                        url = wsdlURL;
-                    }
-                    else {
-                        if(log.isDebugEnabled()) {
-                            log.debug("WSDL URL found for relative path: " + filePath + " scheme: " +
-                                    url.getProtocol());
-                        }
-                    }
-                }
-            }
+       
+        URLConnection urlCon;
+        try {        
+        	
+        	urlCon = getPrivilegedURLConnection(this.wsdlURL);
 
-            URLConnection urlCon = url.openConnection();
-            InputStream is = null;
+        	InputStream is = null;
+            
             try {
                 is = getInputStream(urlCon);
             }
@@ -127,8 +193,9 @@ public class WSDL4JWrapper implements WSDLWrapper {
                     log.debug("Could not open url connection. Trying to use " +
                     "classloader to get another URL.");
                 }
+                String filePath = wsdlURL != null ? wsdlURL.getPath() : null;
                 if(filePath != null) {
-                    url = getAbsoluteURL(classLoader, filePath);
+                    URL url = getAbsoluteURL(classLoader, filePath);
                     if(url == null) {
                         if(log.isDebugEnabled()) {
                             log.debug("Could not locate URL for wsdl. Reporting error");
@@ -136,7 +203,7 @@ public class WSDL4JWrapper implements WSDLWrapper {
                             throw new WSDLException("WSDL4JWrapper : ", e.getMessage(), e);
                         }
                     else {
-                        urlCon = url.openConnection();
+                        urlCon = openConnection(url);
                         if(log.isDebugEnabled()) {
                              log.debug("Found URL for WSDL from jar");
                         }
@@ -153,23 +220,8 @@ public class WSDL4JWrapper implements WSDLWrapper {
             if(is != null) {
                 is.close();
             }
-            final String explicitWsdl = urlCon.getURL().toString();
-            try {
-                wsdlDefinition = (Definition)AccessController.doPrivileged(
-                        new PrivilegedExceptionAction() {
-                            public Object run() throws WSDLException {
-                                WSDLReader reader = getWSDLReader();
-                                return reader.readWSDL(explicitWsdl);
-                            }
-                        }
-                );
-            } catch (PrivilegedActionException e) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Exception thrown from AccessController: " + e);
-                }
-                throw ExceptionFactory.makeWebServiceException(e.getException());
-            }
-
+            this.wsdlExplicitURL = urlCon.getURL().toString();
+            getDefinition();
         } catch (FileNotFoundException ex) {
             throw ex;
         } catch (UnknownHostException ex) {
@@ -179,43 +231,184 @@ public class WSDL4JWrapper implements WSDLWrapper {
         } catch(IOException ex)  {
             throw ex;
         } catch (Exception ex) {
-            throw new WSDLException("WSDL4JWrapper : ", ex.getMessage());
+            throw new WSDLException("WSDL4JWrapper : ", ex.getMessage(), ex);
+        }
+    }
+    
+    /**
+     * This is a helper method to retrieve a URLConnection object
+     * based on a URL for the WSDL document.
+     */
+    private URLConnection getURLConnection(URL url) throws IOException {
+        String filePath = null;
+        boolean isFileProtocol =
+                (url != null && "file".equals(url.getProtocol())) ? true : false;
+        if (isFileProtocol) {
+            filePath = (url != null) ? url.getPath() : null;
+            //Check is the uri has relative path i.e path is not absolute and is not starting with a "/"
+            boolean isRelativePath =
+                    (filePath != null && !new File(filePath).isAbsolute()) ? true : false;
+            if (isRelativePath) {
+                if (log.isDebugEnabled()) {
+                    log.debug("WSDL URL has a relative path");
+                }
+                //Lets read the complete WSDL URL for relative path from class loader
+                //Use relative path of url to fetch complete URL.
+                url = getAbsoluteURL(getThreadClassLoader(), filePath);
+                if (url == null) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("WSDL URL for relative path not found in ClassLoader");
+                        log.warn(
+                                "Unable to read WSDL from relative path, check the relative path");
+                        log.info("Relative path example: file:/WEB-INF/wsdl/<wsdlfilename>");
+                        log.warn(
+                                "Using relative path as default wsdl URL to create wsdl Definition.");
+                    }
+                    url = wsdlURL;
+                }
+                else {
+                    if(log.isDebugEnabled()) {
+                        log.debug("WSDL URL found for relative path: " + filePath + " scheme: " +
+                                url.getProtocol());
+                    }
+                }
+            }
+        }
+        URLConnection connection = null;
+        if(url != null) {
+            if(log.isDebugEnabled()) {
+                log.debug("Retrieving URLConnection from WSDL URL");
+            }
+            connection = openConnection(url);
+        }
+        return connection;
+    }
+    
+    private URLConnection getPrivilegedURLConnection(final URL url) throws IOException {
+        try {
+
+        	return (URLConnection) AccessController.doPrivileged( new PrivilegedExceptionAction() {
+                public Object run() throws IOException {
+                    return (getURLConnection(url));
+                }
+            });
+        
+        } catch (PrivilegedActionException e) {
+            throw (IOException) e.getException();
         }
     }
 
-    private URL getAbsoluteURL(ClassLoader classLoader, String filePath){
-    	URL url = classLoader.getResource(filePath);
+    private URLConnection openConnection(final URL url) throws IOException {
+        try {
+            return (URLConnection) AccessController.doPrivileged(new PrivilegedExceptionAction() {
+                public Object run() throws IOException {
+                    return url.openConnection();
+                }
+            });
+        } catch (PrivilegedActionException e) {
+           throw (IOException) e.getException();
+        }
+    }
+    
+    private ClassLoader getThreadClassLoader() {
+        return (ClassLoader) AccessController.doPrivileged(new PrivilegedAction() {
+            public Object run() {
+                return Thread.currentThread().getContextClassLoader();
+            }
+        });
+    }
+
+    private URL getAbsoluteURL(final ClassLoader classLoader, final String filePath){
+        URL url = (URL) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        return classLoader.getResource(filePath);
+                    }
+                }
+        );
         if(url == null) {
             if(log.isDebugEnabled()) {
                 log.debug("Could not get URL from classloader. Looking in a jar.");
             }
             if(classLoader instanceof URLClassLoader){
-                URLClassLoader urlLoader = (URLClassLoader)classLoader;
-                url = getURLFromJAR(urlLoader, wsdlURL);
+                final URLClassLoader urlLoader = (URLClassLoader)classLoader;
+                
+                url = (URL) AccessController.doPrivileged( new PrivilegedAction() {
+                    public Object run()  {
+                        return (getURLFromJAR(urlLoader, wsdlURL));
+                    }
+                });
+
+            }
+            else {
+                final URLClassLoader nestedLoader = (URLClassLoader) getNestedClassLoader(URLClassLoader.class, classLoader);
+                if (nestedLoader != null) {
+                    url = (URL) AccessController.doPrivileged( new PrivilegedAction() {
+                        public Object run()  {
+                            return (getURLFromJAR(nestedLoader, wsdlURL));
+                        }
+                    });
+                }
             }
         }
         return url;    
     }
-    private URL getURLFromJAR(URLClassLoader urlLoader, URL relativeURL) {
+    
+    private ClassLoader getNestedClassLoader(Class type, ClassLoader root) {
+        if (log.isDebugEnabled()) {
+            log.debug("Searching for nested URLClassLoader");
+        }
+        while (!(root instanceof URLClassLoader)) {
+            if (root == null) {
+                break;
+            }
+            
+            final ClassLoader current = root;
+            root = (ClassLoader) AccessController.doPrivileged(
+                    new PrivilegedAction() {
+                        public Object run() {
+                            return current.getParent();
+                        }
+                    }
+            );
+            if (log.isDebugEnabled() && root != null) {
+                log.debug("Checking parent ClassLoader: " + root.getClass().getName());
+            }
+        }
 
-    	URL[] urlList = null;
-    	ResourceFinderFactory rff =(ResourceFinderFactory)MetadataFactoryRegistry.getFactory(ResourceFinderFactory.class);
-    	ResourceFinder cf = rff.getResourceFinder();
-    	urlList = cf.getURLs(urlLoader);
-    	if(urlList == null){
-    	    if(log.isDebugEnabled()){
-    	        log.debug("No URL's found in URL ClassLoader");
-    	    }
-    	    ExceptionFactory.makeWebServiceException(Messages.getMessage("WSDL4JWrapperErr1"));
-    	}
+        return root;
+    }
+    
+    private URL getURLFromJAR(URLClassLoader urlLoader, URL relativeURL) {
+        URL[] urlList = null;
+        ResourceFinderFactory rff =(ResourceFinderFactory)MetadataFactoryRegistry.getFactory(ResourceFinderFactory.class);
+        ResourceFinder cf = rff.getResourceFinder();
+        if (log.isDebugEnabled()) {
+            log.debug("ResourceFinderFactory: " + rff.getClass().getName());
+            log.debug("ResourceFinder: " + cf.getClass().getName());
+        }
+        
+        urlList = cf.getURLs(urlLoader);
+        if(urlList == null){
+            if(log.isDebugEnabled()){
+                log.debug("No URL's found in URL ClassLoader");
+            }
+            throw ExceptionFactory.makeWebServiceException(Messages.getMessage("WSDL4JWrapperErr1"));
+        }
 
         for (URL url : urlList) {
             if ("file".equals(url.getProtocol())) {
-                File f = new File(url.getPath());
+                final File f = new File(url.getPath());
                 // If file is not of type directory then its a jar file
-                if (f.exists() && !f.isDirectory()) {
+                if (isAFile(f)) { 
                     try {
-                        JarFile jf = new JarFile(f);
+                        JarFile jf = (JarFile) AccessController.doPrivileged(
+                                new PrivilegedExceptionAction() {
+                                    public Object run() throws IOException {
+                                        return new JarFile(f);
+                                    }
+                                }
+                        );
                         Enumeration<JarEntry> entries = jf.entries();
                         // read all entries in jar file and return the first
                         // wsdl file that matches
@@ -252,6 +445,17 @@ public class WSDL4JWrapper implements WSDLWrapper {
         return null;
     }
 
+    private boolean isAFile(final File f) {
+        Boolean ret = (Boolean) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    public Object run() {
+                        return new Boolean(f.exists() && !f.isDirectory());
+                    }
+                }
+        );
+        return ret.booleanValue();
+    }
+
     private static WSDLReader getWSDLReader() throws WSDLException {
         // Keep this method private
         WSDLReader reader;
@@ -266,24 +470,297 @@ public class WSDL4JWrapper implements WSDLWrapper {
         } catch (PrivilegedActionException e) {
             throw (WSDLException)e.getException();
         }
+        WSDLReaderConfigurator configurator = (WSDLReaderConfigurator) MetadataFactoryRegistry.
+            getFactory(WSDLReaderConfigurator.class);
+        if(configurator != null) {
+            if(log.isDebugEnabled()) {
+                log.debug("Calling configureReaderInstance with: " + configurator.getClass().getName());
+            }
+            configurator.configureReaderInstance(reader);
+        }
         return reader;
     }
 
+   /**
+    * Constructor
+    *
+    * @param URL   The URL for the WSDL
+    * @param Definition   Definition for the WSDL
+    * @deprecated Use a constructor that has a ConfigContext or memoryLimit parameter
+    */
     public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition) throws WSDLException {
-        super();
-        this.wsdlURL = wsdlURL;
-        this.wsdlDefinition = wsdlDefinition;
-
+        this(wsdlURL, wsdlDefinition, null, null);
     }
+    
+    /**
+     * Constructor
+     *
+     * @param URL   The URL for the WSDL
+     * @param Definition   Definition for the WSDL
+     * @param ConfigurationContext
+     */
+     public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, 
+                          ConfigurationContext configContext) throws WSDLException {
+         this(wsdlURL, wsdlDefinition, configContext, null);
+     }
+     
+     /**
+      * Constructor
+      *
+      * @param URL   The URL for the WSDL
+      * @param Definition   Definition for the WSDL
+      * @param limitMemory boolean
+      */
+      public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, boolean limitMemory, int memoryType) throws WSDLException {
+          this(wsdlURL, wsdlDefinition, null, null, limitMemory, memoryType);
+      }
+
+    /**
+     * Constructor
+     *
+     * @param URL   The URL for the WSDL
+     * @param Definition   Definition for the WSDL
+     * @param JAXWSCatalogManager Catalog Manager to use for locating external resources
+     */
+    public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, 
+                         JAXWSCatalogManager catalogManager, 
+                         boolean limitMemory, int memoryType) throws WSDLException {
+        this(wsdlURL, wsdlDefinition, null, catalogManager, limitMemory, memoryType);
+    }
+    
+    /**
+     * Constructor
+     *
+     * @param URL   The URL for the WSDL
+     * @param Definition   Definition for the WSDL
+     * @param JAXWSCatalogManager Catalog Manager to use for locating external resources
+     * @deprecated Use a constructor with a ConfigurationContext or memory limit setting
+     */
+    public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, JAXWSCatalogManager catalogManager) throws WSDLException {
+        this(wsdlURL, wsdlDefinition, null, catalogManager, false, 0);
+    }
+    
+    /**
+    * Constructor
+    *
+    * @param URL   The URL for the WSDL
+    * @param Definition   Definition for the WSDL
+    * @param ConfigurationContext  to get parameters for WSDL building 
+     * @param JAXWSCatalogManager Catalog Manager to use for locating external resources
+    */
+    public WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, ConfigurationContext configContext,
+            JAXWSCatalogManager catalogManager) throws WSDLException {
+        this(wsdlURL, wsdlDefinition, configContext, catalogManager, false, 0);
+    }
+    
+    /**
+     * Full Constructor
+     */
+     private WSDL4JWrapper(URL wsdlURL, Definition wsdlDefinition, ConfigurationContext configContext,
+             JAXWSCatalogManager catalogManager, boolean limitMemory, int memoryType) throws WSDLException {
+         super();
+         if (log.isDebugEnabled() ) { log.debug("WSDL4JWrapper(...) entry"); }
+
+         this.configContext = configContext;
+         this.catalogManager = catalogManager;
+         this.wsdlURL = wsdlURL;
+         this.limitMemory = limitMemory;  // Only used if configContext is not present
+         this.memoryType = memoryType;
+         if ((wsdlDefinition != null) && !(wsdlDefinition instanceof WSDLDefinitionWrapper)) {
+             if (configContext != null && configContext.getAxisConfiguration() != null) {
+                 this.wsdlDefinition = 
+                     new WSDLDefinitionWrapper(wsdlDefinition, wsdlURL, 
+                                               configContext.getAxisConfiguration() );
+             } else {
+                 this.wsdlDefinition = 
+                     new WSDLDefinitionWrapper(wsdlDefinition, wsdlURL, 
+                                               limitMemory, 2);
+             }
+         } else {
+             this.wsdlDefinition = (WSDLDefinitionWrapper) wsdlDefinition;
+         }
+     }
+
+
+   /**
+    * Constructor
+    *
+    * @param Definition   Definition for the WSDL
+    * @deprecated Use WSDL4JWrapper(Definition,ConfigurationContext)
+    */
+    public WSDL4JWrapper(Definition wsdlDefinition) throws WSDLException {
+        this(wsdlDefinition, false, 0);
+        
+    }
+    
+    /**
+     * Constructor
+     *
+     * @param Definition   Definition for the WSDL
+     * @boolean limitMemory
+     */
+     public WSDL4JWrapper(Definition wsdlDefinition, boolean limitMemory, int memoryType) throws WSDLException {
+         if (log.isDebugEnabled() ) { log.debug("WSDL4JWrapper(Definition, boolean) entry"); }
+
+         this.limitMemory = limitMemory;
+         this.memoryType = memoryType;
+         if ((wsdlDefinition != null) && !(wsdlDefinition instanceof WSDLDefinitionWrapper)) {
+             this.wsdlDefinition = new WSDLDefinitionWrapper(wsdlDefinition, null, limitMemory, memoryType);
+         } else {
+             this.wsdlDefinition = (WSDLDefinitionWrapper) wsdlDefinition;
+         }
+
+         if (this.wsdlDefinition != null) {
+             String baseURI = wsdlDefinition.getDocumentBaseURI();
+             try {
+                 wsdlURL = new URL(baseURI);
+             } catch (Exception ex) {
+                 // just absorb the error
+             }
+         }
+     }
+
+    /**
+     * Constructor
+     *
+     * @param Definition   Definition for the WSDL
+     * @param ConfigurationContext
+     */
+     public WSDL4JWrapper(Definition wsdlDefinition, 
+                          ConfigurationContext configContext) throws WSDLException {
+         super();
+         if (log.isDebugEnabled() ) { log.debug("WSDL4JWrapper(Definition) entry"); }
+
+         if ((wsdlDefinition != null) && !(wsdlDefinition instanceof WSDLDefinitionWrapper)) {
+             this.wsdlDefinition = new WSDLDefinitionWrapper(wsdlDefinition, configContext.getAxisConfiguration());
+         } else {
+             this.wsdlDefinition = (WSDLDefinitionWrapper) wsdlDefinition;
+         }
+
+         if (this.wsdlDefinition != null) {
+             String baseURI = wsdlDefinition.getDocumentBaseURI();
+             try {
+                 wsdlURL = new URL(baseURI);
+             } catch (Exception ex) {
+                 // just absorb the error
+             }
+         }
+     }
     //TODO: Perform validations for each method to check for null parameters on QName.
 
+    /*
+     * Returns a wrapped WSDL4J wSDL definition
+     */
     public Definition getDefinition() {
+        if (wsdlDefinition == null) {
+            Definition def = loadDefinition();
+            if (def != null) {
+                if (configContext != null) {
+                    wsdlDefinition = new WSDLDefinitionWrapper(def, configContext.getAxisConfiguration() );
+                } else {
+                    wsdlDefinition = new WSDLDefinitionWrapper(def, wsdlURL, limitMemory, memoryType);
+                }
+            }
+        }
         return wsdlDefinition;
     }
 
+    /*
+     * Returns an unwrapped WSDL4J wSDL definition
+     */
+    public Definition getUnwrappedDefinition() {
+        Definition def;
+        if (wsdlDefinition == null) {
+            def = loadDefinition();
+        } else if (wsdlDefinition instanceof WSDLDefinitionWrapper) {
+            def = wsdlDefinition.getUnwrappedDefinition();
+        } else {
+            def = wsdlDefinition;
+        }
+        return def;
+    }
+
+
+    /*
+     * Load a WSDL4J WSDL definition from a URL
+     */
+    public Definition loadDefinition() {
+
+        Definition def = null;
+
+        if (wsdlExplicitURL != null) {
+            try {
+
+                URLConnection urlConn = getPrivilegedURLConnection(this.wsdlURL);
+                if(urlConn != null) {
+                    try {
+                        InputStream is = getInputStream(urlConn);
+                        if(is != null) {
+                            if (catalogManager == null) {
+                                catalogManager = new OASISCatalogManager();
+                            }
+                            final CatalogWSDLLocator locator = new CatalogWSDLLocator(wsdlExplicitURL, is, 
+                                    getThreadClassLoader(), catalogManager);
+                            if(log.isDebugEnabled()) {
+                                log.debug("Loading WSDL using ModuleWSDLLocator from base " +
+                                        "location: " + wsdlExplicitURL);
+                            }
+                            def = (Definition) AccessController.doPrivileged(new PrivilegedExceptionAction() {
+                                public Object run() throws WSDLException {
+                                    WSDLReader reader = getWSDLReader();
+                                    return reader.readWSDL(locator);
+                                }
+                            });
+                        }
+                    }
+                    catch(Exception e) {
+                        if(log.isDebugEnabled()) {
+                            log.debug("Using ModuleWSDLLocator was not successful for loading " +
+                                    "WSDL due to the following error: " + e.toString() + ". The " +
+                                    "WSDL will be read from the WSDL location: " + wsdlExplicitURL);
+                        }
+                    }
+                }
+                if(def == null) {
+                    if(log.isDebugEnabled()) {
+                        log.debug("Loading WSDL from location: " + wsdlExplicitURL);
+                    }
+                    def = (Definition) AccessController.doPrivileged(new PrivilegedExceptionAction() {
+                        public Object run() throws WSDLException {
+                            WSDLReader reader = getWSDLReader();
+                            return reader.readWSDL(wsdlExplicitURL);
+                        }
+                    });
+                }
+                
+            } catch (PrivilegedActionException e) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Exception thrown from AccessController: " + e);
+                }
+                throw ExceptionFactory.makeWebServiceException(e.getException());
+            }
+            catch(IOException ioe) {
+                if(log.isDebugEnabled()) {
+                    log.debug("An error occurred while attempting to load the WSDL " +
+                            "file at the following location: " + wsdlExplicitURL);
+                }
+                throw ExceptionFactory.makeWebServiceException(ioe);
+            }
+        }
+
+
+        if (log.isDebugEnabled()) {
+            if (def != null) {
+                log.debug("loadDefinition() returning a NON-NULL definition");
+            } else {
+                log.debug("loadDefinition() returning a NULL definition");
+            }
+        }
+
+        return def;
+    }
 
     public Binding getFirstPortBinding(QName serviceQname) {
-        // TODO Auto-generated method stub
         Service service = getService(serviceQname);
         if (service == null) {
             return null;
@@ -326,7 +803,6 @@ public class WSDL4JWrapper implements WSDLWrapper {
     }
 
     public ArrayList getPortBinding(QName serviceQname) {
-        // TODO Auto-generated method stub
         Map map = this.getService(serviceQname).getPorts();
         if (map == null || map.isEmpty()) {
             return null;
@@ -375,16 +851,19 @@ public class WSDL4JWrapper implements WSDLWrapper {
     }
 
     public Service getService(QName serviceQname) {
-        // TODO Auto-generated method stub
         if (serviceQname == null) {
             return null;
         }
-        return wsdlDefinition.getService(serviceQname);
 
+        Definition def = getDefinition();
+        if (def != null) {
+            return def.getService(serviceQname);
+        } else {
+            return null;
+        }
     }
 
     public String getSOAPAction(QName serviceQname) {
-        // TODO Auto-generated method stub
         Binding binding = getFirstPortBinding(serviceQname);
         if (binding == null) {
             return null;
@@ -405,7 +884,6 @@ public class WSDL4JWrapper implements WSDLWrapper {
     }
 
     public String getSOAPAction(QName serviceQname, QName portQname) {
-        // TODO Auto-generated method stub
         Port port = getPort(serviceQname, portQname);
         if (port == null) {
             return null;
@@ -461,7 +939,6 @@ public class WSDL4JWrapper implements WSDLWrapper {
     }
 
     public URL getWSDLLocation() {
-        // TODO Auto-generated method stub
         return this.wsdlURL;
     }
 
@@ -472,8 +949,12 @@ public class WSDL4JWrapper implements WSDLWrapper {
     }
 
     public String getTargetNamespace() {
-        // TODO Auto-generated method stub
-        return wsdlDefinition.getTargetNamespace();
+        Definition def = getDefinition();
+        if (def != null) {
+            return def.getTargetNamespace();
+        } else {
+            return null;
+        }
     }
     
     /**
@@ -483,20 +964,53 @@ public class WSDL4JWrapper implements WSDLWrapper {
      * permissions if Java2 Security was enabled.
      */
     private InputStream getInputStream(URLConnection urlCon) throws Exception {
-    	final URLConnection finalURLCon = urlCon;
-    	InputStream is = null;
-    	try {
-    		is = (InputStream) AccessController.doPrivileged(
-        			new PrivilegedExceptionAction() {
-    					public Object run() throws IOException {
-    						return finalURLCon.getInputStream();
-    					}
-        			});
-    	}
-    	catch(PrivilegedActionException e) {
-    		throw e.getException();
-    	}
-    	return is;
+        final URLConnection finalURLCon = urlCon;
+        InputStream is = null;
+        try {
+            is = (InputStream) AccessController.doPrivileged(
+                    new PrivilegedExceptionAction() {
+                        public Object run() throws IOException {
+                            return finalURLCon.getInputStream();
+                        }
+                    });
+        }
+        catch(PrivilegedActionException e) {
+            throw e.getException();
+        }
+        return is;
+    }
+
+    private void debugMemoryParms(ConfigurationContext configContext) {
+        if (configContext != null) {
+            AxisConfiguration axisCfg = configContext.getAxisConfiguration();
+
+            boolean reduceWSDLMemoryCache = false;
+            int reduceWSDLMemoryType = 9;
+            // determine what the setting for the memory optimization is
+            if (axisCfg != null) {
+                Parameter param = axisCfg.getParameter(Constants.Configuration.REDUCE_WSDL_MEMORY_CACHE);
+
+                reduceWSDLMemoryCache =
+                    param != null && ((String) param.getValue()).equalsIgnoreCase("true");
+
+
+                param = axisCfg.getParameter(Constants.Configuration.REDUCE_WSDL_MEMORY_TYPE);
+
+                if (param != null) {
+                    String value = (String) param.getValue();
+
+                    if (value != null) {
+                        Integer i = new Integer(value);
+                        reduceWSDLMemoryType = i.intValue();
+                    }
+                }
+                log.debug("reduceWSDLMemoryCache:"+ reduceWSDLMemoryCache + ", reduceWSDLMemoryType:" + reduceWSDLMemoryType );
+            } else {
+                log.debug("AxisConfiguration is null");
+            }
+        } else {
+            log.debug("ConfigContext is null");
+        }
     }
 
 }

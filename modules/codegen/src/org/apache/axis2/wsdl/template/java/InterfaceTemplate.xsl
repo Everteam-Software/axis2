@@ -16,6 +16,7 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
   -->
+
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:output method="text"/>
 
@@ -55,15 +56,20 @@
          <xsl:variable name="outputtype"><xsl:value-of select="output/param[@location='body']/@type"></xsl:value-of></xsl:variable>
          <xsl:variable name="outputcomplextype"><xsl:value-of select="output/param[@location='body']/@complextype"></xsl:value-of></xsl:variable>
          <xsl:variable name="outputparamcount"><xsl:value-of select="count(output/param[@location='body']/param)"></xsl:value-of></xsl:variable>
+         <xsl:variable name="isUnwrapParameters" select="input/param[@location='body' and @type!='']/@unwrappParameters"/>
 
-        <!-- start of the sync block -->                                          
+        <!-- start of the sync block -->
          <xsl:if test="$isSync='1'">
 
         /**
-                * Auto generated method signature
+          * Auto generated method signature
+          * <xsl:value-of select="@comment"/>
                 <xsl:for-each select="input/param[@type!='']">
                     * @param <xsl:value-of select="@name"></xsl:value-of><xsl:text>
                 </xsl:text></xsl:for-each>
+             <xsl:for-each select="fault/param[@type!='']">
+             * @throws <xsl:value-of select="@name"/> : <xsl:value-of select="@comment"/>
+             </xsl:for-each>
          */
 
          <xsl:choose>
@@ -101,6 +107,7 @@
                     <xsl:when test="$outputparamcount=1"><xsl:value-of select="output/param[@location='body']/param/@type"/></xsl:when>
                     <xsl:when test="string-length(normalize-space($outputcomplextype)) > 0"><xsl:value-of
                             select="$outputcomplextype"/></xsl:when>
+                    <xsl:when test="($outputparamcount=0) and ($isUnwrapParameters)">void</xsl:when>
                     <xsl:otherwise><xsl:value-of select="$outputtype"/></xsl:otherwise>
                     </xsl:choose>
                         <xsl:text> </xsl:text><xsl:value-of select="@name"/>(
@@ -110,9 +117,8 @@
                             <xsl:when test="$inputcount=1">
                                 <!-- Even when the parameters are 1 we have to see whether we have the
                               wrapped parameters -->
-                                <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
                                 <xsl:choose>
-                                    <xsl:when test="$inputWrappedCount &gt; 0">
+                                    <xsl:when test="$isUnwrapParameters">
                                        <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                             <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                                        </xsl:for-each>
@@ -144,20 +150,22 @@
         <xsl:if test="$isAsync='1'">
          /**
             * Auto generated method signature for Asynchronous Invocations
+            * <xsl:value-of select="@comment"/>
             <xsl:for-each select="input/param[@type!='']">
                 * @param <xsl:value-of select="@name"></xsl:value-of><xsl:text>
             </xsl:text></xsl:for-each>
           */
         public void start<xsl:value-of select="@name"/>(
 
-             <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
-         <xsl:choose>
+            <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
+            <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
+            <xsl:choose>
                     <xsl:when test="$inputcount=1">
                         <!-- Even when the parameters are 1 we have to see whether we have the
                       wrapped parameters -->
-                        <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
+                        <xsl:variable name="isUnwrapParameters" select="input/param[@location='body' and @type!='']/@unwrappParameters"/>
                         <xsl:choose>
-                            <xsl:when test="$inputWrappedCount &gt; 0">
+                            <xsl:when test="$isUnwrapParameters">
                                <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                     <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                                 </xsl:for-each>
@@ -169,7 +177,7 @@
                     </xsl:when>
                     <xsl:otherwise><!-- Just leave it - nothing we can do here --></xsl:otherwise>
                 </xsl:choose>
-                <xsl:if test="$inputcount=1">,</xsl:if>
+                <xsl:if test="($inputcount=1) and not($isUnwrapParameters and $inputWrappedCount=0)">,</xsl:if>
                 <xsl:for-each select="input/param[not(@location='body') and @type!='']">
                    <xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>,
                 </xsl:for-each>
@@ -183,16 +191,24 @@
         <!-- Code for in-only mep -->
        <xsl:if test="@mep='10' or @mep='11'">
        <xsl:variable name="mep"><xsl:value-of select="@mep"/></xsl:variable>
-
+       /**
+         * Auto generated method signature for Asynchronous Invocations
+         * <xsl:value-of select="@comment"/>
+           <xsl:if test="$mep='11'">
+               <xsl:for-each select="fault/param[@type!='']">
+                 * @throws <xsl:value-of select="@name"/> : <xsl:value-of select="@comment"/>
+               </xsl:for-each>
+           </xsl:if>
+         */
         public void <xsl:text> </xsl:text><xsl:value-of select="@name"/>(
          <xsl:variable name="inputcount" select="count(input/param[@location='body' and @type!=''])"/>
          <xsl:choose>
                 <xsl:when test="$inputcount=1">
                     <!-- Even when the parameters are 1 we have to see whether we have the
                   wrapped parameters -->
-                    <xsl:variable name="inputWrappedCount" select="count(input/param[@location='body' and @type!='']/param)"/>
+                    <xsl:variable name="isUnwrapParameters" select="input/param[@location='body' and @type!='']/@unwrappParameters"/>
                     <xsl:choose>
-                        <xsl:when test="$inputWrappedCount &gt; 0">
+                        <xsl:when test="$isUnwrapParameters">
                            <xsl:for-each select="input/param[@location='body' and @type!='']/param">
                                 <xsl:if test="position()>1">,</xsl:if><xsl:value-of select="@type"/><xsl:text> </xsl:text><xsl:value-of select="@name"/>
                </xsl:for-each>

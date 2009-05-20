@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.dataretrieval.client;
 
 import org.apache.axiom.om.OMAbstractFactory;
@@ -69,22 +70,19 @@ public class MexClient extends ServiceClient {
 
         OMFactory fac = OMAbstractFactory.getOMFactory();
 
-        OMNamespace omNs = fac.createOMNamespace(
-                DRConstants.SPEC.NS_URI, DRConstants.SPEC.NS_PREFIX);
+        OMNamespace omNs = fac.createOMNamespace(DRConstants.SPEC.NS_URI,
+                                                 DRConstants.SPEC.NS_PREFIX);
 
-        OMElement method = fac.createOMElement(DRConstants.SPEC.GET_METADATA,
-                                               omNs);
+        OMElement method = fac.createOMElement(DRConstants.SPEC.GET_METADATA, omNs);
         if (dialect != null) {
-            OMElement dialect_Elem = fac.createOMElement(
-                    DRConstants.SPEC.DIALET, omNs);
+            OMElement dialectElem = fac.createOMElement(DRConstants.SPEC.DIALECT, omNs);
 
-            dialect_Elem.setText(dialect);
-            method.addChild(dialect_Elem);
+            dialectElem.setText(dialect);
+            method.addChild(dialectElem);
         }
         // create Identifier element
         if (identifier != null) {
-            OMElement id_Elem = fac.createOMElement(
-                    DRConstants.SPEC.IDENTIFIER, omNs);
+            OMElement id_Elem = fac.createOMElement(DRConstants.SPEC.IDENTIFIER, omNs);
             id_Elem.setText(identifier);
             method.addChild(id_Elem);
         }

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description.validator;
 
 import java.util.Iterator;
@@ -32,7 +33,6 @@ public abstract class Validator {
     public static final boolean INVALID = false;
 
     protected ValidationFailures validationFailures = new ValidationFailures();
-    // TODO: turn on validation and change the ValidateWSDL test to start checking for failures.
     private ValidationLevel validationLevel = ValidationLevel.FULL;
 
     abstract public boolean validate();

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 package org.apache.axis2.jaxws.description;
 
 import javax.jws.WebService;
@@ -23,6 +24,7 @@ import javax.xml.ws.BindingType;
 import javax.xml.ws.Service;
 import javax.xml.ws.ServiceMode;
 import javax.xml.ws.WebServiceProvider;
+import java.lang.annotation.Annotation;
 
 /**
  * 
@@ -52,4 +54,6 @@ public interface EndpointDescriptionJava {
     public ServiceMode getAnnoServiceMode();
 
     public Service.Mode getAnnoServiceModeValue();
+    
+    public Annotation getAnnoFeature(String id);
 }
