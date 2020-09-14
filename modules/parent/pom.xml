@@ -89,7 +89,7 @@
         <ping.mar.version>1.5-beta-2</ping.mar.version>
         <scripting.mar.version>1.5-beta-2</scripting.mar.version>
 
-        <ant.version>1.7.0</ant.version>
+        <ant.version>1.10.8</ant.version>
         <antlr.version>2.7.7</antlr.version>
         <axiom.version>SNAPSHOT</axiom.version>
         <bcel.version>5.2</bcel.version>
